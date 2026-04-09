@@ -120,14 +120,14 @@ public final class SystemParser {
                 changeFilters.add(new SystemDescriptor.FilterDescriptor(f.value(), f.target()));
             }
 
-            // Parse @Where filters on component parameters
+            // Parse @Where filters on component parameters (supports multiple per param)
             var whereFilters = new java.util.HashMap<Integer, zzuegg.ecs.query.FieldFilter>();
             int compParamIdx = 0;
             for (int i = 0; i < method.getParameters().length; i++) {
                 var p = method.getParameters()[i];
                 if (p.isAnnotationPresent(Read.class) || p.isAnnotationPresent(Write.class)) {
-                    var where = p.getAnnotation(Where.class);
-                    if (where != null) {
+                    var wheres = p.getAnnotationsByType(Where.class);
+                    if (wheres.length > 0) {
                         Class<? extends Record> compType;
                         if (p.isAnnotationPresent(Read.class)) {
                             @SuppressWarnings("unchecked")
@@ -138,7 +138,15 @@ public final class SystemParser {
                             var t = (Class<? extends Record>) extractTypeArg(p);
                             compType = t;
                         }
-                        whereFilters.put(i, zzuegg.ecs.query.FieldFilter.parse(where.value(), compType));
+                        if (wheres.length == 1) {
+                            whereFilters.put(i, zzuegg.ecs.query.FieldFilter.parse(wheres[0].value(), compType));
+                        } else {
+                            var filters = new zzuegg.ecs.query.FieldFilter[wheres.length];
+                            for (int w = 0; w < wheres.length; w++) {
+                                filters[w] = zzuegg.ecs.query.FieldFilter.parse(wheres[w].value(), compType);
+                            }
+                            whereFilters.put(i, zzuegg.ecs.query.FieldFilter.and(filters));
+                        }
                     }
                     compParamIdx++;
                 }

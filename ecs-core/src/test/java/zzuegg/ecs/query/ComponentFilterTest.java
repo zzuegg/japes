@@ -36,6 +36,31 @@ class ComponentFilterTest {
         }
     }
 
+    static class RangeFilterSystem {
+        @System
+        void healWounded(@Read @Where("hp > 0") @Where("hp < 100") Health health) {
+            processedHp.add(health.hp());
+        }
+    }
+
+    @Test
+    void multipleWhereOnSameParamAllMustMatch() {
+        processedHp.clear();
+        var world = World.builder()
+            .addSystem(RangeFilterSystem.class)
+            .useGeneratedProcessors(true)
+            .build();
+
+        world.spawn(new Health(100));  // skipped: not < 100
+        world.spawn(new Health(0));    // skipped: not > 0
+        world.spawn(new Health(50));   // matches both
+
+        world.tick();
+
+        assertEquals(1, processedHp.size());
+        assertEquals(50, processedHp.getFirst());
+    }
+
     @Test
     void systemSkipsEntitiesThatDontMatchFilter() {
         processedHp.clear();
