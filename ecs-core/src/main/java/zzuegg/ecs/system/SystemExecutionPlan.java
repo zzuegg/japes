@@ -90,4 +90,51 @@ public final class SystemExecutionPlan {
     public ParamSlot[] componentSlots() {
         return slots;
     }
+
+    /**
+     * Process an entire chunk in a single tight loop. Avoids per-entity virtual
+     * dispatch overhead by keeping fill/invoke/flush in one method body that the
+     * JIT can optimize as a single hot loop.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public void processChunk(Chunk chunk, SystemInvoker invoker, long currentTick) {
+        prepareChunk(chunk);
+        int count = chunk.count();
+
+        for (int slot = 0; slot < count; slot++) {
+            // Fill args
+            for (int i = 0; i < slots.length; i++) {
+                var cs = slots[i];
+                if (cs.isWrite) {
+                    var value = cachedStorages[i].get(slot);
+                    var existing = (Mut) mutCache[i];
+                    if (existing == null) {
+                        var mut = new Mut(value, slot, cachedTrackers[i], currentTick, cs.isValueTracked);
+                        mutCache[i] = mut;
+                        args[cs.argIndex] = mut;
+                    } else {
+                        existing.reset(value, slot, cachedTrackers[i], currentTick);
+                    }
+                } else {
+                    args[cs.argIndex] = cachedStorages[i].get(slot);
+                }
+            }
+
+            // Invoke
+            try {
+                invoker.invoke(args);
+            } catch (Throwable e) {
+                throw new RuntimeException("System invocation failed at slot " + slot, e);
+            }
+
+            // Flush writes
+            for (int i = 0; i < slots.length; i++) {
+                if (slots[i].isWrite) {
+                    var mut = (Mut) mutCache[i];
+                    var newValue = mut.flush();
+                    ((ComponentStorage) cachedStorages[i]).set(mut.slot(), newValue);
+                }
+            }
+        }
+    }
 }
