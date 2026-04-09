@@ -84,7 +84,7 @@ public final class World {
             }
         }
 
-        var plan = new SystemExecutionPlan(params.length, componentSlots, serviceArgIndices);
+        var plan = new SystemExecutionPlan(params.length, componentSlots, serviceArgIndices, desc.whereFilters());
 
         // Pre-fill service args (they don't change per entity)
         for (int idx : serviceArgIndices) {
@@ -302,6 +302,38 @@ public final class World {
         }
 
         return new Snapshot(entries);
+    }
+
+    @SafeVarargs
+    public final Set<zzuegg.ecs.entity.Entity> findEntities(
+            zzuegg.ecs.query.FieldFilter filter, Class<? extends Record>... componentTypes) {
+        var requiredIds = new HashSet<ComponentId>();
+        var idToType = new HashMap<ComponentId, Class<? extends Record>>();
+        for (var type : componentTypes) {
+            var id = componentRegistry.getOrRegister(type);
+            requiredIds.add(id);
+            idToType.put(id, type);
+        }
+
+        var matchingArchetypes = archetypeGraph.findMatching(requiredIds);
+        var result = new HashSet<zzuegg.ecs.entity.Entity>();
+
+        for (var archetype : matchingArchetypes) {
+            for (var chunk : archetype.chunks()) {
+                for (int slot = 0; slot < chunk.count(); slot++) {
+                    // Build component map for filter evaluation
+                    var componentMap = new HashMap<Class<?>, Record>();
+                    for (var entry : idToType.entrySet()) {
+                        componentMap.put(entry.getValue(), chunk.get(entry.getKey(), slot));
+                    }
+                    if (filter.test(componentMap)) {
+                        result.add(chunk.entity(slot));
+                    }
+                }
+            }
+        }
+
+        return result;
     }
 
     private void executeStage(ScheduleGraph graph) {

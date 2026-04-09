@@ -120,12 +120,37 @@ public final class SystemParser {
                 changeFilters.add(new SystemDescriptor.FilterDescriptor(f.value(), f.target()));
             }
 
+            // Parse @Where filters on component parameters
+            var whereFilters = new java.util.HashMap<Integer, zzuegg.ecs.query.FieldFilter>();
+            int compParamIdx = 0;
+            for (int i = 0; i < method.getParameters().length; i++) {
+                var p = method.getParameters()[i];
+                if (p.isAnnotationPresent(Read.class) || p.isAnnotationPresent(Write.class)) {
+                    var where = p.getAnnotation(Where.class);
+                    if (where != null) {
+                        Class<? extends Record> compType;
+                        if (p.isAnnotationPresent(Read.class)) {
+                            @SuppressWarnings("unchecked")
+                            var t = (Class<? extends Record>) p.getType();
+                            compType = t;
+                        } else {
+                            @SuppressWarnings("unchecked")
+                            var t = (Class<? extends Record>) extractTypeArg(p);
+                            compType = t;
+                        }
+                        whereFilters.put(i, zzuegg.ecs.query.FieldFilter.parse(where.value(), compType));
+                    }
+                    compParamIdx++;
+                }
+            }
+
             var runIfAnnotation = method.getAnnotation(RunIf.class);
             String runIf = runIfAnnotation != null ? runIfAnnotation.value() : null;
 
             results.add(new SystemDescriptor(
                 method.getName(), stage, after, before, exclusive,
-                componentAccesses, resourceReads, resourceWrites,
+                componentAccesses, whereFilters,
+                resourceReads, resourceWrites,
                 eventReads, eventWrites, withFilters, withoutFilters,
                 changeFilters, usesCommands, usesLocal, runIf,
                 method, Modifier.isStatic(method.getModifiers()) ? null : instance

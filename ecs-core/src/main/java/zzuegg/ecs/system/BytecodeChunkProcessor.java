@@ -52,15 +52,22 @@ public final class BytecodeChunkProcessor {
         ComponentId[] compIds = new ComponentId[paramCount];
         int compIdx = 0;
 
+        Class<?>[] compTypes = new Class<?>[paramCount];
         for (int i = 0; i < paramCount; i++) {
             if (params[i].isAnnotationPresent(Read.class)) {
                 isRead[i] = true;
-                compIds[i] = desc.componentAccesses().get(compIdx++).componentId();
+                var access = desc.componentAccesses().get(compIdx++);
+                compIds[i] = access.componentId();
+                compTypes[i] = access.type();
             } else if (params[i].isAnnotationPresent(Write.class)) {
                 isWrite[i] = true;
-                compIds[i] = desc.componentAccesses().get(compIdx++).componentId();
+                var access = desc.componentAccesses().get(compIdx++);
+                compIds[i] = access.componentId();
+                compTypes[i] = access.type();
             }
         }
+
+        var whereFilters = desc.whereFilters();
 
         // Generate a Runnable-like wrapper class with defineHiddenClass.
         // The hidden class captures the system instance and service args,
@@ -92,158 +99,109 @@ public final class BytecodeChunkProcessor {
 
         // Generate arity-specific invoker
         return switch (paramCount) {
-            case 1 -> createProcessor1(genericMh, isRead, isWrite, isValueTracked, compIds, serviceArgs);
-            case 2 -> createProcessor2(genericMh, isRead, isWrite, isValueTracked, compIds, serviceArgs);
-            case 3 -> createProcessor3(genericMh, isRead, isWrite, isValueTracked, compIds, serviceArgs);
-            case 4 -> createProcessor4(genericMh, isRead, isWrite, isValueTracked, compIds, serviceArgs);
+            case 1 -> createProcessor1(genericMh, isRead, isWrite, isValueTracked, compIds, compTypes, serviceArgs, whereFilters);
+            case 2 -> createProcessor2(genericMh, isRead, isWrite, isValueTracked, compIds, compTypes, serviceArgs, whereFilters);
+            case 3 -> createProcessor3(genericMh, isRead, isWrite, isValueTracked, compIds, compTypes, serviceArgs, whereFilters);
+            case 4 -> createProcessor4(genericMh, isRead, isWrite, isValueTracked, compIds, compTypes, serviceArgs, whereFilters);
             default -> null; // Fall back to spreader for 5+ params
         };
     }
 
-    private static ChunkProcessor createProcessor1(
-            java.lang.invoke.MethodHandle mh,
-            boolean[] isRead, boolean[] isWrite, boolean[] isValueTracked,
-            ComponentId[] compIds, Object[] serviceArgs) {
-
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static ChunkProcessor createProcessor1(java.lang.invoke.MethodHandle mh, boolean[] isRead, boolean[] isWrite, boolean[] isValueTracked, ComponentId[] compIds, Class<?>[] compTypes, Object[] serviceArgs, java.util.Map<Integer, zzuegg.ecs.query.FieldFilter> whereFilters) {
+        boolean hasFilters = !whereFilters.isEmpty();
         return (chunk, tick) -> {
-            var s0 = (isRead[0] || isWrite[0]) ? chunk.componentStorage(compIds[0]) : null;
-            var t0 = isWrite[0] ? chunk.changeTracker(compIds[0]) : null;
-            Mut m0 = null;
+            var stores = new ComponentStorage[1];
+            var trackers = new ChangeTracker[1];
+            var muts = new Mut[1];
+            for (int i = 0; i < 1; i++) { if (isRead[i] || isWrite[i]) stores[i] = chunk.componentStorage(compIds[i]); if (isWrite[i]) trackers[i] = chunk.changeTracker(compIds[i]); }
             int count = chunk.count();
-            try {
-                for (int slot = 0; slot < count; slot++) {
-                    Object a0;
-                    if (isRead[0]) {
-                        a0 = s0.get(slot);
-                    } else if (isWrite[0]) {
-                        if (m0 == null) { m0 = new Mut(s0.get(slot), slot, t0, tick, isValueTracked[0]); }
-                        else { m0.reset(s0.get(slot), slot, t0, tick); }
-                        a0 = m0;
-                    } else {
-                        a0 = serviceArgs[0];
-                    }
-                    mh.invokeExact(a0);
-                    if (isWrite[0]) { ((ComponentStorage) s0).set(m0.slot(), m0.flush()); }
-                }
-            } catch (Throwable e) { throw new RuntimeException(e); }
+            try { for (int slot = 0; slot < count; slot++) {
+                Object a0 = resolveArg(0, slot, tick, stores[0], trackers[0], isRead, isWrite, isValueTracked, serviceArgs, muts[0]); if (isWrite[0]) muts[0] = (Mut) a0;
+                if (hasFilters && !checkFilters(whereFilters, new Object[]{a0}, isRead, isWrite, compTypes, muts, 1)) { continue; }
+                mh.invokeExact(a0);
+                for (int i = 0; i < 1; i++) { if (isWrite[i]) ((ComponentStorage) stores[i]).set(muts[i].slot(), muts[i].flush()); }
+            }} catch (Throwable e) { throw new RuntimeException(e); }
         };
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static ChunkProcessor createProcessor2(
-            java.lang.invoke.MethodHandle mh,
-            boolean[] isRead, boolean[] isWrite, boolean[] isValueTracked,
-            ComponentId[] compIds, Object[] serviceArgs) {
-
+    private static ChunkProcessor createProcessor2(java.lang.invoke.MethodHandle mh, boolean[] isRead, boolean[] isWrite, boolean[] isValueTracked, ComponentId[] compIds, Class<?>[] compTypes, Object[] serviceArgs, java.util.Map<Integer, zzuegg.ecs.query.FieldFilter> whereFilters) {
+        boolean hasFilters = !whereFilters.isEmpty();
         return (chunk, tick) -> {
-            var s0 = (isRead[0] || isWrite[0]) ? chunk.componentStorage(compIds[0]) : null;
-            var s1 = (isRead[1] || isWrite[1]) ? chunk.componentStorage(compIds[1]) : null;
-            var t0 = isWrite[0] ? chunk.changeTracker(compIds[0]) : null;
-            var t1 = isWrite[1] ? chunk.changeTracker(compIds[1]) : null;
-            Mut m0 = null, m1 = null;
+            var stores = new ComponentStorage[2]; var trackers = new ChangeTracker[2]; var muts = new Mut[2];
+            for (int i = 0; i < 2; i++) { if (isRead[i] || isWrite[i]) stores[i] = chunk.componentStorage(compIds[i]); if (isWrite[i]) trackers[i] = chunk.changeTracker(compIds[i]); }
             int count = chunk.count();
-            try {
-                for (int slot = 0; slot < count; slot++) {
-                    Object a0 = resolveArg(0, slot, tick, s0, t0, isRead, isWrite, isValueTracked, serviceArgs, m0);
-                    if (isWrite[0]) m0 = (Mut) a0;
-                    Object a1 = resolveArg(1, slot, tick, s1, t1, isRead, isWrite, isValueTracked, serviceArgs, m1);
-                    if (isWrite[1]) m1 = (Mut) a1;
-
-                    mh.invokeExact(a0, a1);
-
-                    if (isWrite[0]) { ((ComponentStorage) s0).set(m0.slot(), m0.flush()); }
-                    if (isWrite[1]) { ((ComponentStorage) s1).set(m1.slot(), m1.flush()); }
-                }
-            } catch (Throwable e) { throw new RuntimeException(e); }
+            try { for (int slot = 0; slot < count; slot++) {
+                Object a0 = resolveArg(0, slot, tick, stores[0], trackers[0], isRead, isWrite, isValueTracked, serviceArgs, muts[0]); if (isWrite[0]) muts[0] = (Mut) a0;
+                Object a1 = resolveArg(1, slot, tick, stores[1], trackers[1], isRead, isWrite, isValueTracked, serviceArgs, muts[1]); if (isWrite[1]) muts[1] = (Mut) a1;
+                if (hasFilters && !checkFilters(whereFilters, new Object[]{a0, a1}, isRead, isWrite, compTypes, muts, 2)) { continue; }
+                mh.invokeExact(a0, a1);
+                for (int i = 0; i < 2; i++) { if (isWrite[i]) ((ComponentStorage) stores[i]).set(muts[i].slot(), muts[i].flush()); }
+            }} catch (Throwable e) { throw new RuntimeException(e); }
         };
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static ChunkProcessor createProcessor3(
-            java.lang.invoke.MethodHandle mh,
-            boolean[] isRead, boolean[] isWrite, boolean[] isValueTracked,
-            ComponentId[] compIds, Object[] serviceArgs) {
-
+    private static ChunkProcessor createProcessor3(java.lang.invoke.MethodHandle mh, boolean[] isRead, boolean[] isWrite, boolean[] isValueTracked, ComponentId[] compIds, Class<?>[] compTypes, Object[] serviceArgs, java.util.Map<Integer, zzuegg.ecs.query.FieldFilter> whereFilters) {
+        boolean hasFilters = !whereFilters.isEmpty();
         return (chunk, tick) -> {
-            ComponentStorage[] stores = new ComponentStorage[3];
-            ChangeTracker[] trackers = new ChangeTracker[3];
-            Mut[] muts = new Mut[3];
-            for (int i = 0; i < 3; i++) {
-                if (isRead[i] || isWrite[i]) stores[i] = chunk.componentStorage(compIds[i]);
-                if (isWrite[i]) trackers[i] = chunk.changeTracker(compIds[i]);
+            var stores = new ComponentStorage[3]; var trackers = new ChangeTracker[3]; var muts = new Mut[3];
+            for (int i = 0; i < 3; i++) { if (isRead[i] || isWrite[i]) stores[i] = chunk.componentStorage(compIds[i]); if (isWrite[i]) trackers[i] = chunk.changeTracker(compIds[i]); }
+            int count = chunk.count();
+            try { for (int slot = 0; slot < count; slot++) {
+                Object a0 = resolveArg(0, slot, tick, stores[0], trackers[0], isRead, isWrite, isValueTracked, serviceArgs, muts[0]); if (isWrite[0]) muts[0] = (Mut) a0;
+                Object a1 = resolveArg(1, slot, tick, stores[1], trackers[1], isRead, isWrite, isValueTracked, serviceArgs, muts[1]); if (isWrite[1]) muts[1] = (Mut) a1;
+                Object a2 = resolveArg(2, slot, tick, stores[2], trackers[2], isRead, isWrite, isValueTracked, serviceArgs, muts[2]); if (isWrite[2]) muts[2] = (Mut) a2;
+                if (hasFilters && !checkFilters(whereFilters, new Object[]{a0, a1, a2}, isRead, isWrite, compTypes, muts, 3)) { continue; }
+                mh.invokeExact(a0, a1, a2);
+                for (int i = 0; i < 3; i++) { if (isWrite[i]) ((ComponentStorage) stores[i]).set(muts[i].slot(), muts[i].flush()); }
+            }} catch (Throwable e) { throw new RuntimeException(e); }
+        };
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static ChunkProcessor createProcessor4(java.lang.invoke.MethodHandle mh, boolean[] isRead, boolean[] isWrite, boolean[] isValueTracked, ComponentId[] compIds, Class<?>[] compTypes, Object[] serviceArgs, java.util.Map<Integer, zzuegg.ecs.query.FieldFilter> whereFilters) {
+        boolean hasFilters = !whereFilters.isEmpty();
+        return (chunk, tick) -> {
+            var stores = new ComponentStorage[4]; var trackers = new ChangeTracker[4]; var muts = new Mut[4];
+            for (int i = 0; i < 4; i++) { if (isRead[i] || isWrite[i]) stores[i] = chunk.componentStorage(compIds[i]); if (isWrite[i]) trackers[i] = chunk.changeTracker(compIds[i]); }
+            int count = chunk.count();
+            try { for (int slot = 0; slot < count; slot++) {
+                Object a0 = resolveArg(0, slot, tick, stores[0], trackers[0], isRead, isWrite, isValueTracked, serviceArgs, muts[0]); if (isWrite[0]) muts[0] = (Mut) a0;
+                Object a1 = resolveArg(1, slot, tick, stores[1], trackers[1], isRead, isWrite, isValueTracked, serviceArgs, muts[1]); if (isWrite[1]) muts[1] = (Mut) a1;
+                Object a2 = resolveArg(2, slot, tick, stores[2], trackers[2], isRead, isWrite, isValueTracked, serviceArgs, muts[2]); if (isWrite[2]) muts[2] = (Mut) a2;
+                Object a3 = resolveArg(3, slot, tick, stores[3], trackers[3], isRead, isWrite, isValueTracked, serviceArgs, muts[3]); if (isWrite[3]) muts[3] = (Mut) a3;
+                if (hasFilters && !checkFilters(whereFilters, new Object[]{a0, a1, a2, a3}, isRead, isWrite, compTypes, muts, 4)) { continue; }
+                mh.invokeExact(a0, a1, a2, a3);
+                for (int i = 0; i < 4; i++) { if (isWrite[i]) ((ComponentStorage) stores[i]).set(muts[i].slot(), muts[i].flush()); }
+            }} catch (Throwable e) { throw new RuntimeException(e); }
+        };
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static boolean checkFilters(java.util.Map<Integer, zzuegg.ecs.query.FieldFilter> whereFilters, Object[] argValues, boolean[] isRead, boolean[] isWrite, Class<?>[] compTypes, Mut[] muts, int n) {
+        var componentMap = new java.util.HashMap<Class<?>, Record>();
+        for (int i = 0; i < n; i++) {
+            if (isRead[i]) {
+                componentMap.put(compTypes[i], (Record) argValues[i]);
+            } else if (isWrite[i]) {
+                componentMap.put(compTypes[i], (Record) muts[i].get());
             }
-            int count = chunk.count();
-            try {
-                for (int slot = 0; slot < count; slot++) {
-                    Object a0 = resolveArg(0, slot, tick, stores[0], trackers[0], isRead, isWrite, isValueTracked, serviceArgs, muts[0]);
-                    if (isWrite[0]) muts[0] = (Mut) a0;
-                    Object a1 = resolveArg(1, slot, tick, stores[1], trackers[1], isRead, isWrite, isValueTracked, serviceArgs, muts[1]);
-                    if (isWrite[1]) muts[1] = (Mut) a1;
-                    Object a2 = resolveArg(2, slot, tick, stores[2], trackers[2], isRead, isWrite, isValueTracked, serviceArgs, muts[2]);
-                    if (isWrite[2]) muts[2] = (Mut) a2;
-
-                    mh.invokeExact(a0, a1, a2);
-
-                    for (int i = 0; i < 3; i++) {
-                        if (isWrite[i]) ((ComponentStorage) stores[i]).set(muts[i].slot(), muts[i].flush());
-                    }
-                }
-            } catch (Throwable e) { throw new RuntimeException(e); }
-        };
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private static ChunkProcessor createProcessor4(
-            java.lang.invoke.MethodHandle mh,
-            boolean[] isRead, boolean[] isWrite, boolean[] isValueTracked,
-            ComponentId[] compIds, Object[] serviceArgs) {
-
-        return (chunk, tick) -> {
-            ComponentStorage[] stores = new ComponentStorage[4];
-            ChangeTracker[] trackers = new ChangeTracker[4];
-            Mut[] muts = new Mut[4];
-            for (int i = 0; i < 4; i++) {
-                if (isRead[i] || isWrite[i]) stores[i] = chunk.componentStorage(compIds[i]);
-                if (isWrite[i]) trackers[i] = chunk.changeTracker(compIds[i]);
-            }
-            int count = chunk.count();
-            try {
-                for (int slot = 0; slot < count; slot++) {
-                    Object a0 = resolveArg(0, slot, tick, stores[0], trackers[0], isRead, isWrite, isValueTracked, serviceArgs, muts[0]);
-                    if (isWrite[0]) muts[0] = (Mut) a0;
-                    Object a1 = resolveArg(1, slot, tick, stores[1], trackers[1], isRead, isWrite, isValueTracked, serviceArgs, muts[1]);
-                    if (isWrite[1]) muts[1] = (Mut) a1;
-                    Object a2 = resolveArg(2, slot, tick, stores[2], trackers[2], isRead, isWrite, isValueTracked, serviceArgs, muts[2]);
-                    if (isWrite[2]) muts[2] = (Mut) a2;
-                    Object a3 = resolveArg(3, slot, tick, stores[3], trackers[3], isRead, isWrite, isValueTracked, serviceArgs, muts[3]);
-                    if (isWrite[3]) muts[3] = (Mut) a3;
-
-                    mh.invokeExact(a0, a1, a2, a3);
-
-                    for (int i = 0; i < 4; i++) {
-                        if (isWrite[i]) ((ComponentStorage) stores[i]).set(muts[i].slot(), muts[i].flush());
-                    }
-                }
-            } catch (Throwable e) { throw new RuntimeException(e); }
-        };
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private static Object resolveArg(int i, int slot, long tick,
-                                      ComponentStorage store, ChangeTracker tracker,
-                                      boolean[] isRead, boolean[] isWrite, boolean[] isValueTracked,
-                                      Object[] serviceArgs, Mut existing) {
-        if (isRead[i]) {
-            return store.get(slot);
-        } else if (isWrite[i]) {
-            if (existing == null) {
-                return new Mut(store.get(slot), slot, tracker, tick, isValueTracked[i]);
-            } else {
-                existing.reset(store.get(slot), slot, tracker, tick);
-                return existing;
-            }
-        } else {
-            return serviceArgs[i];
         }
+        for (var filter : whereFilters.values()) {
+            if (!filter.test(componentMap)) return false;
+        }
+        return true;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Object resolveArg(int i, int slot, long tick, ComponentStorage store, ChangeTracker tracker, boolean[] isRead, boolean[] isWrite, boolean[] isValueTracked, Object[] serviceArgs, Mut existing) {
+        if (isRead[i]) { return store.get(slot); }
+        else if (isWrite[i]) {
+            if (existing == null) { return new Mut(store.get(slot), slot, tracker, tick, isValueTracked[i]); }
+            else { existing.reset(store.get(slot), slot, tracker, tick); return existing; }
+        }
+        else { return serviceArgs[i]; }
     }
 }

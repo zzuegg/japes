@@ -4,10 +4,13 @@ import zzuegg.ecs.change.ChangeTracker;
 import zzuegg.ecs.component.ComponentId;
 import zzuegg.ecs.component.Mut;
 import zzuegg.ecs.query.ComponentAccess;
+import zzuegg.ecs.query.FieldFilter;
 import zzuegg.ecs.storage.Chunk;
 import zzuegg.ecs.storage.ComponentStorage;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class SystemExecutionPlan {
 
@@ -20,13 +23,16 @@ public final class SystemExecutionPlan {
     // Per-chunk cached references — set once per chunk, used for all entities
     private final ComponentStorage<?>[] cachedStorages;
     private final ChangeTracker[] cachedTrackers;
+    private final Map<Integer, FieldFilter> whereFilters;
 
-    public SystemExecutionPlan(int paramCount, List<ParamSlot> componentSlots, List<Integer> serviceArgIndices) {
+    public SystemExecutionPlan(int paramCount, List<ParamSlot> componentSlots, List<Integer> serviceArgIndices,
+                               Map<Integer, FieldFilter> whereFilters) {
         this.args = new Object[paramCount];
         this.slots = componentSlots.toArray(ParamSlot[]::new);
         this.mutCache = new Mut<?>[slots.length];
         this.cachedStorages = new ComponentStorage<?>[slots.length];
         this.cachedTrackers = new ChangeTracker[slots.length];
+        this.whereFilters = whereFilters;
     }
 
     public Object[] args() {
@@ -118,6 +124,21 @@ public final class SystemExecutionPlan {
                 } else {
                     args[cs.argIndex] = cachedStorages[i].get(slot);
                 }
+            }
+
+            // Check @Where filters
+            if (!whereFilters.isEmpty()) {
+                var componentMap = new HashMap<Class<?>, Record>();
+                for (int i = 0; i < slots.length; i++) {
+                    var cs = slots[i];
+                    var value = cs.isWrite ? ((Mut) mutCache[i]).get() : args[cs.argIndex];
+                    componentMap.put(cs.access.type(), (Record) value);
+                }
+                boolean pass = true;
+                for (var filter : whereFilters.values()) {
+                    if (!filter.test(componentMap)) { pass = false; break; }
+                }
+                if (!pass) continue;
             }
 
             // Invoke

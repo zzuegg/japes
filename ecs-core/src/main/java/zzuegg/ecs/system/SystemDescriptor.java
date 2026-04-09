@@ -1,9 +1,11 @@
 package zzuegg.ecs.system;
 
 import zzuegg.ecs.query.ComponentAccess;
+import zzuegg.ecs.query.FieldFilter;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public record SystemDescriptor(
@@ -13,6 +15,7 @@ public record SystemDescriptor(
     Set<String> before,
     boolean isExclusive,
     List<ComponentAccess> componentAccesses,
+    Map<Integer, FieldFilter> whereFilters,
     Set<Class<?>> resourceReads,
     Set<Class<?>> resourceWrites,
     Set<Class<?>> eventReads,
