@@ -35,6 +35,7 @@ public final class World {
     private final Map<String, SystemExecutionPlan> systemPlans = new HashMap<>();
     private final Map<String, ChunkProcessor> chunkProcessors = new HashMap<>();
     private final Set<String> disabledSystems = new HashSet<>();
+    private final List<Commands> allCommandBuffers = new ArrayList<>();
     private final boolean useGeneratedProcessors;
 
     World(WorldBuilder builder) {
@@ -291,6 +292,10 @@ public final class World {
         return entityAllocator.entityCount();
     }
 
+    public void close() {
+        executor.shutdown();
+    }
+
     public void setSystemEnabled(String systemName, boolean enabled) {
         if (enabled) {
             disabledSystems.remove(systemName);
@@ -314,7 +319,8 @@ public final class World {
     }
 
     public void removeSystem(String systemName) {
-        boolean removed = allDescriptors.removeIf(d -> d.name().equals(systemName));
+        boolean removed = allDescriptors.removeIf(d ->
+            d.name().equals(systemName) || d.name().endsWith("." + systemName));
         if (removed) {
             rebuildSchedule();
         }
@@ -381,6 +387,15 @@ public final class World {
 
     private void executeStage(ScheduleGraph graph) {
         executor.execute(graph, this::executeSystem);
+        flushPendingCommands();
+    }
+
+    private void flushPendingCommands() {
+        for (var cmds : allCommandBuffers) {
+            if (!cmds.isEmpty()) {
+                zzuegg.ecs.command.CommandProcessor.process(cmds.drain(), this);
+            }
+        }
     }
 
     private void executeSystem(ScheduleGraph.SystemNode node) {
@@ -388,9 +403,15 @@ public final class World {
         var invoker = node.invoker();
         if (invoker == null) return;
 
-        // Check disabled
+        // Check disabled (supports both qualified "Class.method" and simple "method" names)
         if (disabledSystems.contains(desc.name())) {
             return;
+        }
+        if (desc.name().contains(".")) {
+            var simpleName = desc.name().substring(desc.name().lastIndexOf('.') + 1);
+            if (disabledSystems.contains(simpleName)) {
+                return;
+            }
         }
 
         // Check RunIf condition
@@ -508,7 +529,9 @@ public final class World {
         } else if (paramType == ResMut.class) {
             return resourceStore.getMut(extractTypeArg(param));
         } else if (paramType == Commands.class) {
-            return new Commands();
+            var cmds = new Commands();
+            allCommandBuffers.add(cmds);
+            return cmds;
         } else if (paramType == EventWriter.class) {
             var eventType = (Class<? extends Record>) extractTypeArg(param);
             return eventRegistry.store(eventType).writer();

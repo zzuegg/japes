@@ -166,8 +166,10 @@ public final class SystemParser {
             var runIfAnnotation = method.getAnnotation(RunIf.class);
             String runIf = runIfAnnotation != null ? runIfAnnotation.value() : null;
 
+            var qualifiedName = clazz.getSimpleName() + "." + method.getName();
+
             results.add(new SystemDescriptor(
-                method.getName(), stage, after, before, exclusive,
+                qualifiedName, stage, after, before, exclusive,
                 componentAccesses, whereFilters,
                 resourceReads, resourceWrites,
                 eventReads, eventWrites, withFilters, withoutFilters,

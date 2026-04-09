@@ -17,6 +17,11 @@ public final class DagBuilder {
             var desc = descriptors.get(i);
             nodes.add(new ScheduleGraph.SystemNode(desc));
             nameToIndex.put(desc.name(), i);
+            // Also register the simple method name for ordering references
+            if (desc.name().contains(".")) {
+                var simpleName = desc.name().substring(desc.name().lastIndexOf('.') + 1);
+                nameToIndex.putIfAbsent(simpleName, i);
+            }
         }
 
         int n = nodes.size();

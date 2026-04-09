@@ -85,7 +85,7 @@ class SystemParserTest {
 
         assertEquals(1, descriptors.size());
         var desc = descriptors.getFirst();
-        assertEquals("move", desc.name());
+        assertEquals("SimpleSystems.move", desc.name());
         assertEquals(2, desc.componentAccesses().size());
 
         var reads = desc.componentAccesses().stream()
@@ -181,7 +181,7 @@ class SystemParserTest {
         for (var desc : descriptors) {
             assertEquals("Update", desc.stage());
         }
-        var gravity = descriptors.stream().filter(d -> d.name().equals("gravity")).findFirst().orElseThrow();
+        var gravity = descriptors.stream().filter(d -> d.name().endsWith(".gravity")).findFirst().orElseThrow();
         assertTrue(gravity.after().contains("input"));
     }
 

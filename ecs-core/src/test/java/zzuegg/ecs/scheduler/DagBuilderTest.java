@@ -63,7 +63,7 @@ class DagBuilderTest {
 
         var ready = graph.readySystems();
         assertEquals(1, ready.size());
-        assertEquals("second", ready.getFirst().descriptor().name());
+        assertTrue(ready.getFirst().descriptor().name().endsWith(".second"));
     }
 
     @Test
@@ -86,7 +86,7 @@ class DagBuilderTest {
 
         var nextReady = graph.readySystems();
         assertEquals(1, nextReady.size());
-        assertEquals("first", nextReady.getFirst().descriptor().name());
+        assertTrue(nextReady.getFirst().descriptor().name().endsWith(".first"));
     }
 
     @Test

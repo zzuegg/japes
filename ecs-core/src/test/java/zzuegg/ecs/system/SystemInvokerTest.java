@@ -32,7 +32,7 @@ class SystemInvokerTest {
         var reg = new ComponentRegistry();
         reg.register(Position.class);
         var descriptors = SystemParser.parse(TestSystems.class, reg);
-        var desc = descriptors.stream().filter(d -> d.name().equals("readOnly")).findFirst().orElseThrow();
+        var desc = descriptors.stream().filter(d -> d.name().endsWith(".readOnly")).findFirst().orElseThrow();
 
         var invoker = SystemInvoker.create(desc);
         assertNotNull(invoker);
@@ -43,7 +43,7 @@ class SystemInvokerTest {
         var reg = new ComponentRegistry();
         reg.register(Position.class);
         var descriptors = SystemParser.parse(TestSystems.class, reg);
-        var desc = descriptors.stream().filter(d -> d.name().equals("readOnly")).findFirst().orElseThrow();
+        var desc = descriptors.stream().filter(d -> d.name().endsWith(".readOnly")).findFirst().orElseThrow();
 
         var invoker = SystemInvoker.create(desc);
         lastPosition.set(null);
@@ -59,7 +59,7 @@ class SystemInvokerTest {
         reg.register(Position.class);
         reg.register(Velocity.class);
         var descriptors = SystemParser.parse(TestSystems.class, reg);
-        var desc = descriptors.stream().filter(d -> d.name().equals("writeComponent")).findFirst().orElseThrow();
+        var desc = descriptors.stream().filter(d -> d.name().endsWith(".writeComponent")).findFirst().orElseThrow();
 
         var invoker = SystemInvoker.create(desc);
 
