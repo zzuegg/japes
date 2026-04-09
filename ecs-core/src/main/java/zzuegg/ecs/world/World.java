@@ -230,6 +230,33 @@ public final class World {
         return entityAllocator.entityCount();
     }
 
+    @SafeVarargs
+    public final Snapshot snapshot(Class<? extends Record>... componentTypes) {
+        var requiredIds = new HashSet<ComponentId>();
+        for (var type : componentTypes) {
+            requiredIds.add(componentRegistry.getOrRegister(type));
+        }
+
+        var matchingArchetypes = archetypeGraph.findMatching(requiredIds);
+        var entries = new ArrayList<Snapshot.SnapshotEntry>();
+
+        for (var archetype : matchingArchetypes) {
+            for (var chunk : archetype.chunks()) {
+                for (int slot = 0; slot < chunk.count(); slot++) {
+                    var entity = chunk.entity(slot);
+                    var components = new Record[componentTypes.length];
+                    for (int i = 0; i < componentTypes.length; i++) {
+                        var compId = componentRegistry.getOrRegister(componentTypes[i]);
+                        components[i] = chunk.get(compId, slot);
+                    }
+                    entries.add(new Snapshot.SnapshotEntry(entity, components));
+                }
+            }
+        }
+
+        return new Snapshot(entries);
+    }
+
     private void executeStage(ScheduleGraph graph) {
         executor.execute(graph, this::executeSystem);
     }
