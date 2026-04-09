@@ -1,0 +1,149 @@
+package zzuegg.ecs.system;
+
+import zzuegg.ecs.command.Commands;
+import zzuegg.ecs.component.ComponentRegistry;
+import zzuegg.ecs.component.Mut;
+import zzuegg.ecs.event.EventReader;
+import zzuegg.ecs.event.EventWriter;
+import zzuegg.ecs.query.AccessType;
+import zzuegg.ecs.query.ComponentAccess;
+import zzuegg.ecs.resource.Res;
+import zzuegg.ecs.resource.ResMut;
+import zzuegg.ecs.world.World;
+
+import java.lang.reflect.*;
+import java.util.*;
+
+public final class SystemParser {
+
+    private SystemParser() {}
+
+    public static List<SystemDescriptor> parse(Class<?> clazz, ComponentRegistry registry) {
+        var results = new ArrayList<SystemDescriptor>();
+
+        var setAnnotation = clazz.getAnnotation(SystemSet.class);
+        String setStage = setAnnotation != null ? setAnnotation.stage() : null;
+        Set<String> setAfter = setAnnotation != null ? Set.of(setAnnotation.after()) : Set.of();
+        Set<String> setBefore = setAnnotation != null ? Set.of(setAnnotation.before()) : Set.of();
+
+        Object instance = null;
+        for (var method : clazz.getDeclaredMethods()) {
+            if (method.isAnnotationPresent(zzuegg.ecs.system.System.class)) {
+                if (instance == null && !Modifier.isStatic(method.getModifiers())) {
+                    try {
+                        var ctor = clazz.getDeclaredConstructor();
+                        ctor.setAccessible(true);
+                        instance = ctor.newInstance();
+                    } catch (Exception e) {
+                        throw new RuntimeException("Cannot instantiate system class: " + clazz.getName(), e);
+                    }
+                }
+            }
+        }
+
+        for (var method : clazz.getDeclaredMethods()) {
+            var sysAnnotation = method.getAnnotation(zzuegg.ecs.system.System.class);
+            if (sysAnnotation == null) continue;
+
+            method.setAccessible(true);
+
+            // Stage resolution: method overrides set, but only if method explicitly changed from default
+            String stage = sysAnnotation.stage();
+            if (setStage != null && stage.equals("Update")) {
+                stage = setStage;
+            }
+
+            var after = new HashSet<>(setAfter);
+            after.addAll(Set.of(sysAnnotation.after()));
+            var before = new HashSet<>(setBefore);
+            before.addAll(Set.of(sysAnnotation.before()));
+
+            boolean exclusive = method.isAnnotationPresent(Exclusive.class);
+
+            var componentAccesses = new ArrayList<ComponentAccess>();
+            var resourceReads = new HashSet<Class<?>>();
+            var resourceWrites = new HashSet<Class<?>>();
+            var eventReads = new HashSet<Class<?>>();
+            var eventWrites = new HashSet<Class<?>>();
+            boolean usesCommands = false;
+            boolean usesLocal = false;
+
+            for (var param : method.getParameters()) {
+                var paramType = param.getType();
+
+                if (paramType == World.class) continue;
+                if (paramType == Commands.class) { usesCommands = true; continue; }
+                if (paramType == Local.class) { usesLocal = true; continue; }
+
+                if (paramType == Res.class) {
+                    resourceReads.add(extractTypeArg(param));
+                    continue;
+                }
+                if (paramType == ResMut.class) {
+                    resourceWrites.add(extractTypeArg(param));
+                    continue;
+                }
+                if (paramType == EventReader.class) {
+                    eventReads.add(extractTypeArg(param));
+                    continue;
+                }
+                if (paramType == EventWriter.class) {
+                    eventWrites.add(extractTypeArg(param));
+                    continue;
+                }
+
+                if (param.isAnnotationPresent(Read.class)) {
+                    var compId = registry.getOrRegister(paramType);
+                    @SuppressWarnings("unchecked")
+                    var recType = (Class<? extends Record>) paramType;
+                    componentAccesses.add(new ComponentAccess(compId, recType, AccessType.READ));
+                } else if (param.isAnnotationPresent(Write.class)) {
+                    var typeArg = extractTypeArg(param);
+                    var compId = registry.getOrRegister(typeArg);
+                    @SuppressWarnings("unchecked")
+                    var recType = (Class<? extends Record>) typeArg;
+                    componentAccesses.add(new ComponentAccess(compId, recType, AccessType.WRITE));
+                }
+            }
+
+            var withFilters = new HashSet<Class<? extends Record>>();
+            var withoutFilters = new HashSet<Class<? extends Record>>();
+            var changeFilters = new ArrayList<SystemDescriptor.FilterDescriptor>();
+
+            for (var w : method.getAnnotationsByType(With.class)) {
+                withFilters.add(w.value());
+            }
+            for (var w : method.getAnnotationsByType(Without.class)) {
+                withoutFilters.add(w.value());
+            }
+            for (var f : method.getAnnotationsByType(Filter.class)) {
+                changeFilters.add(new SystemDescriptor.FilterDescriptor(f.value(), f.target()));
+            }
+
+            var runIfAnnotation = method.getAnnotation(RunIf.class);
+            String runIf = runIfAnnotation != null ? runIfAnnotation.value() : null;
+
+            results.add(new SystemDescriptor(
+                method.getName(), stage, after, before, exclusive,
+                componentAccesses, resourceReads, resourceWrites,
+                eventReads, eventWrites, withFilters, withoutFilters,
+                changeFilters, usesCommands, usesLocal, runIf,
+                method, Modifier.isStatic(method.getModifiers()) ? null : instance
+            ));
+        }
+
+        return results;
+    }
+
+    private static Class<?> extractTypeArg(Parameter param) {
+        var genType = param.getParameterizedType();
+        if (genType instanceof ParameterizedType pt) {
+            var typeArg = pt.getActualTypeArguments()[0];
+            if (typeArg instanceof Class<?> c) {
+                return c;
+            }
+        }
+        throw new IllegalArgumentException(
+            "Cannot extract type argument from parameter: " + param.getName());
+    }
+}
