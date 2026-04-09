@@ -11,18 +11,17 @@ public final class Chunk {
 
     private final int capacity;
     private final Entity[] entities;
-    private final Map<ComponentId, ComponentArray<?>> arrays;
+    private final Map<ComponentId, ComponentStorage<?>> storages;
     private final Map<ComponentId, ChangeTracker> changeTrackers;
     private int count = 0;
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    public Chunk(int capacity, Map<ComponentId, Class<? extends Record>> componentTypes) {
+    public Chunk(int capacity, Map<ComponentId, Class<? extends Record>> componentTypes, ComponentStorage.Factory factory) {
         this.capacity = capacity;
         this.entities = new Entity[capacity];
-        this.arrays = new HashMap<>();
+        this.storages = new HashMap<>();
         this.changeTrackers = new HashMap<>();
         for (var entry : componentTypes.entrySet()) {
-            arrays.put(entry.getKey(), new ComponentArray(entry.getValue(), capacity));
+            storages.put(entry.getKey(), factory.create(entry.getValue(), capacity));
             changeTrackers.put(entry.getKey(), new ChangeTracker(capacity));
         }
     }
@@ -41,19 +40,12 @@ public final class Chunk {
         int lastIndex = count - 1;
         if (slot < lastIndex) {
             entities[slot] = entities[lastIndex];
-            for (var array : arrays.values()) {
-                array.swapRemove(slot, count);
-            }
-            for (var tracker : changeTrackers.values()) {
-                tracker.swapRemove(slot, count);
-            }
-        } else {
-            for (var array : arrays.values()) {
-                array.swapRemove(slot, count);
-            }
-            for (var tracker : changeTrackers.values()) {
-                tracker.swapRemove(slot, count);
-            }
+        }
+        for (var storage : storages.values()) {
+            storage.swapRemove(slot, count);
+        }
+        for (var tracker : changeTrackers.values()) {
+            tracker.swapRemove(slot, count);
         }
         entities[lastIndex] = null;
         count--;
@@ -61,12 +53,12 @@ public final class Chunk {
 
     @SuppressWarnings("unchecked")
     public <T extends Record> T get(ComponentId id, int slot) {
-        return ((ComponentArray<T>) arrays.get(id)).get(slot);
+        return ((ComponentStorage<T>) storages.get(id)).get(slot);
     }
 
     @SuppressWarnings("unchecked")
     public <T extends Record> void set(ComponentId id, int slot, T value) {
-        ((ComponentArray<T>) arrays.get(id)).set(slot, value);
+        ((ComponentStorage<T>) storages.get(id)).set(slot, value);
     }
 
     public Entity entity(int slot) {
@@ -77,8 +69,8 @@ public final class Chunk {
         return entities;
     }
 
-    public ComponentArray<?> componentArray(ComponentId id) {
-        return arrays.get(id);
+    public ComponentStorage<?> componentStorage(ComponentId id) {
+        return storages.get(id);
     }
 
     public int count() {

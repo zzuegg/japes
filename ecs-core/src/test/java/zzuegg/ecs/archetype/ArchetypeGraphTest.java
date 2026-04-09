@@ -15,7 +15,7 @@ class ArchetypeGraphTest {
     void getOrCreateArchetype() {
         var reg = new ComponentRegistry();
         var posId = reg.register(Position.class);
-        var graph = new ArchetypeGraph(reg, 1024);
+        var graph = new ArchetypeGraph(reg, 1024, zzuegg.ecs.storage.ComponentStorage.defaultFactory());
 
         var archId = ArchetypeId.of(Set.of(posId));
         var arch = graph.getOrCreate(archId);
@@ -28,7 +28,7 @@ class ArchetypeGraphTest {
     void sameIdReturnsSameArchetype() {
         var reg = new ComponentRegistry();
         var posId = reg.register(Position.class);
-        var graph = new ArchetypeGraph(reg, 1024);
+        var graph = new ArchetypeGraph(reg, 1024, zzuegg.ecs.storage.ComponentStorage.defaultFactory());
 
         var archId = ArchetypeId.of(Set.of(posId));
         var a = graph.getOrCreate(archId);
@@ -42,7 +42,7 @@ class ArchetypeGraphTest {
         var reg = new ComponentRegistry();
         var posId = reg.register(Position.class);
         var velId = reg.register(Velocity.class);
-        var graph = new ArchetypeGraph(reg, 1024);
+        var graph = new ArchetypeGraph(reg, 1024, zzuegg.ecs.storage.ComponentStorage.defaultFactory());
 
         var posOnly = ArchetypeId.of(Set.of(posId));
         graph.getOrCreate(posOnly);
@@ -58,7 +58,7 @@ class ArchetypeGraphTest {
         var reg = new ComponentRegistry();
         var posId = reg.register(Position.class);
         var velId = reg.register(Velocity.class);
-        var graph = new ArchetypeGraph(reg, 1024);
+        var graph = new ArchetypeGraph(reg, 1024, zzuegg.ecs.storage.ComponentStorage.defaultFactory());
 
         var posVel = ArchetypeId.of(Set.of(posId, velId));
         graph.getOrCreate(posVel);
@@ -74,7 +74,7 @@ class ArchetypeGraphTest {
         var reg = new ComponentRegistry();
         var posId = reg.register(Position.class);
         var velId = reg.register(Velocity.class);
-        var graph = new ArchetypeGraph(reg, 1024);
+        var graph = new ArchetypeGraph(reg, 1024, zzuegg.ecs.storage.ComponentStorage.defaultFactory());
 
         var posOnly = ArchetypeId.of(Set.of(posId));
         graph.getOrCreate(posOnly);
@@ -89,7 +89,7 @@ class ArchetypeGraphTest {
         var reg = new ComponentRegistry();
         var posId = reg.register(Position.class);
         var velId = reg.register(Velocity.class);
-        var graph = new ArchetypeGraph(reg, 1024);
+        var graph = new ArchetypeGraph(reg, 1024, zzuegg.ecs.storage.ComponentStorage.defaultFactory());
 
         assertEquals(0, graph.archetypeCount());
         graph.getOrCreate(ArchetypeId.of(Set.of(posId)));
@@ -104,7 +104,7 @@ class ArchetypeGraphTest {
         var posId = reg.register(Position.class);
         var velId = reg.register(Velocity.class);
         var hpId = reg.register(Health.class);
-        var graph = new ArchetypeGraph(reg, 1024);
+        var graph = new ArchetypeGraph(reg, 1024, zzuegg.ecs.storage.ComponentStorage.defaultFactory());
 
         graph.getOrCreate(ArchetypeId.of(Set.of(posId)));
         graph.getOrCreate(ArchetypeId.of(Set.of(posId, velId)));

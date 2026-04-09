@@ -32,7 +32,7 @@ public final class World {
     private final Map<String, java.util.function.BooleanSupplier> runConditions = new HashMap<>();
 
     World(WorldBuilder builder) {
-        this.archetypeGraph = new ArchetypeGraph(componentRegistry, builder.chunkSize);
+        this.archetypeGraph = new ArchetypeGraph(componentRegistry, builder.chunkSize, builder.storageFactory);
         this.executor = builder.executor;
 
         for (var resource : builder.resources) {

@@ -3,6 +3,7 @@ package zzuegg.ecs.world;
 import zzuegg.ecs.executor.Executor;
 import zzuegg.ecs.executor.Executors;
 import zzuegg.ecs.scheduler.Stage;
+import zzuegg.ecs.storage.ComponentStorage;
 
 import java.util.*;
 
@@ -13,6 +14,7 @@ public final class WorldBuilder {
     final List<Class<? extends Record>> eventTypes = new ArrayList<>();
     final Map<String, Stage> stages = new LinkedHashMap<>();
     Executor executor;
+    ComponentStorage.Factory storageFactory;
     int chunkSize = 1024;
 
     WorldBuilder() {
@@ -53,9 +55,17 @@ public final class WorldBuilder {
         return this;
     }
 
+    public WorldBuilder storageFactory(ComponentStorage.Factory factory) {
+        this.storageFactory = factory;
+        return this;
+    }
+
     public World build() {
         if (executor == null) {
             executor = Executors.singleThreaded();
+        }
+        if (storageFactory == null) {
+            storageFactory = ComponentStorage.defaultFactory();
         }
         return new World(this);
     }

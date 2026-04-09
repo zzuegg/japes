@@ -24,7 +24,7 @@ class ArchetypeTest {
         var posId = reg.getOrRegister(Position.class);
         var velId = reg.getOrRegister(Velocity.class);
         var archId = ArchetypeId.of(Set.of(posId, velId));
-        var arch = new Archetype(archId, reg, 4);
+        var arch = new Archetype(archId, reg, 4, zzuegg.ecs.storage.ComponentStorage.defaultFactory());
 
         var loc = arch.add(Entity.of(0, 0));
 
@@ -37,7 +37,7 @@ class ArchetypeTest {
         var reg = registry();
         var posId = reg.getOrRegister(Position.class);
         var archId = ArchetypeId.of(Set.of(posId));
-        var arch = new Archetype(archId, reg, 2);
+        var arch = new Archetype(archId, reg, 2, zzuegg.ecs.storage.ComponentStorage.defaultFactory());
 
         arch.add(Entity.of(0, 0));
         arch.add(Entity.of(1, 0));
@@ -52,7 +52,7 @@ class ArchetypeTest {
         var reg = registry();
         var posId = reg.getOrRegister(Position.class);
         var archId = ArchetypeId.of(Set.of(posId));
-        var arch = new Archetype(archId, reg, 16);
+        var arch = new Archetype(archId, reg, 16, zzuegg.ecs.storage.ComponentStorage.defaultFactory());
 
         var loc = arch.add(Entity.of(0, 0));
         arch.set(posId, loc, new Position(1, 2));
@@ -65,7 +65,7 @@ class ArchetypeTest {
         var reg = registry();
         var posId = reg.getOrRegister(Position.class);
         var archId = ArchetypeId.of(Set.of(posId));
-        var arch = new Archetype(archId, reg, 16);
+        var arch = new Archetype(archId, reg, 16, zzuegg.ecs.storage.ComponentStorage.defaultFactory());
 
         arch.add(Entity.of(0, 0));
         arch.set(posId, new EntityLocation(archId, 0, 0), new Position(0, 0));
@@ -84,7 +84,7 @@ class ArchetypeTest {
         var reg = registry();
         var posId = reg.getOrRegister(Position.class);
         var archId = ArchetypeId.of(Set.of(posId));
-        var arch = new Archetype(archId, reg, 16);
+        var arch = new Archetype(archId, reg, 16, zzuegg.ecs.storage.ComponentStorage.defaultFactory());
 
         arch.add(Entity.of(0, 0));
         var swapped = arch.remove(new EntityLocation(archId, 0, 0));
@@ -96,7 +96,7 @@ class ArchetypeTest {
         var reg = registry();
         var posId = reg.getOrRegister(Position.class);
         var archId = ArchetypeId.of(Set.of(posId));
-        var arch = new Archetype(archId, reg, 2);
+        var arch = new Archetype(archId, reg, 2, zzuegg.ecs.storage.ComponentStorage.defaultFactory());
 
         arch.add(Entity.of(0, 0));
         arch.add(Entity.of(1, 0));
@@ -110,7 +110,7 @@ class ArchetypeTest {
         var reg = registry();
         var posId = reg.getOrRegister(Position.class);
         var archId = ArchetypeId.of(Set.of(posId));
-        var arch = new Archetype(archId, reg, 2);
+        var arch = new Archetype(archId, reg, 2, zzuegg.ecs.storage.ComponentStorage.defaultFactory());
 
         arch.add(Entity.of(0, 0));
         arch.add(Entity.of(1, 0));

@@ -2,6 +2,7 @@ package zzuegg.ecs.archetype;
 
 import zzuegg.ecs.component.ComponentId;
 import zzuegg.ecs.component.ComponentRegistry;
+import zzuegg.ecs.storage.ComponentStorage;
 
 import java.util.*;
 
@@ -9,17 +10,19 @@ public final class ArchetypeGraph {
 
     private final ComponentRegistry registry;
     private final int chunkCapacity;
+    private final ComponentStorage.Factory storageFactory;
     private final Map<ArchetypeId, Archetype> archetypes = new HashMap<>();
     private final Map<ArchetypeId, Map<ComponentId, ArchetypeId>> addEdges = new HashMap<>();
     private final Map<ArchetypeId, Map<ComponentId, ArchetypeId>> removeEdges = new HashMap<>();
 
-    public ArchetypeGraph(ComponentRegistry registry, int chunkCapacity) {
+    public ArchetypeGraph(ComponentRegistry registry, int chunkCapacity, ComponentStorage.Factory storageFactory) {
         this.registry = registry;
         this.chunkCapacity = chunkCapacity;
+        this.storageFactory = storageFactory;
     }
 
     public Archetype getOrCreate(ArchetypeId id) {
-        return archetypes.computeIfAbsent(id, k -> new Archetype(k, registry, chunkCapacity));
+        return archetypes.computeIfAbsent(id, k -> new Archetype(k, registry, chunkCapacity, storageFactory));
     }
 
     public ArchetypeId addEdge(ArchetypeId source, ComponentId added) {

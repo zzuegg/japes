@@ -40,9 +40,10 @@ public final class CommandProcessor {
         // Group by component type signature for bulk allocation
         var groups = new LinkedHashMap<Set<Class<?>>, List<Commands.SpawnCommand>>();
         for (var spawn : batch) {
-            var signature = java.util.Arrays.stream(spawn.components())
-                .map(Object::getClass)
-                .collect(Collectors.toSet());
+            Set<Class<?>> signature = new java.util.HashSet<>();
+            for (var comp : spawn.components()) {
+                signature.add(comp.getClass());
+            }
             groups.computeIfAbsent(signature, k -> new ArrayList<>()).add(spawn);
         }
 

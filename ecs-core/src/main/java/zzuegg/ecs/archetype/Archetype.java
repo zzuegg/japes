@@ -4,6 +4,7 @@ import zzuegg.ecs.component.ComponentId;
 import zzuegg.ecs.component.ComponentRegistry;
 import zzuegg.ecs.entity.Entity;
 import zzuegg.ecs.storage.Chunk;
+import zzuegg.ecs.storage.ComponentStorage;
 
 import java.util.*;
 
@@ -12,11 +13,13 @@ public final class Archetype {
     private final ArchetypeId id;
     private final Map<ComponentId, Class<? extends Record>> componentTypes;
     private final int chunkCapacity;
+    private final ComponentStorage.Factory storageFactory;
     private final List<Chunk> chunks = new ArrayList<>();
 
-    public Archetype(ArchetypeId id, ComponentRegistry registry, int chunkCapacity) {
+    public Archetype(ArchetypeId id, ComponentRegistry registry, int chunkCapacity, ComponentStorage.Factory storageFactory) {
         this.id = id;
         this.chunkCapacity = chunkCapacity;
+        this.storageFactory = storageFactory;
         this.componentTypes = new LinkedHashMap<>();
         for (var compId : id.components()) {
             componentTypes.put(compId, registry.info(compId).type());
@@ -84,7 +87,7 @@ public final class Archetype {
                 return chunk;
             }
         }
-        var chunk = new Chunk(chunkCapacity, componentTypes);
+        var chunk = new Chunk(chunkCapacity, componentTypes, storageFactory);
         chunks.add(chunk);
         return chunk;
     }

@@ -20,7 +20,7 @@ class ChunkTest {
         return new Chunk(capacity, Map.of(
             POS_ID, Position.class,
             VEL_ID, Velocity.class
-        ));
+        ), ComponentStorage.defaultFactory());
     }
 
     @Test
@@ -112,11 +112,11 @@ class ChunkTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void rawArrayAccess() {
+    void storageAccess() {
         var chunk = createChunk(16);
         chunk.add(Entity.of(0, 0));
         chunk.set(POS_ID, 0, new Position(5, 10));
-        ComponentArray<Position> array = (ComponentArray<Position>) chunk.componentArray(POS_ID);
-        assertEquals(new Position(5, 10), array.get(0));
+        var storage = (ComponentStorage<Position>) chunk.componentStorage(POS_ID);
+        assertEquals(new Position(5, 10), storage.get(0));
     }
 }
