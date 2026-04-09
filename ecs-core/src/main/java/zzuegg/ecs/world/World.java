@@ -29,6 +29,7 @@ public final class World {
     private final Tick tick = new Tick();
     private final Schedule schedule;
     private final Map<String, Local<?>> locals = new HashMap<>();
+    private final Map<String, java.util.function.BooleanSupplier> runConditions = new HashMap<>();
 
     World(WorldBuilder builder) {
         this.archetypeGraph = new ArchetypeGraph(componentRegistry, builder.chunkSize);
@@ -45,12 +46,40 @@ public final class World {
         var allDescriptors = new ArrayList<SystemDescriptor>();
         for (var clazz : builder.systemClasses) {
             allDescriptors.addAll(SystemParser.parse(clazz, componentRegistry));
+            parseRunConditions(clazz);
         }
 
         this.schedule = new Schedule(allDescriptors, builder.stages);
 
         for (var entry : schedule.orderedStages()) {
             entry.getValue().buildInvokers();
+        }
+    }
+
+    private void parseRunConditions(Class<?> clazz) {
+        Object instance = null;
+        for (var method : clazz.getDeclaredMethods()) {
+            if (method.getReturnType() == boolean.class && method.getParameterCount() == 0
+                    && !method.isAnnotationPresent(zzuegg.ecs.system.System.class)) {
+                method.setAccessible(true);
+                if (instance == null && !java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
+                    try {
+                        var ctor = clazz.getDeclaredConstructor();
+                        ctor.setAccessible(true);
+                        instance = ctor.newInstance();
+                    } catch (Exception e) {
+                        continue;
+                    }
+                }
+                final Object inst = instance;
+                runConditions.put(method.getName(), () -> {
+                    try {
+                        return (boolean) method.invoke(inst);
+                    } catch (Exception e) {
+                        return false;
+                    }
+                });
+            }
         }
     }
 
@@ -209,6 +238,14 @@ public final class World {
         var desc = node.descriptor();
         var invoker = node.invoker();
         if (invoker == null) return;
+
+        // Check RunIf condition
+        if (desc.runIf() != null) {
+            var condition = runConditions.get(desc.runIf());
+            if (condition != null && !condition.getAsBoolean()) {
+                return;
+            }
+        }
 
         if (desc.isExclusive()) {
             try {
