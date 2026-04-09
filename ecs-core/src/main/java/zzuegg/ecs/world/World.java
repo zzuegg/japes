@@ -27,17 +27,21 @@ public final class World {
     private final EventRegistry eventRegistry = new EventRegistry();
     private final Executor executor;
     private final Tick tick = new Tick();
-    private final Schedule schedule;
+    private Schedule schedule;
+    private final Map<String, Stage> stages;
+    private final List<SystemDescriptor> allDescriptors = new ArrayList<>();
     private final Map<String, Local<?>> locals = new HashMap<>();
     private final Map<String, java.util.function.BooleanSupplier> runConditions = new HashMap<>();
     private final Map<String, SystemExecutionPlan> systemPlans = new HashMap<>();
     private final Map<String, ChunkProcessor> chunkProcessors = new HashMap<>();
+    private final Set<String> disabledSystems = new HashSet<>();
     private final boolean useGeneratedProcessors;
 
     World(WorldBuilder builder) {
         this.archetypeGraph = new ArchetypeGraph(componentRegistry, builder.chunkSize, builder.storageFactory);
         this.executor = builder.executor;
         this.useGeneratedProcessors = builder.useGeneratedProcessors;
+        this.stages = new HashMap<>(builder.stages);
 
         for (var resource : builder.resources) {
             resourceStore.insert(resource);
@@ -47,13 +51,18 @@ public final class World {
             eventRegistry.register(eventType);
         }
 
-        var allDescriptors = new ArrayList<SystemDescriptor>();
         for (var clazz : builder.systemClasses) {
             allDescriptors.addAll(SystemParser.parse(clazz, componentRegistry));
             parseRunConditions(clazz);
         }
 
-        this.schedule = new Schedule(allDescriptors, builder.stages);
+        rebuildSchedule();
+    }
+
+    private void rebuildSchedule() {
+        systemPlans.clear();
+        chunkProcessors.clear();
+        this.schedule = new Schedule(allDescriptors, stages);
 
         for (var entry : schedule.orderedStages()) {
             entry.getValue().buildInvokers();
@@ -277,6 +286,28 @@ public final class World {
         return entityAllocator.entityCount();
     }
 
+    public void setSystemEnabled(String systemName, boolean enabled) {
+        if (enabled) {
+            disabledSystems.remove(systemName);
+        } else {
+            disabledSystems.add(systemName);
+        }
+    }
+
+    public void addSystem(Class<?> systemClass) {
+        var newDescriptors = SystemParser.parse(systemClass, componentRegistry);
+        allDescriptors.addAll(newDescriptors);
+        parseRunConditions(systemClass);
+        rebuildSchedule();
+    }
+
+    public void removeSystem(String systemName) {
+        boolean removed = allDescriptors.removeIf(d -> d.name().equals(systemName));
+        if (removed) {
+            rebuildSchedule();
+        }
+    }
+
     @SafeVarargs
     public final Snapshot snapshot(Class<? extends Record>... componentTypes) {
         var requiredIds = new HashSet<ComponentId>();
@@ -344,6 +375,11 @@ public final class World {
         var desc = node.descriptor();
         var invoker = node.invoker();
         if (invoker == null) return;
+
+        // Check disabled
+        if (disabledSystems.contains(desc.name())) {
+            return;
+        }
 
         // Check RunIf condition
         if (desc.runIf() != null) {

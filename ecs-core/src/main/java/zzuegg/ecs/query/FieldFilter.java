@@ -101,7 +101,8 @@ public sealed interface FieldFilter {
             this.type = type;
             try {
                 var method = type.getMethod(fieldName);
-                this.accessor = MethodHandles.lookup().unreflect(method);
+                method.setAccessible(true);
+                this.accessor = MethodHandles.privateLookupIn(type, MethodHandles.lookup()).unreflect(method);
             } catch (Exception e) {
                 throw new IllegalArgumentException("No accessor '" + fieldName + "' on " + type.getName(), e);
             }
