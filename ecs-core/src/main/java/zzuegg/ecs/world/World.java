@@ -202,17 +202,7 @@ public final class World {
     }
 
     private void executeStage(ScheduleGraph graph) {
-        graph.reset();
-        while (!graph.isComplete()) {
-            var ready = graph.readySystems();
-            if (ready.isEmpty() && !graph.isComplete()) {
-                throw new IllegalStateException("Deadlock in system schedule");
-            }
-            for (var node : ready) {
-                executeSystem(node);
-                graph.complete(node);
-            }
-        }
+        executor.execute(graph, this::executeSystem);
     }
 
     private void executeSystem(ScheduleGraph.SystemNode node) {

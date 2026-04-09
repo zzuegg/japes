@@ -4,6 +4,7 @@ import zzuegg.ecs.scheduler.ScheduleGraph;
 
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Phaser;
+import java.util.function.Consumer;
 
 public final class MultiThreadedExecutor implements Executor {
 
@@ -21,7 +22,7 @@ public final class MultiThreadedExecutor implements Executor {
     }
 
     @Override
-    public void execute(ScheduleGraph graph) {
+    public void execute(ScheduleGraph graph, Consumer<ScheduleGraph.SystemNode> runner) {
         graph.reset();
 
         while (!graph.isComplete()) {
@@ -31,13 +32,14 @@ public final class MultiThreadedExecutor implements Executor {
             }
 
             if (ready.size() == 1) {
+                runner.accept(ready.getFirst());
                 graph.complete(ready.getFirst());
             } else {
                 var phaser = new Phaser(ready.size());
                 for (var node : ready) {
                     pool.execute(() -> {
                         try {
-                            // Actual invocation handled by World
+                            runner.accept(node);
                         } finally {
                             synchronized (graph) {
                                 graph.complete(node);

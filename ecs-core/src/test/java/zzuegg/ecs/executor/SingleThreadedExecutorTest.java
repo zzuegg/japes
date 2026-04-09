@@ -29,16 +29,8 @@ class SingleThreadedExecutorTest {
         var c = stub("c", Set.of("b"), Set.of());
 
         var graph = DagBuilder.build(List.of(a, b, c));
-
-        graph.reset();
-        while (!graph.isComplete()) {
-            var ready = graph.readySystems();
-            assertFalse(ready.isEmpty());
-            for (var node : ready) {
-                order.add(node.descriptor().name());
-                graph.complete(node);
-            }
-        }
+        var executor = new SingleThreadedExecutor();
+        executor.execute(graph, node -> order.add(node.descriptor().name()));
 
         assertEquals(List.of("a", "b", "c"), order);
     }
@@ -53,5 +45,25 @@ class SingleThreadedExecutorTest {
 
         var ready = graph.readySystems();
         assertEquals(2, ready.size());
+    }
+
+    @Test
+    void executorWithMultiThreaded() {
+        var order = java.util.Collections.synchronizedList(new ArrayList<String>());
+
+        var a = stub("a", Set.of(), Set.of());
+        var b = stub("b", Set.of("a"), Set.of());
+        var c = stub("c", Set.of("a"), Set.of());
+        var d = stub("d", Set.of("b", "c"), Set.of());
+
+        var graph = DagBuilder.build(List.of(a, b, c, d));
+        var executor = new MultiThreadedExecutor(4);
+        executor.execute(graph, node -> order.add(node.descriptor().name()));
+        executor.shutdown();
+
+        assertEquals(4, order.size());
+        // a must be first, d must be last
+        assertEquals("a", order.getFirst());
+        assertEquals("d", order.getLast());
     }
 }
