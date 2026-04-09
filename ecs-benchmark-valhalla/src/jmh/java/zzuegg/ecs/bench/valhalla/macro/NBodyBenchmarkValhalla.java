@@ -42,6 +42,7 @@ public class NBodyBenchmarkValhalla {
         world = World.builder()
             .addResource(new DeltaTime(0.001f))
             .addSystem(IntegrateSystems.class)
+            .useGeneratedProcessors(true)
             .build();
 
         for (int i = 0; i < bodyCount; i++) {

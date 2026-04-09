@@ -47,9 +47,9 @@ public class IterationBenchmarkValhalla {
 
     @Setup
     public void setup() {
-        singleCompWorld = World.builder().addSystem(SingleComponentSystem.class).build();
-        twoCompWorld = World.builder().addSystem(TwoComponentSystem.class).build();
-        writeWorld = World.builder().addSystem(WriteSystem.class).build();
+        singleCompWorld = World.builder().addSystem(SingleComponentSystem.class).useGeneratedProcessors(true).build();
+        twoCompWorld = World.builder().addSystem(TwoComponentSystem.class).useGeneratedProcessors(true).build();
+        writeWorld = World.builder().addSystem(WriteSystem.class).useGeneratedProcessors(true).build();
 
         for (int i = 0; i < entityCount; i++) {
             singleCompWorld.spawn(new Position(i, i, i));
