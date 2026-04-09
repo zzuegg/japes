@@ -43,17 +43,26 @@ public class IterationBenchmark {
     World singleCompWorld;
     World twoCompWorld;
     World writeWorld;
+    World singleCompGenWorld;
+    World twoCompGenWorld;
+    World writeGenWorld;
 
     @Setup
     public void setup() {
         singleCompWorld = World.builder().addSystem(SingleComponentSystem.class).build();
         twoCompWorld = World.builder().addSystem(TwoComponentSystem.class).build();
         writeWorld = World.builder().addSystem(WriteSystem.class).build();
+        singleCompGenWorld = World.builder().addSystem(SingleComponentSystem.class).useGeneratedProcessors(true).build();
+        twoCompGenWorld = World.builder().addSystem(TwoComponentSystem.class).useGeneratedProcessors(true).build();
+        writeGenWorld = World.builder().addSystem(WriteSystem.class).useGeneratedProcessors(true).build();
 
         for (int i = 0; i < entityCount; i++) {
             singleCompWorld.spawn(new Position(i, i, i));
             twoCompWorld.spawn(new Position(i, i, i), new Velocity(1, 1, 1));
             writeWorld.spawn(new Position(i, i, i), new Velocity(1, 1, 1));
+            singleCompGenWorld.spawn(new Position(i, i, i));
+            twoCompGenWorld.spawn(new Position(i, i, i), new Velocity(1, 1, 1));
+            writeGenWorld.spawn(new Position(i, i, i), new Velocity(1, 1, 1));
         }
     }
 
@@ -65,4 +74,13 @@ public class IterationBenchmark {
 
     @Benchmark
     public void iterateWithWrite() { writeWorld.tick(); }
+
+    @Benchmark
+    public void genSingleComponent() { singleCompGenWorld.tick(); }
+
+    @Benchmark
+    public void genTwoComponents() { twoCompGenWorld.tick(); }
+
+    @Benchmark
+    public void genWithWrite() { writeGenWorld.tick(); }
 }

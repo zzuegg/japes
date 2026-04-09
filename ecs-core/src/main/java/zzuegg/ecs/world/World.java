@@ -31,10 +31,13 @@ public final class World {
     private final Map<String, Local<?>> locals = new HashMap<>();
     private final Map<String, java.util.function.BooleanSupplier> runConditions = new HashMap<>();
     private final Map<String, SystemExecutionPlan> systemPlans = new HashMap<>();
+    private final Map<String, ChunkProcessor> chunkProcessors = new HashMap<>();
+    private final boolean useGeneratedProcessors;
 
     World(WorldBuilder builder) {
         this.archetypeGraph = new ArchetypeGraph(componentRegistry, builder.chunkSize, builder.storageFactory);
         this.executor = builder.executor;
+        this.useGeneratedProcessors = builder.useGeneratedProcessors;
 
         for (var resource : builder.resources) {
             resourceStore.insert(resource);
@@ -89,6 +92,15 @@ public final class World {
         }
 
         systemPlans.put(desc.name(), plan);
+
+        // Build generated processor if enabled
+        if (useGeneratedProcessors && !desc.isExclusive() && !desc.componentAccesses().isEmpty()) {
+            var serviceArgsArray = new Object[params.length];
+            for (int idx : serviceArgIndices) {
+                serviceArgsArray[idx] = resolveServiceParam(desc, params[idx], idx);
+            }
+            chunkProcessors.put(desc.name(), ChunkProcessorGenerator.generate(desc, serviceArgsArray));
+        }
     }
 
     private void parseRunConditions(Class<?> clazz) {
@@ -356,10 +368,17 @@ public final class World {
             }
             if (skip) continue;
 
-            var plan = systemPlans.get(desc.name());
+            var processor = chunkProcessors.get(desc.name());
             var currentTick = tick.current();
-            for (var chunk : archetype.chunks()) {
-                plan.processChunk(chunk, invoker, currentTick);
+            if (processor != null) {
+                for (var chunk : archetype.chunks()) {
+                    processor.process(chunk, currentTick);
+                }
+            } else {
+                var plan = systemPlans.get(desc.name());
+                for (var chunk : archetype.chunks()) {
+                    plan.processChunk(chunk, invoker, currentTick);
+                }
             }
         }
     }

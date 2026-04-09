@@ -15,6 +15,7 @@ public final class WorldBuilder {
     final Map<String, Stage> stages = new LinkedHashMap<>();
     Executor executor;
     ComponentStorage.Factory storageFactory;
+    boolean useGeneratedProcessors = false;
     int chunkSize = 1024;
 
     WorldBuilder() {
@@ -52,6 +53,11 @@ public final class WorldBuilder {
 
     public WorldBuilder chunkSize(int chunkSize) {
         this.chunkSize = chunkSize;
+        return this;
+    }
+
+    public WorldBuilder useGeneratedProcessors(boolean enabled) {
+        this.useGeneratedProcessors = enabled;
         return this;
     }
 
