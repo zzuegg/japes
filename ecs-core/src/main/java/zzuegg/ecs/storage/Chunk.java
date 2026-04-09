@@ -1,5 +1,6 @@
 package zzuegg.ecs.storage;
 
+import zzuegg.ecs.change.ChangeTracker;
 import zzuegg.ecs.component.ComponentId;
 import zzuegg.ecs.entity.Entity;
 
@@ -11,6 +12,7 @@ public final class Chunk {
     private final int capacity;
     private final Entity[] entities;
     private final Map<ComponentId, ComponentArray<?>> arrays;
+    private final Map<ComponentId, ChangeTracker> changeTrackers;
     private int count = 0;
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -18,8 +20,10 @@ public final class Chunk {
         this.capacity = capacity;
         this.entities = new Entity[capacity];
         this.arrays = new HashMap<>();
+        this.changeTrackers = new HashMap<>();
         for (var entry : componentTypes.entrySet()) {
             arrays.put(entry.getKey(), new ComponentArray(entry.getValue(), capacity));
+            changeTrackers.put(entry.getKey(), new ChangeTracker(capacity));
         }
     }
 
@@ -40,9 +44,15 @@ public final class Chunk {
             for (var array : arrays.values()) {
                 array.swapRemove(slot, count);
             }
+            for (var tracker : changeTrackers.values()) {
+                tracker.swapRemove(slot, count);
+            }
         } else {
             for (var array : arrays.values()) {
                 array.swapRemove(slot, count);
+            }
+            for (var tracker : changeTrackers.values()) {
+                tracker.swapRemove(slot, count);
             }
         }
         entities[lastIndex] = null;
@@ -85,5 +95,15 @@ public final class Chunk {
 
     public boolean isEmpty() {
         return count == 0;
+    }
+
+    public ChangeTracker changeTracker(ComponentId id) {
+        return changeTrackers.get(id);
+    }
+
+    public void markAdded(int slot, long tick) {
+        for (var tracker : changeTrackers.values()) {
+            tracker.markAdded(slot, tick);
+        }
     }
 }

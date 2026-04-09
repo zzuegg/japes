@@ -1,7 +1,6 @@
 package zzuegg.ecs.world;
 
 import zzuegg.ecs.archetype.*;
-import zzuegg.ecs.change.ChangeTracker;
 import zzuegg.ecs.change.Tick;
 import zzuegg.ecs.command.Commands;
 import zzuegg.ecs.component.*;
@@ -82,6 +81,10 @@ public final class World {
                 archetype.set(info.id(), location, comp);
             }
         }
+
+        // Mark added on chunk's change trackers
+        var chunk = archetype.chunks().get(location.chunkIndex());
+        chunk.markAdded(location.slotIndex(), tick.current());
 
         return entity;
     }
@@ -294,8 +297,9 @@ public final class World {
                 var access = desc.componentAccesses().get(componentIndex++);
                 var value = chunk.get(access.componentId(), slot);
                 var info = componentRegistry.info(access.type());
+                var tracker = chunk.changeTracker(access.componentId());
                 @SuppressWarnings({"unchecked", "rawtypes"})
-                var mut = new Mut(value, slot, new ChangeTracker(chunk.capacity()), tick.current(), info.isValueTracked());
+                var mut = new Mut(value, slot, tracker, tick.current(), info.isValueTracked());
                 args[i] = mut;
             } else {
                 args[i] = resolveServiceParam(desc, param, i);
