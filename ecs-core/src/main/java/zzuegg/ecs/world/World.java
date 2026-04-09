@@ -357,16 +357,18 @@ public final class World {
             if (skip) continue;
 
             var plan = systemPlans.get(desc.name());
+            var currentTick = tick.current();
             for (var chunk : archetype.chunks()) {
+                plan.prepareChunk(chunk);
                 int count = chunk.count();
                 for (int slot = 0; slot < count; slot++) {
-                    plan.fillComponentArgs(chunk, slot, tick.current());
+                    plan.fillComponentArgs(slot, currentTick);
                     try {
                         invoker.invoke(plan.args());
                     } catch (Throwable e) {
                         throw new RuntimeException("System failed: " + desc.name(), e);
                     }
-                    plan.flushMuts(chunk);
+                    plan.flushMuts();
                 }
             }
         }

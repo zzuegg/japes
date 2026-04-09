@@ -3,31 +3,30 @@ package zzuegg.ecs.system;
 import zzuegg.ecs.change.ChangeTracker;
 import zzuegg.ecs.component.ComponentId;
 import zzuegg.ecs.component.Mut;
-import zzuegg.ecs.query.AccessType;
 import zzuegg.ecs.query.ComponentAccess;
 import zzuegg.ecs.storage.Chunk;
+import zzuegg.ecs.storage.ComponentStorage;
 
-import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Pre-computed execution plan for a system. Avoids per-entity allocation
- * by reusing args array and Mut wrappers.
- */
 public final class SystemExecutionPlan {
 
     public record ParamSlot(int argIndex, ComponentAccess access, boolean isWrite, boolean isValueTracked) {}
 
     private final Object[] args;
-    private final List<ParamSlot> componentSlots;
-    private final List<Integer> serviceArgIndices;
+    private final ParamSlot[] slots; // array for indexed access, no List overhead
     private final Mut<?>[] mutCache;
+
+    // Per-chunk cached references — set once per chunk, used for all entities
+    private final ComponentStorage<?>[] cachedStorages;
+    private final ChangeTracker[] cachedTrackers;
 
     public SystemExecutionPlan(int paramCount, List<ParamSlot> componentSlots, List<Integer> serviceArgIndices) {
         this.args = new Object[paramCount];
-        this.componentSlots = componentSlots;
-        this.serviceArgIndices = serviceArgIndices;
-        this.mutCache = new Mut<?>[componentSlots.size()];
+        this.slots = componentSlots.toArray(ParamSlot[]::new);
+        this.mutCache = new Mut<?>[slots.length];
+        this.cachedStorages = new ComponentStorage<?>[slots.length];
+        this.cachedTrackers = new ChangeTracker[slots.length];
     }
 
     public Object[] args() {
@@ -39,46 +38,56 @@ public final class SystemExecutionPlan {
     }
 
     /**
-     * Fill component args for a specific entity slot in a chunk.
-     * Reuses the args array — zero allocation for reads, one Mut allocation per write slot (cached).
+     * Cache storage and tracker references for a chunk. Call once per chunk.
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    public void fillComponentArgs(Chunk chunk, int slot, long currentTick) {
-        for (int i = 0; i < componentSlots.size(); i++) {
-            var cs = componentSlots.get(i);
-            if (cs.isWrite) {
-                var value = chunk.get(cs.access.componentId(), slot);
-                var tracker = chunk.changeTracker(cs.access.componentId());
-                var existing = (Mut) mutCache[i];
-                if (existing == null) {
-                    var mut = new Mut(value, slot, tracker, currentTick, cs.isValueTracked);
-                    mutCache[i] = mut;
-                    args[cs.argIndex] = mut;
-                } else {
-                    existing.reset(value, slot, tracker, currentTick);
-                }
-            } else {
-                args[cs.argIndex] = chunk.get(cs.access.componentId(), slot);
+    public void prepareChunk(Chunk chunk) {
+        for (int i = 0; i < slots.length; i++) {
+            var compId = slots[i].access.componentId();
+            cachedStorages[i] = chunk.componentStorage(compId);
+            if (slots[i].isWrite) {
+                cachedTrackers[i] = chunk.changeTracker(compId);
             }
         }
     }
 
     /**
-     * Flush Mut values back to chunk after system invocation.
+     * Fill component args using cached storage references. Zero HashMap lookups.
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public void flushMuts(Chunk chunk) {
-        for (int i = 0; i < componentSlots.size(); i++) {
-            var cs = componentSlots.get(i);
+    public void fillComponentArgs(int slot, long currentTick) {
+        for (int i = 0; i < slots.length; i++) {
+            var cs = slots[i];
             if (cs.isWrite) {
-                var mut = (Mut) mutCache[i];
-                var newValue = mut.flush();
-                chunk.set(cs.access.componentId(), mut.slot(), newValue);
+                var value = cachedStorages[i].get(slot);
+                var existing = (Mut) mutCache[i];
+                if (existing == null) {
+                    var mut = new Mut(value, slot, cachedTrackers[i], currentTick, cs.isValueTracked);
+                    mutCache[i] = mut;
+                    args[cs.argIndex] = mut;
+                } else {
+                    existing.reset(value, slot, cachedTrackers[i], currentTick);
+                }
+            } else {
+                args[cs.argIndex] = cachedStorages[i].get(slot);
             }
         }
     }
 
-    public List<ParamSlot> componentSlots() {
-        return componentSlots;
+    /**
+     * Flush Mut values back using cached storage references.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public void flushMuts() {
+        for (int i = 0; i < slots.length; i++) {
+            if (slots[i].isWrite) {
+                var mut = (Mut) mutCache[i];
+                var newValue = mut.flush();
+                ((ComponentStorage) cachedStorages[i]).set(mut.slot(), newValue);
+            }
+        }
+    }
+
+    public ParamSlot[] componentSlots() {
+        return slots;
     }
 }
