@@ -49,10 +49,13 @@ public final class ChunkProcessorGenerator {
             }
         }
 
-        // Use the direct processor — the ClassFile API approach for generating
-        // invokevirtual bytecode requires the target class to be accessible,
-        // which inner/private system classes are not. Instead, use a tightly
-        // Try bytecode-generated processor first (uses invokeExact, no spreader)
+        // Tier 1: Maximally optimized read-only processor (no resolveArg, no boolean checks)
+        var generatedProcessor = GeneratedChunkProcessor.tryGenerate(desc, serviceArgs);
+        if (generatedProcessor != null) {
+            return generatedProcessor;
+        }
+
+        // Tier 2: invokeExact with arity specialization (1-4 params, handles writes)
         var bytecodeProcessor = BytecodeChunkProcessor.tryGenerate(desc, serviceArgs);
         if (bytecodeProcessor != null) {
             return bytecodeProcessor;
