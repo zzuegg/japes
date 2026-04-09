@@ -49,9 +49,14 @@ public final class SystemExecutionPlan {
             if (cs.isWrite) {
                 var value = chunk.get(cs.access.componentId(), slot);
                 var tracker = chunk.changeTracker(cs.access.componentId());
-                var mut = new Mut(value, slot, tracker, currentTick, cs.isValueTracked);
-                mutCache[i] = mut;
-                args[cs.argIndex] = mut;
+                var existing = (Mut) mutCache[i];
+                if (existing == null) {
+                    var mut = new Mut(value, slot, tracker, currentTick, cs.isValueTracked);
+                    mutCache[i] = mut;
+                    args[cs.argIndex] = mut;
+                } else {
+                    existing.reset(value, slot, tracker, currentTick);
+                }
             } else {
                 args[cs.argIndex] = chunk.get(cs.access.componentId(), slot);
             }

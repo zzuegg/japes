@@ -4,11 +4,11 @@ import zzuegg.ecs.change.ChangeTracker;
 
 public final class Mut<T extends Record> {
 
-    private final T original;
+    private T original;
     private T current;
-    private final int slot;
-    private final ChangeTracker tracker;
-    private final long tick;
+    private int slot;
+    private ChangeTracker tracker;
+    private long tick;
     private final boolean valueTracked;
     private boolean changed;
 
@@ -19,6 +19,15 @@ public final class Mut<T extends Record> {
         this.tracker = tracker;
         this.tick = tick;
         this.valueTracked = valueTracked;
+        this.changed = false;
+    }
+
+    public void reset(T value, int newSlot, ChangeTracker newTracker, long newTick) {
+        this.original = value;
+        this.current = value;
+        this.slot = newSlot;
+        this.tracker = newTracker;
+        this.tick = newTick;
         this.changed = false;
     }
 
