@@ -2,13 +2,17 @@ package zzuegg.ecs.system;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 
 public final class SystemInvoker {
 
     private final MethodHandle handle;
+    private final MethodHandle spreader;
 
     private SystemInvoker(MethodHandle handle) {
         this.handle = handle;
+        // Create a spreader that takes Object[] and calls the method
+        this.spreader = handle.asSpreader(Object[].class, handle.type().parameterCount());
     }
 
     public static SystemInvoker create(SystemDescriptor descriptor) {
@@ -28,7 +32,7 @@ public final class SystemInvoker {
     }
 
     public void invoke(Object[] args) throws Throwable {
-        handle.invokeWithArguments(args);
+        spreader.invoke(args);
     }
 
     public MethodHandle handle() {
