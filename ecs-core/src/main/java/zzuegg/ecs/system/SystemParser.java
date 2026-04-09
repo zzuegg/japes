@@ -18,7 +18,15 @@ public final class SystemParser {
 
     private SystemParser() {}
 
+    public static List<SystemDescriptor> parse(Object instance, ComponentRegistry registry) {
+        return parse(instance.getClass(), registry, instance);
+    }
+
     public static List<SystemDescriptor> parse(Class<?> clazz, ComponentRegistry registry) {
+        return parse(clazz, registry, null);
+    }
+
+    private static List<SystemDescriptor> parse(Class<?> clazz, ComponentRegistry registry, Object providedInstance) {
         var results = new ArrayList<SystemDescriptor>();
 
         var setAnnotation = clazz.getAnnotation(SystemSet.class);
@@ -26,16 +34,19 @@ public final class SystemParser {
         Set<String> setAfter = setAnnotation != null ? Set.of(setAnnotation.after()) : Set.of();
         Set<String> setBefore = setAnnotation != null ? Set.of(setAnnotation.before()) : Set.of();
 
-        Object instance = null;
-        for (var method : clazz.getDeclaredMethods()) {
-            if (method.isAnnotationPresent(zzuegg.ecs.system.System.class)) {
-                if (instance == null && !Modifier.isStatic(method.getModifiers())) {
-                    try {
-                        var ctor = clazz.getDeclaredConstructor();
-                        ctor.setAccessible(true);
-                        instance = ctor.newInstance();
-                    } catch (Exception e) {
-                        throw new RuntimeException("Cannot instantiate system class: " + clazz.getName(), e);
+        Object instance = providedInstance;
+        if (instance == null) {
+            for (var method : clazz.getDeclaredMethods()) {
+                if (method.isAnnotationPresent(zzuegg.ecs.system.System.class)) {
+                    if (!Modifier.isStatic(method.getModifiers())) {
+                        try {
+                            var ctor = clazz.getDeclaredConstructor();
+                            ctor.setAccessible(true);
+                            instance = ctor.newInstance();
+                        } catch (Exception e) {
+                            throw new RuntimeException("Cannot instantiate system class: " + clazz.getName(), e);
+                        }
+                        break;
                     }
                 }
             }

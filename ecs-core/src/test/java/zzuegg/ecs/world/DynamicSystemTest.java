@@ -144,4 +144,68 @@ class DynamicSystemTest {
         world.tick();
         assertEquals(2, ticked.size());
     }
+
+    // === Add system instance ===
+
+    static class MultiplierSystem {
+        private final int factor;
+
+        MultiplierSystem(int factor) {
+            this.factor = factor;
+        }
+
+        @System
+        void multiply(@Write Mut<Counter> counter) {
+            counter.set(new Counter(counter.get().value() * factor));
+        }
+    }
+
+    @Test
+    void addSystemInstance() {
+        var world = World.builder().build();
+        world.spawn(new Counter(5));
+
+        world.addSystem(new MultiplierSystem(3));
+        world.tick();
+
+        var results = world.findEntities(
+            zzuegg.ecs.query.FieldFilter.of(Counter.class, "value").equalTo(15),
+            Counter.class
+        );
+        assertEquals(1, results.size());
+    }
+
+    @Test
+    void addSystemInstanceAtBuild() {
+        var world = World.builder()
+            .addSystem(new MultiplierSystem(10))
+            .build();
+
+        world.spawn(new Counter(7));
+        world.tick();
+
+        var results = world.findEntities(
+            zzuegg.ecs.query.FieldFilter.of(Counter.class, "value").equalTo(70),
+            Counter.class
+        );
+        assertEquals(1, results.size());
+    }
+
+    @Test
+    void multipleInstancesWithDifferentState() {
+        ticked.clear();
+        var world = World.builder().build();
+        world.spawn(new Counter(2));
+
+        world.addSystem(new MultiplierSystem(3));  // 2 * 3 = 6
+        world.addSystem(new MultiplierSystem(2));  // 6 * 2 = 12 (or 2*2=4, 4*3=12 depending on order)
+        world.tick();
+
+        // Both systems run — exact order depends on DAG (both write Counter, so serialized)
+        var entity = world.findEntities(
+            zzuegg.ecs.query.FieldFilter.of(Counter.class, "value").greaterThan(2),
+            Counter.class
+        );
+        assertEquals(1, entity.size());
+    }
 }

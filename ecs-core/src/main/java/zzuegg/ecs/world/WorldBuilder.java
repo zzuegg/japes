@@ -10,6 +10,7 @@ import java.util.*;
 public final class WorldBuilder {
 
     final List<Class<?>> systemClasses = new ArrayList<>();
+    final List<Object> systemInstances = new ArrayList<>();
     final List<Object> resources = new ArrayList<>();
     final List<Class<? extends Record>> eventTypes = new ArrayList<>();
     final Map<String, Stage> stages = new LinkedHashMap<>();
@@ -28,6 +29,11 @@ public final class WorldBuilder {
 
     public WorldBuilder addSystem(Class<?> systemClass) {
         systemClasses.add(systemClass);
+        return this;
+    }
+
+    public WorldBuilder addSystem(Object systemInstance) {
+        systemInstances.add(systemInstance);
         return this;
     }
 

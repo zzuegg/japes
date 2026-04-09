@@ -56,6 +56,11 @@ public final class World {
             parseRunConditions(clazz);
         }
 
+        for (var instance : builder.systemInstances) {
+            allDescriptors.addAll(SystemParser.parse(instance, componentRegistry));
+            parseRunConditions(instance.getClass());
+        }
+
         rebuildSchedule();
     }
 
@@ -298,6 +303,13 @@ public final class World {
         var newDescriptors = SystemParser.parse(systemClass, componentRegistry);
         allDescriptors.addAll(newDescriptors);
         parseRunConditions(systemClass);
+        rebuildSchedule();
+    }
+
+    public void addSystem(Object systemInstance) {
+        var newDescriptors = SystemParser.parse(systemInstance, componentRegistry);
+        allDescriptors.addAll(newDescriptors);
+        parseRunConditions(systemInstance.getClass());
         rebuildSchedule();
     }
 
