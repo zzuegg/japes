@@ -31,6 +31,10 @@ public final class Mut<T extends Record> {
         this.changed = true;
     }
 
+    public int slot() {
+        return slot;
+    }
+
     public boolean isChanged() {
         return changed;
     }

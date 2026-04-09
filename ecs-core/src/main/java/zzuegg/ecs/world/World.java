@@ -30,6 +30,7 @@ public final class World {
     private final Schedule schedule;
     private final Map<String, Local<?>> locals = new HashMap<>();
     private final Map<String, java.util.function.BooleanSupplier> runConditions = new HashMap<>();
+    private final Map<String, SystemExecutionPlan> systemPlans = new HashMap<>();
 
     World(WorldBuilder builder) {
         this.archetypeGraph = new ArchetypeGraph(componentRegistry, builder.chunkSize, builder.storageFactory);
@@ -53,7 +54,41 @@ public final class World {
 
         for (var entry : schedule.orderedStages()) {
             entry.getValue().buildInvokers();
+            for (var node : entry.getValue().nodes()) {
+                buildExecutionPlan(node.descriptor());
+            }
         }
+    }
+
+    private void buildExecutionPlan(SystemDescriptor desc) {
+        if (desc.method() == null) return;
+        var params = desc.method().getParameters();
+        var componentSlots = new ArrayList<SystemExecutionPlan.ParamSlot>();
+        var serviceArgIndices = new ArrayList<Integer>();
+        int componentIndex = 0;
+
+        for (int i = 0; i < params.length; i++) {
+            var param = params[i];
+            if (param.isAnnotationPresent(Read.class)) {
+                var access = desc.componentAccesses().get(componentIndex++);
+                componentSlots.add(new SystemExecutionPlan.ParamSlot(i, access, false, false));
+            } else if (param.isAnnotationPresent(Write.class)) {
+                var access = desc.componentAccesses().get(componentIndex++);
+                var info = componentRegistry.info(access.type());
+                componentSlots.add(new SystemExecutionPlan.ParamSlot(i, access, true, info.isValueTracked()));
+            } else {
+                serviceArgIndices.add(i);
+            }
+        }
+
+        var plan = new SystemExecutionPlan(params.length, componentSlots, serviceArgIndices);
+
+        // Pre-fill service args (they don't change per entity)
+        for (int idx : serviceArgIndices) {
+            plan.setServiceArg(idx, resolveServiceParam(desc, params[idx], idx));
+        }
+
+        systemPlans.put(desc.name(), plan);
     }
 
     private void parseRunConditions(Class<?> clazz) {
@@ -321,15 +356,17 @@ public final class World {
             }
             if (skip) continue;
 
+            var plan = systemPlans.get(desc.name());
             for (var chunk : archetype.chunks()) {
-                for (int slot = 0; slot < chunk.count(); slot++) {
-                    var args = buildEntityArgs(desc, chunk, slot);
+                int count = chunk.count();
+                for (int slot = 0; slot < count; slot++) {
+                    plan.fillComponentArgs(chunk, slot, tick.current());
                     try {
-                        invoker.invoke(args);
+                        invoker.invoke(plan.args());
                     } catch (Throwable e) {
                         throw new RuntimeException("System failed: " + desc.name(), e);
                     }
-                    flushMuts(desc, chunk, slot, args);
+                    plan.flushMuts(chunk);
                 }
             }
         }
