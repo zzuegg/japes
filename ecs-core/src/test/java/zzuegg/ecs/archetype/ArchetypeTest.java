@@ -68,11 +68,11 @@ class ArchetypeTest {
         var arch = new Archetype(archId, reg, 16, zzuegg.ecs.storage.ComponentStorage.defaultFactory(), java.util.Set.of());
 
         arch.add(Entity.of(0, 0));
-        arch.set(posId, new EntityLocation(archId, 0, 0), new Position(0, 0));
+        arch.set(posId, new EntityLocation(arch, 0, 0), new Position(0, 0));
         arch.add(Entity.of(1, 0));
-        arch.set(posId, new EntityLocation(archId, 0, 1), new Position(1, 1));
+        arch.set(posId, new EntityLocation(arch, 0, 1), new Position(1, 1));
 
-        var swapped = arch.remove(new EntityLocation(archId, 0, 0));
+        var swapped = arch.remove(new EntityLocation(arch, 0, 0));
 
         assertEquals(1, arch.entityCount());
         assertTrue(swapped.isPresent());
@@ -87,7 +87,7 @@ class ArchetypeTest {
         var arch = new Archetype(archId, reg, 16, zzuegg.ecs.storage.ComponentStorage.defaultFactory(), java.util.Set.of());
 
         arch.add(Entity.of(0, 0));
-        var swapped = arch.remove(new EntityLocation(archId, 0, 0));
+        var swapped = arch.remove(new EntityLocation(arch, 0, 0));
         assertTrue(swapped.isEmpty());
     }
 

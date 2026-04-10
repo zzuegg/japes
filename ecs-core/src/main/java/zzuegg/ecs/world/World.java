@@ -298,7 +298,7 @@ public final class World {
             throw new IllegalStateException(
                 "Invariant violation: alive entity has no location: " + entity);
         }
-        var archetype = archetypeGraph.get(location.archetypeId());
+        var archetype = location.archetype();
 
         // Log every component the entity is about to lose so RemovedComponents<T>
         // consumers can see them. Skip the whole loop when no component on
@@ -307,7 +307,7 @@ public final class World {
         if (!trackedRemovedComponents.isEmpty()) {
             var chunk = archetype.chunks().get(location.chunkIndex());
             int slot = location.slotIndex();
-            for (var compId : location.archetypeId().components()) {
+            for (var compId : archetype.id().components()) {
                 if (trackedRemovedComponents.contains(compId)) {
                     removalLog.append(compId, entity, (Record) chunk.get(compId, slot), tick.current());
                 }
@@ -332,8 +332,7 @@ public final class World {
             throw new IllegalArgumentException("Entity has no location: " + entity);
         }
         var compId = componentRegistry.getOrRegister(type);
-        var archetype = archetypeGraph.get(location.archetypeId());
-        return archetype.get(compId, location);
+        return location.archetype().get(compId, location);
     }
 
     public <T> void setResource(T resource) {
@@ -350,7 +349,10 @@ public final class World {
         var info = componentRegistry.getOrRegisterInfo(component.getClass());
         var compId = info.id();
         var location = getLocation(entity.index());
-        var archetype = archetypeGraph.get(location.archetypeId());
+        // No archetypeGraph lookup — EntityLocation already holds a direct
+        // Archetype reference. This removes the HashMap<ArchetypeId, ...>.get
+        // that was firing on every setComponent call.
+        var archetype = location.archetype();
 
         // For @ValueTracked components, skip the change-detection bump when the
         // new value equals the existing one — matches Mut.flush()'s semantics so
@@ -377,9 +379,9 @@ public final class World {
         }
         var compId = componentRegistry.getOrRegister(component.getClass());
         var oldLocation = getLocation(entity.index());
-        var oldArchetype = archetypeGraph.get(oldLocation.archetypeId());
+        var oldArchetype = oldLocation.archetype();
 
-        var newArchetypeId = archetypeGraph.addEdge(oldLocation.archetypeId(), compId);
+        var newArchetypeId = archetypeGraph.addEdge(oldArchetype.id(), compId);
         var newArchetype = archetypeGraph.getOrCreate(newArchetypeId);
 
         var newLocation = newArchetype.add(entity);
@@ -389,7 +391,7 @@ public final class World {
         int oldSlot = oldLocation.slotIndex();
         int newSlot = newLocation.slotIndex();
 
-        for (var existingCompId : oldLocation.archetypeId().components()) {
+        for (var existingCompId : oldArchetype.id().components()) {
             var value = oldArchetype.get(existingCompId, oldLocation);
             newArchetype.set(existingCompId, newLocation, value);
             // Preserve added/changed history across the archetype migration.
@@ -417,7 +419,7 @@ public final class World {
         }
         var compId = componentRegistry.getOrRegister(type);
         var oldLocation = getLocation(entity.index());
-        var oldArchetype = archetypeGraph.get(oldLocation.archetypeId());
+        var oldArchetype = oldLocation.archetype();
 
         // Log the removal BEFORE migration, so the last-known value is still
         // reachable in the source chunk for RemovedComponents<T> consumers.
@@ -427,7 +429,7 @@ public final class World {
                 (Record) oldChunkEarly.get(compId, oldLocation.slotIndex()), tick.current());
         }
 
-        var newArchetypeId = archetypeGraph.removeEdge(oldLocation.archetypeId(), compId);
+        var newArchetypeId = archetypeGraph.removeEdge(oldArchetype.id(), compId);
         var newArchetype = archetypeGraph.getOrCreate(newArchetypeId);
 
         var newLocation = newArchetype.add(entity);

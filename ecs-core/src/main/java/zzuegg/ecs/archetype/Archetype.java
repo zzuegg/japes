@@ -34,7 +34,7 @@ public final class Archetype {
         int chunkIndex = findOrCreateChunkIndex();
         Chunk chunk = chunks.get(chunkIndex);
         int slot = chunk.add(entity);
-        return new EntityLocation(id, chunkIndex, slot);
+        return new EntityLocation(this, chunkIndex, slot);
     }
 
     public <T extends Record> void set(ComponentId compId, EntityLocation loc, T value) {
