@@ -15,7 +15,7 @@ public final class Commands {
     public record SetCommand(Entity entity, Record component) implements Command {}
     public record InsertResourceCommand(Object resource) implements Command {}
 
-    private final List<Command> buffer = new ArrayList<>();
+    private List<Command> buffer = new ArrayList<>();
 
     public void spawn(Record... components) {
         buffer.add(new SpawnCommand(components));
@@ -42,9 +42,14 @@ public final class Commands {
     }
 
     public List<Command> drain() {
-        var commands = List.copyOf(buffer);
-        buffer.clear();
-        return commands;
+        // Swap in a fresh buffer and hand the old one to the caller. Avoids
+        // the per-flush List.copyOf allocation the previous implementation
+        // paid for an immutable snapshot we don't actually need — the caller
+        // just iterates once and drops the list.
+        if (buffer.isEmpty()) return List.of();
+        var out = buffer;
+        buffer = new ArrayList<>();
+        return out;
     }
 
     public boolean isEmpty() {

@@ -278,11 +278,23 @@ public final class World {
         if (!entityAllocator.isAlive(entity)) {
             throw new IllegalArgumentException("Entity is not alive: " + entity);
         }
+        despawnInternal(entity);
+    }
 
+    /**
+     * Despawn the entity if it's still alive, otherwise no-op. Used by the
+     * command flush path to avoid a double isAlive check (caller already
+     * tests; then {@code despawn} would test again).
+     */
+    public void despawnIfAlive(zzuegg.ecs.entity.Entity entity) {
+        if (!entityAllocator.isAlive(entity)) return;
+        despawnInternal(entity);
+    }
+
+    private void despawnInternal(zzuegg.ecs.entity.Entity entity) {
         var location = removeLocation(entity.index());
-        // isAlive already passed: a missing location would be an invariant
-        // violation (entity in allocator but not in the location map). Fail
-        // loudly rather than silently leaking the allocation.
+        // Caller already confirmed isAlive; a missing location would be an
+        // invariant violation. Fail loudly rather than silently leaking.
         if (location == null) {
             throw new IllegalStateException(
                 "Invariant violation: alive entity has no location: " + entity);
@@ -290,13 +302,16 @@ public final class World {
         var archetype = archetypeGraph.get(location.archetypeId());
 
         // Log every component the entity is about to lose so RemovedComponents<T>
-        // consumers can see them. Done before archetype.remove() so the values
-        // are still readable.
-        var chunk = archetype.chunks().get(location.chunkIndex());
-        int slot = location.slotIndex();
-        for (var compId : location.archetypeId().components()) {
-            if (trackedRemovedComponents.contains(compId)) {
-                removalLog.append(compId, entity, (Record) chunk.get(compId, slot), tick.current());
+        // consumers can see them. Skip the whole loop when no component on
+        // this entity is being tracked — short-circuits the common case where
+        // the system has no @RemovedComponents readers at all.
+        if (!trackedRemovedComponents.isEmpty()) {
+            var chunk = archetype.chunks().get(location.chunkIndex());
+            int slot = location.slotIndex();
+            for (var compId : location.archetypeId().components()) {
+                if (trackedRemovedComponents.contains(compId)) {
+                    removalLog.append(compId, entity, (Record) chunk.get(compId, slot), tick.current());
+                }
             }
         }
 
