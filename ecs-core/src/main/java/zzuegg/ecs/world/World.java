@@ -393,6 +393,16 @@ public final class World {
         boolean removed = allDescriptors.removeIf(d ->
             d.name().equals(systemName) || d.name().endsWith("." + systemName));
         if (removed) {
+            // Drop any per-system Local<?> instances whose descriptor no longer
+            // exists, so repeated add/remove cycles don't accumulate orphaned
+            // state keyed by "desc.name():paramIndex".
+            var surviving = new HashSet<String>();
+            for (var d : allDescriptors) surviving.add(d.name());
+            locals.keySet().removeIf(k -> {
+                int colon = k.lastIndexOf(':');
+                if (colon < 0) return false;
+                return !surviving.contains(k.substring(0, colon));
+            });
             rebuildSchedule();
         }
     }
