@@ -19,7 +19,29 @@ import static java.lang.classfile.ClassFile.*;
  */
 public final class GeneratedChunkProcessor {
 
+    private static final java.util.concurrent.atomic.AtomicLong COUNTER = new java.util.concurrent.atomic.AtomicLong();
+    private static final String GENERATED_PACKAGE = "zzuegg.ecs.generated";
+
     private GeneratedChunkProcessor() {}
+
+    /**
+     * Build a valid JVM class name for a hidden processor.
+     * desc.name() is "Class.method" — the dot is a JVM package separator, so we
+     * sanitise it (and any other illegal identifier characters) into '_' before
+     * embedding the name in ClassDesc.of. A monotonic counter guarantees
+     * uniqueness across rebuilds instead of relying on nanoTime() resolution.
+     */
+    static String generateClassName(String descName) {
+        var sb = new StringBuilder(descName.length());
+        for (int i = 0; i < descName.length(); i++) {
+            char c = descName.charAt(i);
+            boolean ok = (c >= 'A' && c <= 'Z')
+                || (c >= 'a' && c <= 'z')
+                || (c >= '0' && c <= '9' && i > 0);
+            sb.append(ok ? c : '_');
+        }
+        return GENERATED_PACKAGE + ".Proc_" + sb + "_" + COUNTER.incrementAndGet();
+    }
 
     public static ChunkProcessor tryGenerate(SystemDescriptor desc, Object[] serviceArgs) {
         var method = desc.method();
@@ -63,7 +85,7 @@ public final class GeneratedChunkProcessor {
         var chunkDesc = ClassDesc.of("zzuegg.ecs.storage.Chunk");
         var compIdDesc = ClassDesc.of("zzuegg.ecs.component.ComponentId");
         var processorDesc = ClassDesc.of("zzuegg.ecs.system.ChunkProcessor");
-        var genName = "zzuegg.ecs.generated.Proc_" + desc.name() + "_" + java.lang.System.nanoTime();
+        var genName = generateClassName(desc.name());
         var genDesc = ClassDesc.of(genName);
         var objDesc = ConstantDescs.CD_Object;
 
