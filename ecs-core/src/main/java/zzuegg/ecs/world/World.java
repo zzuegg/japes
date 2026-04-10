@@ -117,6 +117,21 @@ public final class World {
         var plan = new SystemExecutionPlan(params.length, componentSlots, serviceArgIndices,
             desc.whereFilters(), resolvedChangeFilters);
 
+        // Pre-compute the query sets once; executeSystem used to rebuild them
+        // on every tick per system.
+        var required = new HashSet<ComponentId>();
+        for (var access : desc.componentAccesses()) {
+            required.add(access.componentId());
+        }
+        for (var withType : desc.withFilters()) {
+            required.add(componentRegistry.getOrRegister(withType));
+        }
+        var without = new HashSet<ComponentId>();
+        for (var withoutType : desc.withoutFilters()) {
+            without.add(componentRegistry.getOrRegister(withoutType));
+        }
+        plan.setQuerySets(Set.copyOf(required), Set.copyOf(without));
+
         // Resolve service args once per system so the generated-processor path and the
         // SystemExecutionPlan path observe the same Commands/EventWriter/Local instances.
         // Duplicating the call previously leaked a second Commands into allCommandBuffers
@@ -480,15 +495,6 @@ public final class World {
             return;
         }
 
-        // Collect required component IDs for matching
-        var requiredComponents = new HashSet<ComponentId>();
-        for (var access : desc.componentAccesses()) {
-            requiredComponents.add(access.componentId());
-        }
-        for (var withType : desc.withFilters()) {
-            requiredComponents.add(componentRegistry.getOrRegister(withType));
-        }
-
         if (desc.componentAccesses().isEmpty()) {
             // No component params — invoke once with non-component args
             var args = buildServiceArgs(desc);
@@ -500,13 +506,12 @@ public final class World {
             return;
         }
 
-        var matchingArchetypes = archetypeGraph.findMatching(requiredComponents);
+        // Pull the pre-cached query sets from the plan instead of rebuilding.
+        var cachedPlan = systemPlans.get(desc.name());
+        var requiredComponents = cachedPlan.requiredComponents();
+        var withoutIds = cachedPlan.withoutComponents();
 
-        // Apply @Without filters
-        var withoutIds = new HashSet<ComponentId>();
-        for (var withoutType : desc.withoutFilters()) {
-            withoutIds.add(componentRegistry.getOrRegister(withoutType));
-        }
+        var matchingArchetypes = archetypeGraph.findMatching(requiredComponents);
 
         var currentTick = tick.current();
         for (var archetype : matchingArchetypes) {

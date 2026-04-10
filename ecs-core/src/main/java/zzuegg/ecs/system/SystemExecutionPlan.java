@@ -11,6 +11,7 @@ import zzuegg.ecs.storage.ComponentStorage;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public final class SystemExecutionPlan {
 
@@ -41,6 +42,18 @@ public final class SystemExecutionPlan {
     // instantiated if whereFilters is non-empty so systems without @Where stay
     // allocation-free on the hot path.
     private final HashMap<Class<?>, Record> whereLookup;
+
+    // Cached query sets: computed once at plan build time instead of rebuilt
+    // every tick inside World.executeSystem.
+    private Set<ComponentId> requiredComponents = Set.of();
+    private Set<ComponentId> withoutComponents = Set.of();
+
+    public Set<ComponentId> requiredComponents() { return requiredComponents; }
+    public Set<ComponentId> withoutComponents() { return withoutComponents; }
+    public void setQuerySets(Set<ComponentId> required, Set<ComponentId> without) {
+        this.requiredComponents = required;
+        this.withoutComponents = without;
+    }
 
     public SystemExecutionPlan(int paramCount, List<ParamSlot> componentSlots, List<Integer> serviceArgIndices,
                                Map<Integer, FieldFilter> whereFilters) {
