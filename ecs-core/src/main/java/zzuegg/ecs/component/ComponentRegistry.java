@@ -40,11 +40,22 @@ public final class ComponentRegistry {
     }
 
     public ComponentId getOrRegister(Class<?> type) {
+        return getOrRegisterInfo(type).id();
+    }
+
+    /**
+     * One-lookup variant used by hot paths like {@code World.setComponent}
+     * that need both the {@code ComponentId} and the {@code ComponentInfo}
+     * for the same class. Returns the whole info record so the caller can
+     * avoid the second {@code info(type)} HashMap round-trip.
+     */
+    public ComponentInfo getOrRegisterInfo(Class<?> type) {
         var existing = byType.get(type);
         if (existing != null) {
-            return existing.id();
+            return existing;
         }
-        return register(type);
+        register(type);
+        return byType.get(type);
     }
 
     public ComponentInfo info(Class<?> type) {

@@ -53,6 +53,32 @@ public final class SystemExecutionPlan {
     public void setQuerySets(Set<ComponentId> required, Set<ComponentId> without) {
         this.requiredComponents = required;
         this.withoutComponents = without;
+        this.matchingArchetypes = null;
+        this.matchingArchetypesGeneration = -1;
+    }
+
+    // Memoized result of ArchetypeGraph.findMatching(requiredComponents),
+    // keyed by the graph's generation counter. If the cached generation
+    // matches the graph's current generation, the cached list is still
+    // valid and we skip the HashMap<Set<ComponentId>, ...> lookup
+    // entirely — that lookup was measurably hot (~18% of a RealisticTick
+    // tick) because AbstractSet.hashCode walks every element on every
+    // call. Comparing two longs is O(1).
+    @SuppressWarnings("rawtypes")
+    private java.util.List matchingArchetypes;
+    private long matchingArchetypesGeneration = -1;
+
+    @SuppressWarnings("unchecked")
+    public <A> java.util.List<A> cachedMatchingArchetypes(long graphGeneration) {
+        if (matchingArchetypesGeneration == graphGeneration) {
+            return (java.util.List<A>) matchingArchetypes;
+        }
+        return null;
+    }
+
+    public <A> void cacheMatchingArchetypes(long graphGeneration, java.util.List<A> list) {
+        this.matchingArchetypes = list;
+        this.matchingArchetypesGeneration = graphGeneration;
     }
 
     // Classes consumed via RemovedComponents<T> parameters. Used by World to

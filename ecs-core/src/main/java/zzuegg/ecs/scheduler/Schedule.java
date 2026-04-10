@@ -8,6 +8,12 @@ import java.util.stream.Collectors;
 public final class Schedule {
 
     private final TreeMap<Stage, ScheduleGraph> stages = new TreeMap<>();
+    // Cached view of stages.entrySet() so World.tick() doesn't pay a
+    // List.copyOf() + TreeMap iteration on every call. The schedule is
+    // immutable after construction (a new Schedule is built from scratch
+    // whenever systems are added/removed), so this list stays valid for
+    // the whole lifetime of the instance.
+    private final List<Map.Entry<Stage, ScheduleGraph>> orderedStagesView;
 
     public Schedule(List<SystemDescriptor> allDescriptors, Map<String, Stage> stageMap) {
         var byStage = allDescriptors.stream()
@@ -26,10 +32,12 @@ public final class Schedule {
         for (var stage : stageMap.values()) {
             stages.putIfAbsent(stage, DagBuilder.build(List.of()));
         }
+
+        this.orderedStagesView = List.copyOf(stages.entrySet());
     }
 
     public List<Map.Entry<Stage, ScheduleGraph>> orderedStages() {
-        return List.copyOf(stages.entrySet());
+        return orderedStagesView;
     }
 
     public ScheduleGraph graphForStage(Stage stage) {

@@ -344,8 +344,11 @@ public final class World {
         if (!entityAllocator.isAlive(entity)) {
             throw new IllegalArgumentException("Entity not alive: " + entity);
         }
-        var compId = componentRegistry.getOrRegister(component.getClass());
-        var info = componentRegistry.info(component.getClass());
+        // One HashMap lookup instead of two — setComponent is called once per
+        // mutation and previously paid for both getOrRegister(class) and
+        // info(class), which hashed the same Class key twice.
+        var info = componentRegistry.getOrRegisterInfo(component.getClass());
+        var compId = info.id();
         var location = getLocation(entity.index());
         var archetype = archetypeGraph.get(location.archetypeId());
 
@@ -717,10 +720,19 @@ public final class World {
 
         // Pull the pre-cached query sets from the plan instead of rebuilding.
         var cachedPlan = systemPlans.get(desc.name());
-        var requiredComponents = cachedPlan.requiredComponents();
         var withoutIds = cachedPlan.withoutComponents();
 
-        var matchingArchetypes = archetypeGraph.findMatching(requiredComponents);
+        // Fast path: the plan remembers the last findMatching() result and
+        // the archetype-graph generation at which it was cached. If the
+        // graph hasn't grown since then, reuse it and skip the per-tick
+        // Set<ComponentId> hash lookup entirely.
+        long gen = archetypeGraph.generation();
+        java.util.List<zzuegg.ecs.archetype.Archetype> matchingArchetypes =
+            cachedPlan.cachedMatchingArchetypes(gen);
+        if (matchingArchetypes == null) {
+            matchingArchetypes = archetypeGraph.findMatching(cachedPlan.requiredComponents());
+            cachedPlan.cacheMatchingArchetypes(gen, matchingArchetypes);
+        }
 
         var currentTick = tick.current();
         for (var archetype : matchingArchetypes) {

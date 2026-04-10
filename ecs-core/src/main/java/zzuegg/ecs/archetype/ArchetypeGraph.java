@@ -24,11 +24,21 @@ public final class ArchetypeGraph {
     // with every Archetype created here so new chunks pick up the current
     // state at construction time without an explicit callback.
     private final Set<ComponentId> dirtyTrackedComponents = new HashSet<>();
+    // Bumped every time getOrCreate actually materialises a new archetype.
+    // Callers that memoise findMatching() results can compare this against
+    // a stored snapshot to decide whether their cache is still valid —
+    // comparing two longs is O(1), whereas hashing the required Set<ComponentId>
+    // every call walks every element and was measurably hot in the profile.
+    private long generation = 0;
 
     public ArchetypeGraph(ComponentRegistry registry, int chunkCapacity, ComponentStorage.Factory storageFactory) {
         this.registry = registry;
         this.chunkCapacity = chunkCapacity;
         this.storageFactory = storageFactory;
+    }
+
+    public long generation() {
+        return generation;
     }
 
     public Archetype getOrCreate(ArchetypeId id) {
@@ -39,6 +49,7 @@ public final class ArchetypeGraph {
         // New archetype invalidates every cached query — any previously-cached
         // match set could now be missing this archetype.
         findMatchingCache.clear();
+        generation++;
         return created;
     }
 
