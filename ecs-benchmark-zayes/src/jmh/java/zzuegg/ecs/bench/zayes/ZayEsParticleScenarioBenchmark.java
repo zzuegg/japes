@@ -6,22 +6,27 @@ import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 
 import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Zay-ES counterpart of ParticleScenarioBenchmark.
  *
- * Same per-tick pipeline as the reference:
- *   1. move     — Position += Velocity
- *   2. damage   — Health.hp -= 1
- *   3. reap     — despawn entities with hp <= 0
- *   4. stats    — count deaths (via getRemovedEntities) and alive count
- *   5. respawn  — replenish to 10k
+ * Written in the canonical Zay-ES "AppState per logical system" shape: each
+ * system owns its own {@code EntitySet} and calls {@code applyChanges()}
+ * exactly once at the start of its update — the same pattern real Zay-ES
+ * games use.
  *
- * Written in Zay-ES idiom: one EntitySet per query shape, applyChanges at
- * stage boundaries, direct setComponent / removeEntity calls (no deferred
- * command buffer because Zay-ES doesn't have one).
+ * Per tick:
+ *   1. MoveState.update()    — iterate (Position, Velocity), setComponent Position
+ *   2. DamageState.update()  — iterate Health, setComponent with hp-1
+ *   3. ReapState.update()    — iterate getChangedEntities over Health, removeEntity if hp<=0
+ *   4. StatsState.update()   — drain getRemovedEntities for death count;
+ *                              count alive via Lifetime set
+ *   5. RespawnState.update() — recreate N-alive entities to keep total at 10k
+ *
+ * This is a strict superset of what a real AppState pipeline does, but
+ * nothing more — no extra applyChanges calls between unrelated sets, no
+ * sharing of EntitySets across logically distinct concerns.
  */
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
@@ -40,10 +45,15 @@ public class ZayEsParticleScenarioBenchmark {
     int entityCount;
 
     EntityData data;
-    EntitySet moveSet;     // Position + Velocity
-    EntitySet damageSet;   // Health
-    EntitySet healthSet;   // Health — change/remove tracking for deaths
-    EntitySet aliveSet;    // Lifetime — alive-count stat
+
+    // One EntitySet per logical AppState. Each state owns its own set and
+    // calls applyChanges() once per tick at the start of its update.
+    EntitySet moveSet;     // MoveState
+    EntitySet damageSet;   // DamageState
+    EntitySet reapSet;     // ReapState   — separate from DamageState's set
+    EntitySet statsSet;    // StatsState  — owns its own delta views
+    EntitySet aliveSet;    // StatsState's "count alive" auxiliary
+
     long totalDeaths;
 
     @Setup(Level.Iteration)
@@ -60,12 +70,15 @@ public class ZayEsParticleScenarioBenchmark {
         }
         moveSet = data.getEntities(Position.class, Velocity.class);
         damageSet = data.getEntities(Health.class);
-        healthSet = data.getEntities(Health.class);
+        reapSet = data.getEntities(Health.class);
+        statsSet = data.getEntities(Health.class);
         aliveSet = data.getEntities(Lifetime.class);
 
+        // Prime all sets so the first benchmark tick is steady-state.
         moveSet.applyChanges();
         damageSet.applyChanges();
-        healthSet.applyChanges();
+        reapSet.applyChanges();
+        statsSet.applyChanges();
         aliveSet.applyChanges();
         totalDeaths = 0;
     }
@@ -74,13 +87,15 @@ public class ZayEsParticleScenarioBenchmark {
     public void tearDown() {
         if (moveSet != null) moveSet.release();
         if (damageSet != null) damageSet.release();
-        if (healthSet != null) healthSet.release();
+        if (reapSet != null) reapSet.release();
+        if (statsSet != null) statsSet.release();
         if (aliveSet != null) aliveSet.release();
     }
 
     @Benchmark
     public void tick(Blackhole bh) {
-        // 1. Move — equivalent of the MoveSystem.
+        // 1. MoveState.update()
+        moveSet.applyChanges();
         for (Entity e : moveSet) {
             var pos = e.get(Position.class);
             var vel = e.get(Velocity.class);
@@ -88,20 +103,22 @@ public class ZayEsParticleScenarioBenchmark {
                 new Position(pos.x() + vel.dx(), pos.y() + vel.dy(), pos.z() + vel.dz()));
         }
 
-        // 2. Damage — DamageSystem.
+        // 2. DamageState.update()
+        damageSet.applyChanges();
         for (Entity e : damageSet) {
             var h = e.get(Health.class);
             data.setComponent(e.getId(), new Health(h.hp() - 1));
         }
 
-        // Stage boundary: apply mutations before reap observes them.
-        damageSet.applyChanges();
-        healthSet.applyChanges();
-
-        // 3. Reap — despawn entities at hp <= 0. Collect first, remove after
-        //    iteration to avoid CME on the live EntitySet.
+        // 3. ReapState.update()
+        //    applyChanges here picks up the Health writes from DamageState.
+        //    Iterating getChangedEntities() is the idiomatic "react to what
+        //    changed since my last run" pattern — for this workload every
+        //    entity is dirty so it's functionally the same as full iteration,
+        //    but it's the shape a real Zay-ES system would use.
+        reapSet.applyChanges();
         var toRemove = new ArrayList<EntityId>();
-        for (Entity e : healthSet) {
+        for (Entity e : reapSet.getChangedEntities()) {
             if (e.get(Health.class).hp() <= 0) {
                 toRemove.add(e.getId());
             }
@@ -110,10 +127,13 @@ public class ZayEsParticleScenarioBenchmark {
             data.removeEntity(id);
         }
 
-        // 4. Stats — drain the removed view for the death count, count alive.
-        healthSet.applyChanges();
+        // 4. StatsState.update()
+        //    This state's applyChanges now sees the removes from ReapState.
+        //    The aliveSet is an auxiliary view owned by the same state for
+        //    the "count alive" statistic.
+        statsSet.applyChanges();
         long deathsThisTick = 0;
-        for (Entity e : healthSet.getRemovedEntities()) {
+        for (Entity e : statsSet.getRemovedEntities()) {
             deathsThisTick++;
             bh.consume(e.getId());
         }
@@ -126,7 +146,7 @@ public class ZayEsParticleScenarioBenchmark {
         }
         bh.consume(alive);
 
-        // 5. Respawn — keep the total at 10_000.
+        // 5. RespawnState.update() — recreate to keep total at 10k.
         for (int i = 0; i < deathsThisTick; i++) {
             var id = data.createEntity();
             data.setComponents(id,
@@ -135,13 +155,6 @@ public class ZayEsParticleScenarioBenchmark {
                 new Lifetime(1000),
                 new Health(100));
         }
-
-        // End-of-tick: propagate the respawn additions so the next iteration
-        // sees them in the sets.
-        moveSet.applyChanges();
-        damageSet.applyChanges();
-        healthSet.applyChanges();
-        aliveSet.applyChanges();
 
         bh.consume(totalDeaths);
     }
