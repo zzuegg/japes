@@ -16,6 +16,11 @@ public final class WorldBuilder {
     final Map<String, Stage> stages = new LinkedHashMap<>();
     Executor executor;
     ComponentStorage.Factory storageFactory;
+    // True when the user is using the default storage factory — lets tier-1
+    // safely assume every ComponentStorage is a DefaultComponentStorage and
+    // access the backing array directly via rawArray() instead of going
+    // through the interface dispatch. Flipped to false by storageFactory().
+    boolean useDefaultStorageFactory = true;
     boolean useGeneratedProcessors = true;
     int chunkSize = 1024;
 
@@ -69,6 +74,9 @@ public final class WorldBuilder {
 
     public WorldBuilder storageFactory(ComponentStorage.Factory factory) {
         this.storageFactory = factory;
+        // A custom factory might return something that isn't a
+        // DefaultComponentStorage, so we can't use the tier-1 raw-array path.
+        this.useDefaultStorageFactory = false;
         return this;
     }
 

@@ -84,9 +84,14 @@ public final class GeneratedChunkProcessor {
     }
 
     public static ChunkProcessor tryGenerate(SystemDescriptor desc, Object[] serviceArgs) {
+        return tryGenerate(desc, serviceArgs, true);
+    }
+
+    public static ChunkProcessor tryGenerate(SystemDescriptor desc, Object[] serviceArgs,
+                                             boolean useDefaultStorageFactory) {
         if (skipReason(desc) != null) return null;
         try {
-            return generateWithBytecode(desc, serviceArgs);
+            return generateWithBytecode(desc, serviceArgs, useDefaultStorageFactory);
         } catch (Exception e) {
             // Fall back to invokeExact path. The invokeExact fallback cannot
             // handle Mut/Entity/service parameters — if any such param exists,
@@ -122,7 +127,8 @@ public final class GeneratedChunkProcessor {
     // Per-parameter classification for the generator.
     private enum ParamKind { READ, WRITE, ENTITY, SERVICE }
 
-    private static ChunkProcessor generateWithBytecode(SystemDescriptor desc, Object[] serviceArgs) throws Exception {
+    private static ChunkProcessor generateWithBytecode(SystemDescriptor desc, Object[] serviceArgs,
+                                                        boolean useDefaultStorageFactory) throws Exception {
         var method = desc.method();
         var accesses = desc.componentAccesses();
         int paramCount = method.getParameterCount();
@@ -186,6 +192,9 @@ public final class GeneratedChunkProcessor {
         var mutArrayDesc = mutDesc.arrayType();
         var trackerArrayDesc = trackerDesc.arrayType();
         var objArrayDesc = objDesc.arrayType();
+        var recordArrayDesc = recordDesc.arrayType();
+        var defaultStorageDesc = ClassDesc.of("zzuegg.ecs.storage.DefaultComponentStorage");
+        var rawArrayDesc = MethodTypeDesc.of(recordArrayDesc);
         var entityDesc = ClassDesc.of("zzuegg.ecs.entity.Entity");
         var chunkEntityDesc = MethodTypeDesc.of(entityDesc, ConstantDescs.CD_int);
 
@@ -260,9 +269,11 @@ public final class GeneratedChunkProcessor {
                 cb.invokevirtual(chunkDesc, "count", MethodTypeDesc.of(ConstantDescs.CD_int));
                 cb.istore(countVar);
 
-                // Load storages into local vars for READ/WRITE params only.
-                // cids is indexed by ComponentAccess order, so we use
-                // paramToAccessIdx[i] to read the right slot.
+                // Load storages into local vars for READ/WRITE params. When
+                // the world uses the default storage factory, go a step
+                // further and grab the raw Record[] backing array so the
+                // per-entity access is just aaload/aastore — no
+                // invokeinterface on the hot path.
                 for (int i = 0; i < paramCount; i++) {
                     if (kinds[i] != ParamKind.READ && kinds[i] != ParamKind.WRITE) continue;
                     cb.aload(1); // chunk
@@ -272,6 +283,10 @@ public final class GeneratedChunkProcessor {
                     cb.aaload();
                     cb.invokevirtual(chunkDesc, "componentStorage",
                         MethodTypeDesc.of(storageDesc, compIdDesc));
+                    if (useDefaultStorageFactory) {
+                        cb.checkcast(defaultStorageDesc);
+                        cb.invokevirtual(defaultStorageDesc, "rawArray", rawArrayDesc);
+                    }
                     cb.astore(firstStorageVar + i);
                 }
 
@@ -324,10 +339,17 @@ public final class GeneratedChunkProcessor {
                 for (int i = 0; i < paramCount; i++) {
                     switch (kinds[i]) {
                         case READ -> {
-                            // (Type) storageN.get(slot)
-                            cb.aload(firstStorageVar + i);
-                            cb.iload(slotVar);
-                            cb.invokeinterface(storageDesc, "get", storageGetDesc);
+                            // Fast path: aaload from raw Record[] then checkcast.
+                            // Slow path: invokeinterface ComponentStorage.get.
+                            if (useDefaultStorageFactory) {
+                                cb.aload(firstStorageVar + i); // Record[]
+                                cb.iload(slotVar);
+                                cb.aaload();
+                            } else {
+                                cb.aload(firstStorageVar + i);
+                                cb.iload(slotVar);
+                                cb.invokeinterface(storageDesc, "get", storageGetDesc);
+                            }
                             cb.checkcast(componentTypes[i].describeConstable().orElseThrow());
                         }
                         case WRITE -> {
@@ -335,16 +357,20 @@ public final class GeneratedChunkProcessor {
                             // tracker+tick were already set per-chunk via
                             // setContext, so the per-entity path only pushes
                             // the two variables that actually change per slot.
-                            // The duplicated Mut remains on the stack as the
-                            // method argument after resetValue returns void.
                             cb.aload(0);
                             cb.getfield(genDesc, "muts", mutArrayDesc);
                             cb.ldc(i);
                             cb.aaload();
                             cb.dup();
-                            cb.aload(firstStorageVar + i);
-                            cb.iload(slotVar);
-                            cb.invokeinterface(storageDesc, "get", storageGetDesc);
+                            if (useDefaultStorageFactory) {
+                                cb.aload(firstStorageVar + i);
+                                cb.iload(slotVar);
+                                cb.aaload();
+                            } else {
+                                cb.aload(firstStorageVar + i);
+                                cb.iload(slotVar);
+                                cb.invokeinterface(storageDesc, "get", storageGetDesc);
+                            }
                             cb.iload(slotVar);
                             cb.invokevirtual(mutDesc, "resetValue", mutResetValueDesc);
                         }
@@ -385,10 +411,21 @@ public final class GeneratedChunkProcessor {
                     cb.invokevirtual(mutDesc, "flush", mutFlushDesc);
                     cb.astore(tempValueVar);
 
-                    cb.aload(firstStorageVar + i);
-                    cb.iload(slotVar);
-                    cb.aload(tempValueVar);
-                    cb.invokeinterface(storageDesc, "set", storageSetDesc);
+                    if (useDefaultStorageFactory) {
+                        // raw[slot] = tempValue — direct array store, no
+                        // interface dispatch. The array's runtime component
+                        // type is the concrete component class, so aastore's
+                        // covariance check is satisfied cheaply.
+                        cb.aload(firstStorageVar + i);
+                        cb.iload(slotVar);
+                        cb.aload(tempValueVar);
+                        cb.aastore();
+                    } else {
+                        cb.aload(firstStorageVar + i);
+                        cb.iload(slotVar);
+                        cb.aload(tempValueVar);
+                        cb.invokeinterface(storageDesc, "set", storageSetDesc);
+                    }
                 }
 
                 cb.iinc(slotVar, 1);

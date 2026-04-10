@@ -48,11 +48,13 @@ public final class World {
     // drive per-chunk dirty-list pruning at end of tick.
     private final Set<ComponentId> trackedChangeFilterComponents = new HashSet<>();
     private final boolean useGeneratedProcessors;
+    private final boolean useDefaultStorageFactory;
 
     World(WorldBuilder builder) {
         this.archetypeGraph = new ArchetypeGraph(componentRegistry, builder.chunkSize, builder.storageFactory);
         this.executor = builder.executor;
         this.useGeneratedProcessors = builder.useGeneratedProcessors;
+        this.useDefaultStorageFactory = builder.useDefaultStorageFactory;
         this.stages = new HashMap<>(builder.stages);
 
         for (var resource : builder.resources) {
@@ -197,7 +199,8 @@ public final class World {
         // because its read-only fast path doesn't emit the entity load).
         if (useGeneratedProcessors && !desc.isExclusive() && !desc.componentAccesses().isEmpty()
                 && desc.changeFilters().isEmpty()) {
-            chunkProcessors.put(desc.name(), ChunkProcessorGenerator.generate(desc, resolvedServiceArgs));
+            chunkProcessors.put(desc.name(),
+                ChunkProcessorGenerator.generate(desc, resolvedServiceArgs, useDefaultStorageFactory));
         }
     }
 
