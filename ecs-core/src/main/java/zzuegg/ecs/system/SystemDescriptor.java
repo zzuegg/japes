@@ -23,6 +23,7 @@ public record SystemDescriptor(
     Set<Class<? extends Record>> withFilters,
     Set<Class<? extends Record>> withoutFilters,
     List<FilterDescriptor> changeFilters,
+    Set<Class<? extends Record>> removedReads,
     boolean usesCommands,
     boolean usesLocal,
     String runIf,

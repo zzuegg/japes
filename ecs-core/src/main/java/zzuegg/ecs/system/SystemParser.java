@@ -79,6 +79,7 @@ public final class SystemParser {
             var resourceWrites = new HashSet<Class<?>>();
             var eventReads = new HashSet<Class<?>>();
             var eventWrites = new HashSet<Class<?>>();
+            var removedReads = new HashSet<Class<? extends Record>>();
             boolean usesCommands = false;
             boolean usesLocal = false;
 
@@ -103,6 +104,13 @@ public final class SystemParser {
                 }
                 if (paramType == EventWriter.class) {
                     eventWrites.add(extractTypeArg(param));
+                    continue;
+                }
+                if (paramType == RemovedComponents.class) {
+                    @SuppressWarnings("unchecked")
+                    var recType = (Class<? extends Record>) extractTypeArg(param);
+                    removedReads.add(recType);
+                    registry.getOrRegister(recType);
                     continue;
                 }
 
@@ -176,7 +184,7 @@ public final class SystemParser {
                 componentAccesses, whereFilters,
                 resourceReads, resourceWrites,
                 eventReads, eventWrites, withFilters, withoutFilters,
-                changeFilters, usesCommands, usesLocal, runIf,
+                changeFilters, removedReads, usesCommands, usesLocal, runIf,
                 method, Modifier.isStatic(method.getModifiers()) ? null : instance
             ));
         }

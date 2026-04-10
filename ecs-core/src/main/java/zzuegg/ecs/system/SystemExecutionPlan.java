@@ -55,6 +55,14 @@ public final class SystemExecutionPlan {
         this.withoutComponents = without;
     }
 
+    // Classes consumed via RemovedComponents<T> parameters. Used by World to
+    // identify which plans participate in each per-component GC pass.
+    private Set<Class<? extends Record>> consumedRemovedComponents = Set.of();
+    public Set<Class<? extends Record>> consumedRemovedComponents() { return consumedRemovedComponents; }
+    public void setConsumedRemovedComponents(Set<Class<? extends Record>> types) {
+        this.consumedRemovedComponents = types;
+    }
+
     public SystemExecutionPlan(int paramCount, List<ParamSlot> componentSlots, List<Integer> serviceArgIndices,
                                Map<Integer, FieldFilter> whereFilters) {
         this(paramCount, componentSlots, serviceArgIndices, whereFilters, List.of());
@@ -76,6 +84,10 @@ public final class SystemExecutionPlan {
 
     public boolean hasChangeFilters() {
         return changeFilters.length > 0;
+    }
+
+    public long lastSeenTick() {
+        return lastSeenTick;
     }
 
     /**

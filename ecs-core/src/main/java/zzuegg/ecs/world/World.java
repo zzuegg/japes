@@ -1,6 +1,7 @@
 package zzuegg.ecs.world;
 
 import zzuegg.ecs.archetype.*;
+import zzuegg.ecs.change.RemovalLog;
 import zzuegg.ecs.change.Tick;
 import zzuegg.ecs.command.Commands;
 import zzuegg.ecs.component.*;
@@ -39,6 +40,10 @@ public final class World {
     private final Map<String, ChunkProcessor> chunkProcessors = new HashMap<>();
     private final Set<String> disabledSystems = new HashSet<>();
     private final List<Commands> allCommandBuffers = new ArrayList<>();
+    private final RemovalLog removalLog = new RemovalLog();
+    // Components observed via RemovedComponents<T> in any plan. GC walks only
+    // these each tick.
+    private final Set<ComponentId> trackedRemovedComponents = new HashSet<>();
     private final boolean useGeneratedProcessors;
 
     World(WorldBuilder builder) {
@@ -74,6 +79,9 @@ public final class World {
         // Every rebuild re-resolves service args, which allocates fresh Commands
         // buffers. Drop the old ones so the list doesn't grow unbounded.
         allCommandBuffers.clear();
+        // Removal consumers must be re-registered by each plan below.
+        removalLog.clearConsumers();
+        trackedRemovedComponents.clear();
         this.schedule = new Schedule(allDescriptors, stages);
 
         for (var entry : schedule.orderedStages()) {
@@ -134,6 +142,7 @@ public final class World {
             without.add(componentRegistry.getOrRegister(withoutType));
         }
         plan.setQuerySets(Set.copyOf(required), Set.copyOf(without));
+        plan.setConsumedRemovedComponents(Set.copyOf(desc.removedReads()));
 
         // Resolve service args once per system so the generated-processor path and the
         // SystemExecutionPlan path observe the same Commands/EventWriter/Local instances.
@@ -142,7 +151,21 @@ public final class World {
         // the one exposed to the system at runtime.
         var resolvedServiceArgs = new Object[params.length];
         for (int idx : serviceArgIndices) {
-            var arg = resolveServiceParam(desc, params[idx], idx);
+            var p = params[idx];
+            Object arg;
+            if (p.getType() == RemovedComponents.class) {
+                // RemovedComponents<T> needs the owning plan to read its watermark,
+                // so construct it here where the plan is in scope rather than
+                // through the generic resolveServiceParam helper.
+                @SuppressWarnings("unchecked")
+                var recType = (Class<? extends Record>) extractTypeArg(p);
+                var compId = componentRegistry.getOrRegister(recType);
+                removalLog.registerConsumer(compId);
+                trackedRemovedComponents.add(compId);
+                arg = RemovedComponents.bind(removalLog, compId, plan);
+            } else {
+                arg = resolveServiceParam(desc, p, idx);
+            }
             resolvedServiceArgs[idx] = arg;
             plan.setServiceArg(idx, arg);
         }
@@ -243,6 +266,18 @@ public final class World {
                 "Invariant violation: alive entity has no location: " + entity);
         }
         var archetype = archetypeGraph.get(location.archetypeId());
+
+        // Log every component the entity is about to lose so RemovedComponents<T>
+        // consumers can see them. Done before archetype.remove() so the values
+        // are still readable.
+        var chunk = archetype.chunks().get(location.chunkIndex());
+        int slot = location.slotIndex();
+        for (var compId : location.archetypeId().components()) {
+            if (trackedRemovedComponents.contains(compId)) {
+                removalLog.append(compId, entity, (Record) chunk.get(compId, slot), tick.current());
+            }
+        }
+
         var swapped = archetype.remove(location);
         swapped.ifPresent(swappedEntity ->
             setLocation(swappedEntity.index(), location)
@@ -345,6 +380,14 @@ public final class World {
         var oldLocation = getLocation(entity.index());
         var oldArchetype = archetypeGraph.get(oldLocation.archetypeId());
 
+        // Log the removal BEFORE migration, so the last-known value is still
+        // reachable in the source chunk for RemovedComponents<T> consumers.
+        if (trackedRemovedComponents.contains(compId)) {
+            var oldChunkEarly = oldArchetype.chunks().get(oldLocation.chunkIndex());
+            removalLog.append(compId, entity,
+                (Record) oldChunkEarly.get(compId, oldLocation.slotIndex()), tick.current());
+        }
+
         var newArchetypeId = archetypeGraph.removeEdge(oldLocation.archetypeId(), compId);
         var newArchetype = archetypeGraph.getOrCreate(newArchetypeId);
 
@@ -379,6 +422,35 @@ public final class World {
 
         for (var entry : schedule.orderedStages()) {
             executeStage(entry.getValue());
+        }
+
+        // End-of-tick GC for the removal log: for each tracked component, drop
+        // every entry whose tick is ≤ the minimum watermark across the plans
+        // that consume it. Plans that never ran this tick (disabled / skipped
+        // by RunIf) still hold references via their older watermark, so their
+        // entries survive until they catch up.
+        if (!trackedRemovedComponents.isEmpty()) {
+            for (var compId : trackedRemovedComponents) {
+                long minWatermark = Long.MAX_VALUE;
+                for (var p : systemPlans.values()) {
+                    // Only plans that actually consume this component count.
+                    // Descriptors carry the Class, not the ComponentId, so
+                    // we re-resolve here — cheap lookups in componentRegistry.
+                    boolean consumes = false;
+                    for (var type : p.consumedRemovedComponents()) {
+                        if (componentRegistry.getOrRegister(type).equals(compId)) {
+                            consumes = true;
+                            break;
+                        }
+                    }
+                    if (consumes && p.lastSeenTick() < minWatermark) {
+                        minWatermark = p.lastSeenTick();
+                    }
+                }
+                if (minWatermark != Long.MAX_VALUE) {
+                    removalLog.collectGarbage(compId, minWatermark);
+                }
+            }
         }
     }
 
@@ -560,12 +632,21 @@ public final class World {
         }
 
         if (desc.componentAccesses().isEmpty()) {
-            // No component params — invoke once with non-component args
-            var args = buildServiceArgs(desc);
+            // No component params — invoke once with the plan's pre-resolved
+            // service args (Commands, Res, EventReader, RemovedComponents, ...).
+            // buildServiceArgs previously re-resolved from scratch, which
+            // returned null for RemovedComponents and leaked fresh Commands
+            // buffers on every call.
+            var plan = systemPlans.get(desc.name());
             try {
-                invoker.invoke(args);
+                invoker.invoke(plan.args());
             } catch (Throwable e) {
                 throw new RuntimeException("System failed: " + desc.name(), e);
+            }
+            // Even zero-component systems need their watermark advanced for
+            // RemovedComponents/@Filter consumers.
+            if (plan.hasChangeFilters() || !desc.removedReads().isEmpty()) {
+                plan.markExecuted(tick.current());
             }
             return;
         }
@@ -600,10 +681,11 @@ public final class World {
                 }
             }
         }
-        // Advance the per-system "last seen" watermark so change filters on the
-        // next tick compare against this tick's boundary.
+        // Advance the per-system "last seen" watermark so change filters and
+        // RemovedComponents readers on the next tick compare against this
+        // tick's boundary.
         var plan = systemPlans.get(desc.name());
-        if (plan != null && plan.hasChangeFilters()) {
+        if (plan != null && (plan.hasChangeFilters() || !desc.removedReads().isEmpty())) {
             plan.markExecuted(currentTick);
         }
     }
