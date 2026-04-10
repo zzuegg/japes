@@ -5,6 +5,7 @@ import dev.dominion.ecs.api.Entity;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 
+import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -18,14 +19,19 @@ import java.util.concurrent.TimeUnit;
  *      Health in place and pushing each entity onto a caller-maintained
  *      dirty buffer.
  *   2. "Observer" pass iterates the dirty buffer, consumes each Health, and
- *      resets the buffer cursor to zero for the next tick.
+ *      clears the buffer for the next tick.
  *
- * The dirty buffer is a fixed-size array (size = BATCH), reused across ticks
- * so the benchmark doesn't measure allocator throughput. This is the fastest
- * honest implementation a Dominion user can write — but it relies on the
- * user remembering to update the dirty list everywhere Health is mutated.
- * That contract is enforced by the library in japes/Zay-ES/Bevy and has to
- * be hand-maintained here.
+ * The dirty buffer is a reused {@link ArrayList} with Java's default initial
+ * capacity — realistic "declare a field, clear it per tick" code, not a
+ * pre-sized array that assumes the benchmark's exact per-tick batch count.
+ * Earlier revisions of this benchmark used {@code new Entity[BATCH]} which
+ * was cheating: a real Dominion user writing a mutation-driven dirty list
+ * wouldn't know the exact number of entities they'll touch each frame.
+ *
+ * This is still the fastest honest implementation a Dominion user can write,
+ * but it relies on the user remembering to update the dirty list everywhere
+ * Health is mutated. That contract is enforced by the library in
+ * japes/Zay-ES/Bevy and has to be hand-maintained here.
  */
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
@@ -51,7 +57,9 @@ public class DominionSparseDeltaBenchmark {
     long observedCount;
 
     // Caller-maintained dirty buffer — the whole point of the benchmark.
-    Entity[] dirtyBuf;
+    // Default-constructed ArrayList (capacity 10, grows as needed) so we
+    // measure the cost a production Dominion user would actually pay.
+    ArrayList<Entity> dirtyBuf;
 
     @Setup(Level.Iteration)
     public void setup() {
@@ -62,7 +70,7 @@ public class DominionSparseDeltaBenchmark {
         }
         cursor = 0;
         observedCount = 0;
-        dirtyBuf = new Entity[BATCH];
+        dirtyBuf = new ArrayList<>();
     }
 
     @TearDown(Level.Iteration)
@@ -72,21 +80,25 @@ public class DominionSparseDeltaBenchmark {
 
     @Benchmark
     public void tick(Blackhole bh) {
+        // Clear-and-reuse. ArrayList.clear() resets size to 0 without
+        // shrinking the backing array, so subsequent ticks don't pay the
+        // growth cost once the list has stabilised.
+        dirtyBuf.clear();
+
         // 1. Driver: damage 100 entities, and remember which ones were touched.
-        int dirtyCount = 0;
         for (int i = 0; i < BATCH; i++) {
             var e = handles[cursor];
             cursor = (cursor + 1) % handles.length;
             var h = e.get(Health.class);
             h.hp -= 1;
-            dirtyBuf[dirtyCount++] = e;
+            dirtyBuf.add(e);
         }
 
         // 2. Observer: walk exactly the dirty buffer — per-tick work is
-        //    proportional to dirtyCount, not entityCount.
-        for (int i = 0; i < dirtyCount; i++) {
+        //    proportional to dirty count, not entity count.
+        for (int i = 0, n = dirtyBuf.size(); i < n; i++) {
             observedCount++;
-            bh.consume(dirtyBuf[i].get(Health.class));
+            bh.consume(dirtyBuf.get(i).get(Health.class));
         }
         bh.consume(observedCount);
     }

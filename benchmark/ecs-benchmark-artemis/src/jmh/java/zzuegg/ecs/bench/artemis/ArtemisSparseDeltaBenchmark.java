@@ -23,10 +23,16 @@ import java.util.concurrent.TimeUnit;
  *   2. "Observer" pass iterates the IntBag, consumes each Health, and clears
  *      the bag for the next tick.
  *
- * The bag is reused across ticks so the benchmark doesn't measure allocator
- * throughput. This is the fastest honest implementation an Artemis user can
- * write, but it relies on the user remembering to append to the bag at every
- * Health mutation site — a contract the library enforces automatically in
+ * The bag is a default-constructed {@link IntBag} (Artemis's default capacity,
+ * grows as needed) so we measure the cost a production Artemis user would
+ * actually pay. An earlier revision used {@code new IntBag(BATCH)}, pre-sizing
+ * the bag to the exact per-tick count — that was cheating, because a real
+ * user writing a mutation-driven dirty list wouldn't know the exact number
+ * of entities touched per frame.
+ *
+ * This is still the fastest honest implementation an Artemis user can write,
+ * but it relies on the user remembering to append to the bag at every Health
+ * mutation site — a contract the library enforces automatically in
  * japes/Zay-ES/Bevy.
  */
 @BenchmarkMode(Mode.Throughput)
@@ -53,6 +59,8 @@ public class ArtemisSparseDeltaBenchmark {
     long observedCount;
 
     // Caller-maintained dirty buffer — the point of the benchmark.
+    // Default-constructed IntBag so the benchmark pays the realistic growth
+    // cost instead of being pre-sized to the exact per-tick batch.
     IntBag dirtyBuf;
 
     @Setup(Level.Iteration)
@@ -70,7 +78,7 @@ public class ArtemisSparseDeltaBenchmark {
         world.process();
         cursor = 0;
         observedCount = 0;
-        dirtyBuf = new IntBag(BATCH);
+        dirtyBuf = new IntBag();
     }
 
     @TearDown(Level.Iteration)
