@@ -1,5 +1,6 @@
 package zzuegg.ecs.bench.valhalla.scenario;
 
+import jdk.internal.vm.annotation.LooselyConsistentValue;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 import zzuegg.ecs.command.Commands;
@@ -25,11 +26,11 @@ import java.util.concurrent.TimeUnit;
 @Fork(2)
 public class ParticleScenarioBenchmarkValhalla {
 
-    public value record Position(float x, float y, float z) {}
-    public value record Velocity(float dx, float dy, float dz) {}
-    public value record Lifetime(int ttl) {}
-    public value record Health(int hp) {}
-    public value record Stats(long deaths, long alive) {}
+    @LooselyConsistentValue public value record Position(float x, float y, float z) {}
+    @LooselyConsistentValue public value record Velocity(float dx, float dy, float dz) {}
+    @LooselyConsistentValue public value record Lifetime(int ttl) {}
+    @LooselyConsistentValue public value record Health(int hp) {}
+    @LooselyConsistentValue public value record Stats(long deaths, long alive) {}
 
     @Param({"10000"})
     int entityCount;

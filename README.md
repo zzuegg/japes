@@ -512,16 +512,39 @@ sequential dense iteration over a primitive-backed storage.
   Valhalla allocating **2.2×** more per op on RealisticTick than stock
   japes (13 349 B/op vs 6 085 B/op); stack sampling put
   `DefaultComponentStorage.get` / `set` at a combined 18 % of CPU under
-  Valhalla vs invisible under stock. The culprit is
-  `DefaultComponentStorage.data`, which is created via
-  `Array.newInstance(type, capacity)` — that produces a *reference*
-  `T[]` under JEP 401 EA, not a flat array. In a tight per-chunk tier-1
-  loop the JIT seems to hoist / scalar-replace well enough that reads
-  fly (see the iteration rows), but every call to the out-of-line
-  `setComponent` path stores a value record into that reference array,
-  which boxes. To actually get the full value-layout win on the write
-  path too, the storage would need to opt in explicitly to a flat array
-  via whatever API ends up shipping in the final Valhalla release.
+  Valhalla vs invisible under stock. The culprit is that value records
+  cross the erased `Record` parameter of `World.setComponent` in the
+  scenario hot path, which forces the JVM to box the value into a
+  heap wrapper even though the storage layer is value-aware.
+
+**Does an explicit flat-array opt-in fix it?** JEP 401 EA exposes an
+experimental flat-array allocator at `jdk.internal.value.ValueClass.
+newNullRestrictedNonAtomicArray(Class, int, Object)` plus a
+class-level `@jdk.internal.vm.annotation.LooselyConsistentValue`
+opt-in. I wired both into `DefaultComponentStorage` and the Valhalla
+benchmark records (see `DefaultComponentStorage` static initialiser —
+it's gated behind `-Dzzuegg.ecs.useFlatStorage=true` so it's off by
+default). The resulting backing array genuinely is flat
+(`ValueClass.isFlatArray(arr) == true`, verified in-process), but in
+an A/B comparison on the same JVM it was **measurably worse**:
+
+  | benchmark                | flat OFF | flat ON | Δ              |
+  |--------------------------|---------:|--------:|---------------:|
+  | iterateTwoComponents 10k |   1.79   |   6.18  | **3.4× slower**|
+  | iterateTwoComponents 100k|   18.4   |   64.3  | **3.5× slower**|
+  | RealisticTick st         |   14.0   |   16.3  | 16% slower     |
+  | SparseDelta              |   2.57   |   2.49  | noise          |
+
+  The EA JIT clearly hasn't yet emitted optimised get/set code for flat
+  null-restricted arrays — the flat layout is in place but accessing
+  it goes through a slower path than the reference-array fallback that
+  the JIT has had longer to optimise. All the real Valhalla wins above
+  (the 2–4× reads and the ~10% NBody numbers) come from the
+  *reference-array* path, where the JIT scalar-replaces well and the
+  value-record layout wins through escape analysis instead of through
+  an explicit flat backing. The opt-in is there and correct; it'll
+  become the right default once the Valhalla JIT's flat-array path
+  catches up with its reference-array path.
 - **SparseDelta** is within noise. The bottleneck is change-tracker
   bookkeeping, not component reads, so there's nothing for Valhalla
   to flatten.
@@ -530,13 +553,16 @@ sequential dense iteration over a primitive-backed storage.
 ~**3×** speedup on read-heavy iteration (the biggest single gain in
 this README) and ~**10%** on dense integration loops, and is still a
 net *regression* on change-detection scenario benchmarks that exercise
-`setComponent` heavily. The regression is attributable to the storage
-layer's reference `T[]` backing, which the tier-1 generator's read
-path survives but the `setComponent` write path doesn't — a clear
-"fix the storage" target once Valhalla's flat-array API stabilises.
-The shape is right and the trajectory is clearly favourable; "just set
-the JVM to Valhalla" is not a free performance switch today but the
-read-side numbers are *very* compelling.
+`setComponent` heavily. Counter-intuitively, the explicit
+flat-array opt-in (`newNullRestrictedNonAtomicArray` +
+`@LooselyConsistentValue`) makes things *worse* today because the EA
+JIT hasn't optimised the flat-access path yet — the real wins come
+from the reference-array fallback where the JIT can scalar-replace
+through escape analysis. Both code paths are implemented and
+A/B-tested in the repo; the flat opt-in will become the right default
+once the Valhalla JIT catches up. "Just set the JVM to Valhalla" is
+not a free performance switch today but the read-side numbers are
+*very* compelling, and the trajectory is clearly favourable.
 
 ### The "write-path tax" — why japes looks slow on naked writes
 

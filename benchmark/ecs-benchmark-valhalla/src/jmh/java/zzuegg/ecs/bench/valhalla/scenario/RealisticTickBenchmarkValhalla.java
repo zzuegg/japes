@@ -1,5 +1,6 @@
 package zzuegg.ecs.bench.valhalla.scenario;
 
+import jdk.internal.vm.annotation.LooselyConsistentValue;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 import zzuegg.ecs.entity.Entity;
@@ -27,10 +28,13 @@ import java.util.concurrent.TimeUnit;
 @Fork(2)
 public class RealisticTickBenchmarkValhalla {
 
-    public value record Position(float x, float y, float z) {}
-    public value record Velocity(float dx, float dy, float dz) {}
-    public value record Health(int hp) {}
-    public value record Mana(int points) {}
+    // @LooselyConsistentValue opts into the flat-array layout — without it
+    // the VM returns a non-flat reference array even for newNullRestricted
+    // storage. See DefaultComponentStorage for the flat-allocator probe.
+    @LooselyConsistentValue public value record Position(float x, float y, float z) {}
+    @LooselyConsistentValue public value record Velocity(float dx, float dy, float dz) {}
+    @LooselyConsistentValue public value record Health(int hp) {}
+    @LooselyConsistentValue public value record Mana(int points) {}
 
     @Param({"10000"})
     int entityCount;

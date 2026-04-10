@@ -1,5 +1,6 @@
 package zzuegg.ecs.bench.valhalla.macro;
 
+import jdk.internal.vm.annotation.LooselyConsistentValue;
 import org.openjdk.jmh.annotations.*;
 import zzuegg.ecs.component.Mut;
 import zzuegg.ecs.resource.Res;
@@ -17,11 +18,12 @@ import java.util.concurrent.TimeUnit;
 @Fork(2)
 public class NBodyBenchmarkValhalla {
 
-    // Value records — Valhalla flattens these
-    public value record Position(float x, float y, float z) {}
-    public value record Velocity(float dx, float dy, float dz) {}
-    public value record Mass(float m) {}
-    public value record DeltaTime(float dt) {}
+    // Value records + @LooselyConsistentValue — the combination is what
+    // JEP 401 EA actually requires for the VM to lay these out flat.
+    @LooselyConsistentValue public value record Position(float x, float y, float z) {}
+    @LooselyConsistentValue public value record Velocity(float dx, float dy, float dz) {}
+    @LooselyConsistentValue public value record Mass(float m) {}
+    @LooselyConsistentValue public value record DeltaTime(float dt) {}
 
     static class IntegrateSystems {
         @System

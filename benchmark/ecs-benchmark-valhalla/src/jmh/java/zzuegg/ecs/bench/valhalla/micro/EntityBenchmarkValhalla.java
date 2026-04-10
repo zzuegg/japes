@@ -1,5 +1,6 @@
 package zzuegg.ecs.bench.valhalla.micro;
 
+import jdk.internal.vm.annotation.LooselyConsistentValue;
 import org.openjdk.jmh.annotations.*;
 import zzuegg.ecs.entity.Entity;
 import zzuegg.ecs.entity.EntityAllocator;
@@ -16,9 +17,9 @@ import java.util.concurrent.TimeUnit;
 @Fork(2)
 public class EntityBenchmarkValhalla {
 
-    // Value records — Valhalla flattens these in arrays
-    public value record Position(float x, float y, float z) {}
-    public value record Velocity(float dx, float dy, float dz) {}
+    // Value records + @LooselyConsistentValue — opt into flat layout.
+    @LooselyConsistentValue public value record Position(float x, float y, float z) {}
+    @LooselyConsistentValue public value record Velocity(float dx, float dy, float dz) {}
 
     @Benchmark
     public Entity singleSpawn() {

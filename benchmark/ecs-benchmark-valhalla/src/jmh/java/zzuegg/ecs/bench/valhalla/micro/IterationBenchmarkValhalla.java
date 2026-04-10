@@ -1,5 +1,6 @@
 package zzuegg.ecs.bench.valhalla.micro;
 
+import jdk.internal.vm.annotation.LooselyConsistentValue;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 import zzuegg.ecs.component.Mut;
@@ -17,9 +18,13 @@ import java.util.concurrent.TimeUnit;
 @Fork(2)
 public class IterationBenchmarkValhalla {
 
-    // Value records — Valhalla flattens these in arrays
-    public value record Position(float x, float y, float z) {}
-    public value record Velocity(float dx, float dy, float dz) {}
+    // Value records + @LooselyConsistentValue — the combination that lets
+    // the JVM actually lay these out flat in a backing array. JEP 401 EA
+    // only flattens value classes that explicitly opt into relaxed
+    // atomicity; without the annotation newNullRestrictedNonAtomicArray
+    // returns a non-flat Object[] even though the API accepts the call.
+    @LooselyConsistentValue public value record Position(float x, float y, float z) {}
+    @LooselyConsistentValue public value record Velocity(float dx, float dy, float dz) {}
 
     // Read-only systems hand their components to a Blackhole so the JIT
     // can't dead-code-eliminate the per-entity load. Empty method bodies

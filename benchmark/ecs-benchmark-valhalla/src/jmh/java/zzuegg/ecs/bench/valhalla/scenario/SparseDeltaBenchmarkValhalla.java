@@ -1,5 +1,6 @@
 package zzuegg.ecs.bench.valhalla.scenario;
 
+import jdk.internal.vm.annotation.LooselyConsistentValue;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 import zzuegg.ecs.entity.Entity;
@@ -26,7 +27,7 @@ import java.util.concurrent.TimeUnit;
 @Fork(2)
 public class SparseDeltaBenchmarkValhalla {
 
-    public value record Health(int hp) {}
+    @LooselyConsistentValue public value record Health(int hp) {}
 
     public static class ChangedObserver {
         public static Blackhole bh;
