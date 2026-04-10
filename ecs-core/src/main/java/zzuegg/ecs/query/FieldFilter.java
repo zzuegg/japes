@@ -3,6 +3,7 @@ package zzuegg.ecs.query;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Predicate;
 
 /**
@@ -62,12 +63,20 @@ public sealed interface FieldFilter {
         public boolean test(java.util.Map<Class<?>, Record> components) {
             var component = components.get(componentType);
             if (component == null) return false;
+            Object value;
             try {
-                var value = accessor.invoke(component);
-                return predicate.test(value);
+                value = accessor.invoke(component);
+            } catch (RuntimeException | Error e) {
+                throw e;
             } catch (Throwable e) {
-                return false;
+                // MethodHandle.invoke declares Throwable; checked exceptions here
+                // are effectively impossible for a record accessor, but wrap for safety.
+                throw new RuntimeException("field accessor failed on " + componentType.getName(), e);
             }
+            // Let predicate failures (e.g., ClassCastException from comparing a
+            // String field against a numeric threshold) propagate so users see
+            // the bug instead of mysteriously empty query results.
+            return predicate.test(value);
         }
     }
 
@@ -130,12 +139,12 @@ public sealed interface FieldFilter {
 
         public FieldFilter equalTo(Object expected) {
             return new SingleFieldFilter(type, accessor,
-                v -> v != null && v.equals(expected));
+                v -> Objects.equals(v, expected));
         }
 
         public FieldFilter notEqualTo(Object expected) {
             return new SingleFieldFilter(type, accessor,
-                v -> v != null && !v.equals(expected));
+                v -> !Objects.equals(v, expected));
         }
 
         @SuppressWarnings({"unchecked", "rawtypes"})
