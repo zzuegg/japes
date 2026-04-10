@@ -440,5 +440,65 @@ fn scenario_benchmarks(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, iteration_benchmarks, nbody_benchmarks, entity_benchmarks, change_detection_benchmarks, scenario_benchmarks);
+// === Sparse-delta scenario ===
+//
+// Matches SparseDeltaBenchmark (ecs-benchmark) and
+// ZayEsSparseDeltaBenchmark (ecs-benchmark-zayes). 10k entities exist, but
+// only 100 are touched per tick. The observer reacts only to entities whose
+// Health component actually changed — Changed<Health> in Bevy's idiom.
+
+#[derive(Component)]
+struct SparseHealth {
+    hp: i32,
+}
+
+#[derive(Resource, Default)]
+struct SparseObserved(u64);
+
+fn observe_changed_sparse_health(
+    q: Query<&SparseHealth, Changed<SparseHealth>>,
+    mut counter: ResMut<SparseObserved>,
+) {
+    for h in &q {
+        counter.0 += 1;
+        std::hint::black_box(h);
+    }
+}
+
+fn sparse_delta_benchmarks(c: &mut Criterion) {
+    let mut group = c.benchmark_group("sparse_delta");
+
+    group.bench_with_input(
+        BenchmarkId::new("observe_changed_health", 10000),
+        &10000usize,
+        |b, &n| {
+            const BATCH: usize = 100;
+            let mut world = World::new();
+            world.insert_resource(SparseObserved::default());
+            let handles: Vec<Entity> = (0..n)
+                .map(|_| world.spawn(SparseHealth { hp: 1000 }).id())
+                .collect();
+            let mut schedule = Schedule::default();
+            schedule.add_systems(observe_changed_sparse_health);
+            schedule.run(&mut world); // prime
+
+            let mut cursor = 0usize;
+            b.iter(|| {
+                // Driver: damage 100 entities via rotating cursor.
+                for _ in 0..BATCH {
+                    let e = handles[cursor];
+                    cursor = (cursor + 1) % handles.len();
+                    if let Some(mut h) = world.get_mut::<SparseHealth>(e) {
+                        h.hp -= 1;
+                    }
+                }
+                schedule.run(&mut world);
+            });
+        },
+    );
+
+    group.finish();
+}
+
+criterion_group!(benches, iteration_benchmarks, nbody_benchmarks, entity_benchmarks, change_detection_benchmarks, scenario_benchmarks, sparse_delta_benchmarks);
 criterion_main!(benches);
