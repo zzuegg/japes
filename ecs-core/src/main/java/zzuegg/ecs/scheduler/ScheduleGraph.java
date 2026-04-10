@@ -9,6 +9,9 @@ public final class ScheduleGraph {
 
     public static final class SystemNode {
         private final SystemDescriptor descriptor;
+        // Index into the owning ScheduleGraph.nodes list; set once during construction
+        // so ScheduleGraph.complete(node) can do an O(1) lookup instead of nodes.indexOf.
+        private int index = -1;
         private SystemInvoker invoker;
 
         public SystemNode(SystemDescriptor descriptor) {
@@ -18,6 +21,8 @@ public final class ScheduleGraph {
         public SystemDescriptor descriptor() { return descriptor; }
         public SystemInvoker invoker() { return invoker; }
         public void setInvoker(SystemInvoker invoker) { this.invoker = invoker; }
+        public int index() { return index; }
+        void setIndex(int index) { this.index = index; }
     }
 
     private final List<SystemNode> nodes;
@@ -32,6 +37,9 @@ public final class ScheduleGraph {
         this.originalInDegree = Arrays.copyOf(inDegree, inDegree.length);
         this.inDegree = Arrays.copyOf(inDegree, inDegree.length);
         this.completed = new boolean[nodes.size()];
+        for (int i = 0; i < nodes.size(); i++) {
+            nodes.get(i).setIndex(i);
+        }
     }
 
     public List<SystemNode> readySystems() {
@@ -45,8 +53,10 @@ public final class ScheduleGraph {
     }
 
     public void complete(SystemNode node) {
-        int idx = nodes.indexOf(node);
-        if (idx < 0) throw new IllegalArgumentException("Unknown node: " + node.descriptor().name());
+        int idx = node.index();
+        if (idx < 0 || idx >= nodes.size() || nodes.get(idx) != node) {
+            throw new IllegalArgumentException("Unknown node: " + node.descriptor().name());
+        }
         completed[idx] = true;
 
         var deps = edges.getOrDefault(idx, Set.of());
