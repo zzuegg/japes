@@ -2,6 +2,9 @@
 junit = "5.11.4"
 jmh = "1.37"
 jmh-plugin = "0.7.3"
+dominion = "0.9.0"
+artemis = "2.3.0"
+zayes = "1.6.0"
 
 [libraries]
 junit-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit" }
@@ -9,6 +12,9 @@ junit-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref 
 junit-params = { module = "org.junit.jupiter:junit-jupiter-params", version.ref = "junit" }
 jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
 jmh-annprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
+dominion = { module = "dev.dominion.ecs:dominion-ecs-engine", version.ref = "dominion" }
+artemis-odb = { module = "net.onedaybeard.artemis:artemis-odb", version.ref = "artemis" }
+zayes = { module = "com.simsilica:zay-es", version.ref = "zayes" }
 
 [plugins]
 jmh = { id = "me.champeau.jmh", version.ref = "jmh-plugin" }
