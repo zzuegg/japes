@@ -1,6 +1,7 @@
 package zzuegg.ecs.bench.valhalla.micro;
 
 import org.openjdk.jmh.annotations.*;
+import org.openjdk.jmh.infra.Blackhole;
 import zzuegg.ecs.component.Mut;
 import zzuegg.ecs.system.*;
 import zzuegg.ecs.system.System;
@@ -20,14 +21,23 @@ public class IterationBenchmarkValhalla {
     public value record Position(float x, float y, float z) {}
     public value record Velocity(float dx, float dy, float dz) {}
 
+    // Read-only systems hand their components to a Blackhole so the JIT
+    // can't dead-code-eliminate the per-entity load. Empty method bodies
+    // were measuring "nothing" on Valhalla — the JIT saw the value-record
+    // load had no observable effect and deleted the whole loop.
     static class SingleComponentSystem {
+        public static Blackhole bh;
         @System
-        void iterate(@Read Position pos) {}
+        void iterate(@Read Position pos) { bh.consume(pos); }
     }
 
     static class TwoComponentSystem {
+        public static Blackhole bh;
         @System
-        void iterate(@Read Position pos, @Read Velocity vel) {}
+        void iterate(@Read Position pos, @Read Velocity vel) {
+            bh.consume(pos);
+            bh.consume(vel);
+        }
     }
 
     static class WriteSystem {
@@ -59,10 +69,16 @@ public class IterationBenchmarkValhalla {
     }
 
     @Benchmark
-    public void iterateSingleComponent() { singleCompWorld.tick(); }
+    public void iterateSingleComponent(Blackhole bh) {
+        SingleComponentSystem.bh = bh;
+        singleCompWorld.tick();
+    }
 
     @Benchmark
-    public void iterateTwoComponents() { twoCompWorld.tick(); }
+    public void iterateTwoComponents(Blackhole bh) {
+        TwoComponentSystem.bh = bh;
+        twoCompWorld.tick();
+    }
 
     @Benchmark
     public void iterateWithWrite() { writeWorld.tick(); }
