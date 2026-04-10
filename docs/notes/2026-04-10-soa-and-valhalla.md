@@ -11,9 +11,14 @@ Four sequential wins on stock japes (2× cumulative speedup on
 scenario regression, tested the JEP 401 EA flat-array opt-in (made things
 worse — EA JIT not ready), then a hand-written SoA prototype that closes
 the Valhalla scenario regression entirely (37 % faster on that JVM) but
-regresses stock JDK 26 by 10 %. **Decision point: whether to ship a
-`SoAStorageGenerator`, keep SoA as a benchmark-only recipe, or extend the
-tier-1 generator to emit primitive field loads directly.**
+regresses stock JDK 26 by 10 %. **Then a third round of setComponent
+perf fixes** (array-indexed chunk lookups, setComponent chunk
+consolidation, ClassValue) that landed another 1.7× on RealisticTick
+and made `SparseDelta` **2.16× faster than Bevy**. Total session
+speedup on setComponent-heavy workloads: **2.83×**. **Decision point
+still open: whether to ship a `SoAStorageGenerator`, keep SoA as a
+benchmark-only recipe, or extend the tier-1 generator to emit
+primitive field loads directly.**
 
 ## Commits this session (oldest → newest, all on `main`)
 
@@ -25,6 +30,8 @@ tier-1 generator to emit primitive field loads directly.**
 | `6de1fb5` | bench(sparse-delta): stop pre-sizing dirty buffers + refresh all tables |
 | `70ba5b2` | perf(storage): opt-in flat-array via jdk.internal.value.ValueClass; A/B against EA JIT |
 | `d731a55` | bench: SoA (struct-of-arrays) prototype for RealisticTick — JVM-dependent win |
+| `069631a` | docs: session note — profile-guided perf pass, Valhalla probe, SoA experiment |
+| `355c177` | perf(core): chunk-level array-indexed lookups + setComponent consolidation |
 
 ## Current state (as of `d731a55`)
 
@@ -41,13 +48,17 @@ JDK 27 (`~/.sdkman/candidates/java/valhalla-ea` — `openjdk 27-jep401ea3`).
 | iterateTwoComponents 100k | 33.3 | **69.9** | **18.7** | 519 | 129 | 230 |
 | iterateWithWrite 10k | 6.18 | **58.2** | **52.0** | 1910 | 22.6 | 18.4 |
 | NBody simulateOneTick 10k | 8.79 | **62.8** | **57.3** | 444 | 23.9 | 19.2 |
-| ParticleScenario tick | 22.4 | **157** | **186** | 1777 | 68.7 | 98.3 |
-| SparseDelta tick | 4.01 | **2.56** | **2.60** | 4.60 | 0.37 | 0.26 |
-| RealisticTick tick (st) | — | **8.07** | **14.0** | — | 41.7 | 24.7 |
-| RealisticTick tick (mt) | — | **12.7** | **19.1** | — | 18.9 | 12.9 |
+| ParticleScenario tick | 22.4 | **149** | **186** | 1777 | 68.7 | 98.3 |
+| SparseDelta tick | 4.01 | **1.86** | **2.60** | 4.60 | 0.37 | 0.26 |
+| RealisticTick tick (st) | — | **5.79** | **14.0** | — | 41.7 | 24.7 |
+| RealisticTick tick (mt) | — | **10.49** | **19.1** | — | 18.9 | 12.9 |
 
-- **japes SparseDelta at 2.56 µs** is the fastest library change-detection path in the whole comparison (Bevy 4.01).
-- **japes RealisticTick st at 8.07 µs** beats Artemis's fastest `mt` configuration (12.9 µs) on the same workload — by total CPU cost japes `st` is 4.8× cheaper than Artemis `mt`.
+> Numbers updated after the round-3 fixes in commit `355c177`
+> (Chunk array-indexed storagesById / changeTrackersById; setComponent
+> folds two chunk lookups into one; ComponentRegistry uses ClassValue).
+
+- **japes SparseDelta at 1.86 µs** is the fastest library change-detection path in the whole comparison — **2.16× faster than Bevy** (4.01).
+- **japes RealisticTick st at 5.79 µs** beats Artemis's fastest `mt` configuration (12.9 µs) by 2.2× on the same workload — by total CPU cost japes `st` is 6.7× cheaper than Artemis `mt`.
 - **Valhalla iterateTwoComponents 100k at 18.7 µs vs stock's 69.9 µs** — the biggest single cross-JVM number in the README (3.74× real win, Blackhole-proof).
 
 ### The four perf fixes in the first pass (cumulative 2×)
@@ -76,12 +87,65 @@ Then a second follow-up:
    - `ecs-core/src/main/java/zzuegg/ecs/archetype/Archetype.java`
    - `ecs-core/src/main/java/zzuegg/ecs/world/World.java`
 
-Cumulative result:
+Cumulative result (after fixes 1–5):
 - `RealisticTickBenchmark.tick st`: 16.4 → **8.07 µs/op** (2.03×)
 - `SparseDeltaBenchmark.tick`: 5.22 → **2.56 µs/op** (2.04×)
 - `ParticleScenarioBenchmark.tick`: ~161 → 157 µs/op (1.03×)
 - `NBodyBenchmark` / `IterationBenchmark`: within noise (tier-1 direct
   array path doesn't hit the fixed slow path)
+
+### Round three — chunk-level lookups (commit `355c177`)
+
+After the session was supposed to end, another profile pass chased
+`setComponent`'s remaining cost. Three more fixes + a failed
+experiment:
+
+6. **`Chunk.storagesById` / `changeTrackersById` — flat `Object[]`
+   indexed by `ComponentId.id()`**. Replaced both
+   `HashMap<ComponentId, ...>` lookups in the setComponent hot path
+   (`storages.get(id)` and `changeTrackers.get(id)`) with a single
+   array load. Sized to maxGlobalComponentId + 1 per chunk, slots for
+   absent components stay null. Biggest win of this round.
+   - `ecs-core/src/main/java/zzuegg/ecs/storage/Chunk.java`
+
+7. **`World.setComponent` folds two chunk lookups into one**. The
+   previous shape did `archetype.set(compId, location, component)`
+   (which did its own `chunks.get(chunkIndex)`) and then a *second*
+   `archetype.chunks().get(chunkIndex)` for the tracker update.
+   Consolidated: grab the chunk once at the top, use it for both
+   the store and the `markChanged`.
+   - `ecs-core/src/main/java/zzuegg/ecs/world/World.java`
+
+8. **`ComponentRegistry.getOrRegisterInfo` via `ClassValue`**.
+   `ClassValue.get` has a HotSpot JIT intrinsic that folds to a
+   direct field load on the `Class` object; previously this path
+   went through `HashMap<Class<?>, ComponentInfo>.get`. Measurement
+   was noise but the pattern is cleaner.
+   - `ecs-core/src/main/java/zzuegg/ecs/component/ComponentRegistry.java`
+
+**Reverted experiment — chunk reference on EntityLocation.** Tried
+`EntityLocation(Archetype, Chunk, int slotIndex)` to replace the
+chained lookup `archetype.chunks().get(chunkIndex)` with a single
+field load. **Regressed RealisticTick by 9%** (5.80 → 6.30 µs/op).
+Hypothesis: the archetype is stable across the benchmark's
+setComponent loop, so the JIT was CSE-ing `archetype.chunks().get(0)`
+*out of the loop* and effectively hoisting the chunk lookup to
+once-per-loop. With a per-entity chunk field the reference varies
+and prevents the hoist. A comment in `EntityLocation.java` now
+records the finding so nobody re-tries it.
+
+**Cumulative after round 3:**
+- `RealisticTickBenchmark.tick st`: 16.4 → **5.79 µs/op** (**2.83×**)
+- `RealisticTickBenchmark.tick mt`: 21.5 → **10.49 µs/op** (2.05×)
+- `SparseDeltaBenchmark.tick`: 5.22 → **1.86 µs/op** (**2.81×**)
+  — **2.16× faster than Bevy**
+- `ParticleScenarioBenchmark.tick`: ~161 → ~149 µs/op (1.08×)
+
+Profile confirmation: the setComponent call chain is now fully
+inlined into the benchmark's tick method frame (42% of stack
+samples, indivisible). All framework-level hot spots are under 2%.
+The remaining cost is the raw work of 300 sparse mutations + 3
+observer sweeps + scheduler dispatch.
 
 ## Iteration read Blackhole fix
 
