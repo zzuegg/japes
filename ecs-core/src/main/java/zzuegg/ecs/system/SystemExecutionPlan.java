@@ -36,6 +36,12 @@ public final class SystemExecutionPlan {
     private final ChangeTracker[] cachedFilterTrackers;
     private long lastSeenTick = 0;
 
+    // Reusable component map for @Where evaluation — populated per entity from
+    // the cached slot refs, cleared and refilled instead of allocated. Only
+    // instantiated if whereFilters is non-empty so systems without @Where stay
+    // allocation-free on the hot path.
+    private final HashMap<Class<?>, Record> whereLookup;
+
     public SystemExecutionPlan(int paramCount, List<ParamSlot> componentSlots, List<Integer> serviceArgIndices,
                                Map<Integer, FieldFilter> whereFilters) {
         this(paramCount, componentSlots, serviceArgIndices, whereFilters, List.of());
@@ -52,6 +58,7 @@ public final class SystemExecutionPlan {
         this.whereFilters = whereFilters;
         this.changeFilters = changeFilters.toArray(ResolvedChangeFilter[]::new);
         this.cachedFilterTrackers = new ChangeTracker[this.changeFilters.length];
+        this.whereLookup = whereFilters.isEmpty() ? null : new HashMap<>();
     }
 
     public boolean hasChangeFilters() {
@@ -184,17 +191,18 @@ public final class SystemExecutionPlan {
                 }
             }
 
-            // Check @Where filters
-            if (!whereFilters.isEmpty()) {
-                var componentMap = new HashMap<Class<?>, Record>();
+            // Check @Where filters — reuse a single lookup map per plan to avoid
+            // per-entity HashMap allocation in the inner loop.
+            if (whereLookup != null) {
+                whereLookup.clear();
                 for (int i = 0; i < slots.length; i++) {
                     var cs = slots[i];
                     var value = cs.isWrite ? ((Mut) mutCache[i]).get() : args[cs.argIndex];
-                    componentMap.put(cs.access.type(), (Record) value);
+                    whereLookup.put(cs.access.type(), (Record) value);
                 }
                 boolean pass = true;
                 for (var filter : whereFilters.values()) {
-                    if (!filter.test(componentMap)) { pass = false; break; }
+                    if (!filter.test(whereLookup)) { pass = false; break; }
                 }
                 if (!pass) continue;
             }
