@@ -3,3 +3,6 @@ build/
 .idea/
 *.iml
 benchmark/bevy-benchmark/target/
+
+# Local session artefacts — not worth tracking upstream.
+docs/superpowers/
