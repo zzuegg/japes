@@ -189,9 +189,10 @@ public final class GeneratedChunkProcessor {
         var entityDesc = ClassDesc.of("zzuegg.ecs.entity.Entity");
         var chunkEntityDesc = MethodTypeDesc.of(entityDesc, ConstantDescs.CD_int);
 
-        // Descriptors for Mut.reset / Mut.flush and ComponentStorage.set / get.
-        var mutResetDesc = MethodTypeDesc.of(ConstantDescs.CD_void,
-            recordDesc, ConstantDescs.CD_int, trackerDesc, ConstantDescs.CD_long);
+        // Descriptors for Mut.setContext / Mut.resetValue / Mut.flush and
+        // ComponentStorage.set / get.
+        var mutSetContextDesc = MethodTypeDesc.of(ConstantDescs.CD_void, trackerDesc, ConstantDescs.CD_long);
+        var mutResetValueDesc = MethodTypeDesc.of(ConstantDescs.CD_void, recordDesc, ConstantDescs.CD_int);
         var mutFlushDesc = MethodTypeDesc.of(recordDesc);
         var storageGetDesc = MethodTypeDesc.of(recordDesc, ConstantDescs.CD_int);
         var storageSetDesc = MethodTypeDesc.of(ConstantDescs.CD_void, ConstantDescs.CD_int, recordDesc);
@@ -286,6 +287,20 @@ public final class GeneratedChunkProcessor {
                     cb.astore(firstTrackerVar + i);
                 }
 
+                // Per-chunk Mut setup: tracker and tick are stable across every
+                // entity in this chunk, so push them into each Mut once here
+                // instead of passing them as args to reset() per entity.
+                for (int i = 0; i < paramCount; i++) {
+                    if (kinds[i] != ParamKind.WRITE) continue;
+                    cb.aload(0);
+                    cb.getfield(genDesc, "muts", mutArrayDesc);
+                    cb.ldc(i);
+                    cb.aaload();
+                    cb.aload(firstTrackerVar + i);
+                    cb.lload(2); // tick
+                    cb.invokevirtual(mutDesc, "setContext", mutSetContextDesc);
+                }
+
                 // int slot = 0
                 cb.iconst_0();
                 cb.istore(slotVar);
@@ -316,8 +331,12 @@ public final class GeneratedChunkProcessor {
                             cb.checkcast(componentTypes[i].describeConstable().orElseThrow());
                         }
                         case WRITE -> {
-                            // push muts[i], dup, call reset(value, slot, tracker, tick);
-                            // the duplicated Mut remains on the stack as the method argument.
+                            // push muts[i], dup, call resetValue(value, slot);
+                            // tracker+tick were already set per-chunk via
+                            // setContext, so the per-entity path only pushes
+                            // the two variables that actually change per slot.
+                            // The duplicated Mut remains on the stack as the
+                            // method argument after resetValue returns void.
                             cb.aload(0);
                             cb.getfield(genDesc, "muts", mutArrayDesc);
                             cb.ldc(i);
@@ -327,9 +346,7 @@ public final class GeneratedChunkProcessor {
                             cb.iload(slotVar);
                             cb.invokeinterface(storageDesc, "get", storageGetDesc);
                             cb.iload(slotVar);
-                            cb.aload(firstTrackerVar + i);
-                            cb.lload(2); // tick
-                            cb.invokevirtual(mutDesc, "reset", mutResetDesc);
+                            cb.invokevirtual(mutDesc, "resetValue", mutResetValueDesc);
                         }
                         case ENTITY -> {
                             // chunk.entity(slot) — returns Entity directly, no cast needed

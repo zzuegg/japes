@@ -22,12 +22,33 @@ public final class Mut<T extends Record> {
         this.changed = false;
     }
 
+    /**
+     * Legacy per-entity reset with all four fields. Kept so tier-2/tier-3
+     * fallbacks that haven't been refactored to the split shape still compile.
+     */
     public void reset(T value, int newSlot, ChangeTracker newTracker, long newTick) {
+        setContext(newTracker, newTick);
+        resetValue(value, newSlot);
+    }
+
+    /**
+     * Set the per-chunk context — the ChangeTracker and the current tick are
+     * stable across all entities in a chunk, so tier-1 calls this once before
+     * the iteration loop instead of paying the stores per entity.
+     */
+    public void setContext(ChangeTracker newTracker, long newTick) {
+        this.tracker = newTracker;
+        this.tick = newTick;
+    }
+
+    /**
+     * Per-entity reset — updates only the fields that change between
+     * iterations. Call after {@link #setContext} in the tier-1 hot loop.
+     */
+    public void resetValue(T value, int newSlot) {
         this.original = value;
         this.current = value;
         this.slot = newSlot;
-        this.tracker = newTracker;
-        this.tick = newTick;
         this.changed = false;
     }
 
