@@ -350,26 +350,30 @@ public final class World {
         var compId = info.id();
         var location = getLocation(entity.index());
         // No archetypeGraph lookup — EntityLocation already holds a direct
-        // Archetype reference. This removes the HashMap<ArchetypeId, ...>.get
-        // that was firing on every setComponent call.
+        // Archetype reference. Then one ArrayList.get for the chunk; the
+        // JIT CSEs this out of loops where the archetype is stable, so
+        // caching the chunk on EntityLocation (which varies per entity)
+        // was a regression.
         var archetype = location.archetype();
+        var chunk = archetype.chunks().get(location.chunkIndex());
+        int slot = location.slotIndex();
 
         // For @ValueTracked components, skip the change-detection bump when the
         // new value equals the existing one — matches Mut.flush()'s semantics so
         // both mutation paths behave the same way.
         boolean fireChanged = true;
         if (info.isValueTracked()) {
-            var existing = archetype.<Record>get(compId, location);
+            @SuppressWarnings("unchecked")
+            var existing = (Record) chunk.componentStorage(compId).get(slot);
             if (existing != null && existing.equals(component)) {
                 fireChanged = false;
             }
         }
 
-        archetype.set(compId, location, component);
+        chunk.set(compId, slot, component);
 
         if (fireChanged) {
-            var chunk = archetype.chunks().get(location.chunkIndex());
-            chunk.changeTracker(compId).markChanged(location.slotIndex(), tick.current());
+            chunk.changeTracker(compId).markChanged(slot, tick.current());
         }
     }
 

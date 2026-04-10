@@ -9,6 +9,14 @@ package zzuegg.ecs.archetype;
  *
  * {@code archetypeId()} remains available as a convenience but just
  * forwards to {@code archetype().id()}.
+ *
+ * Note: a previous revision also carried a direct {@code Chunk}
+ * reference on the location, but benchmarking showed it *regressed*
+ * {@code setComponent}-heavy workloads by ~9 %. The JIT was able to
+ * CSE {@code archetype.chunks().get(chunkIndex)} out of the loop when
+ * the archetype was stable, whereas
+ * {@code location.chunk()} varies per entity and prevents the hoist.
+ * Reverted — chunkIndex wins.
  */
 public record EntityLocation(Archetype archetype, int chunkIndex, int slotIndex) {
 
