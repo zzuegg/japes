@@ -9,7 +9,11 @@ public interface ComponentStorage<T extends Record> {
     int capacity();
     Class<T> type();
 
-    @FunctionalInterface
+    /**
+     * Storage factory. Not a @FunctionalInterface: because create() is
+     * itself generic, a lambda cannot express the signature — only method
+     * references (e.g., {@code DefaultComponentStorage::new}) work.
+     */
     interface Factory {
         <T extends Record> ComponentStorage<T> create(Class<T> type, int capacity);
     }

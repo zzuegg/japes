@@ -235,13 +235,18 @@ public final class World {
         }
 
         var location = removeLocation(entity.index());
-        if (location != null) {
-            var archetype = archetypeGraph.get(location.archetypeId());
-            var swapped = archetype.remove(location);
-            swapped.ifPresent(swappedEntity ->
-                setLocation(swappedEntity.index(), location)
-            );
+        // isAlive already passed: a missing location would be an invariant
+        // violation (entity in allocator but not in the location map). Fail
+        // loudly rather than silently leaking the allocation.
+        if (location == null) {
+            throw new IllegalStateException(
+                "Invariant violation: alive entity has no location: " + entity);
         }
+        var archetype = archetypeGraph.get(location.archetypeId());
+        var swapped = archetype.remove(location);
+        swapped.ifPresent(swappedEntity ->
+            setLocation(swappedEntity.index(), location)
+        );
 
         entityAllocator.free(entity);
     }
@@ -500,7 +505,13 @@ public final class World {
     private void executeSystem(ScheduleGraph.SystemNode node) {
         var desc = node.descriptor();
         var invoker = node.invoker();
-        if (invoker == null) return;
+        if (invoker == null) {
+            // A node reached executeSystem without an invoker — rebuildSchedule
+            // is expected to have populated one for every method-backed node.
+            // Fail loudly so a half-rebuilt schedule can't silently skip work.
+            throw new IllegalStateException(
+                "System '" + desc.name() + "' has no invoker — schedule not fully built");
+        }
 
         // Check disabled (supports both qualified "Class.method" and simple "method" names)
         if (disabledSystems.contains(desc.name())) {
