@@ -241,5 +241,92 @@ fn entity_benchmarks(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, iteration_benchmarks, nbody_benchmarks, entity_benchmarks);
+// === Change detection + RemovedComponents benchmarks ===
+
+fn move_all(mut q: Query<(&Velocity, &mut Position)>) {
+    for (v, mut p) in &mut q {
+        p.x += v.dx;
+        p.y += v.dy;
+        p.z += v.dz;
+    }
+}
+
+fn observe_changed(q: Query<&Position, Changed<Position>>, mut count: Local<u64>) {
+    for p in &q {
+        *count += 1;
+        std::hint::black_box(p);
+    }
+    std::hint::black_box(*count);
+}
+
+fn drain_removed(mut removed: RemovedComponents<Position>, mut count: Local<u64>) {
+    for e in removed.read() {
+        *count += 1;
+        std::hint::black_box(e);
+    }
+    std::hint::black_box(*count);
+}
+
+fn change_detection_benchmarks(c: &mut Criterion) {
+    let mut group = c.benchmark_group("change_detection");
+
+    // Equivalent to ChangeDetectionBenchmark.changedFilterAllEntitiesDirty:
+    // every tick MoveAll writes every Position, so the Changed<Position>
+    // observer sees every entity as changed.
+    group.bench_with_input(
+        BenchmarkId::new("changed_all_dirty", 10000),
+        &10000usize,
+        |b, &n| {
+            let mut world = World::new();
+            for i in 0..n {
+                let f = i as f32;
+                world.spawn((
+                    Position { x: f, y: f, z: f },
+                    Velocity { dx: 1.0, dy: 1.0, dz: 1.0 },
+                ));
+            }
+            let mut schedule = Schedule::default();
+            schedule.add_systems((move_all, observe_changed).chain());
+            schedule.run(&mut world); // warmup
+            b.iter(|| {
+                schedule.run(&mut world);
+            });
+        },
+    );
+
+    // Equivalent to ChangeDetectionBenchmark.removedComponentsDrainAfterBulkDespawn:
+    // despawn N entities then run the drain observer in a schedule tick.
+    // We include the respawn in the measured section so both sides are symmetric.
+    group.bench_with_input(
+        BenchmarkId::new("removed_drain_bulk_despawn", 10000),
+        &10000usize,
+        |b, &n| {
+            b.iter_with_setup(
+                || {
+                    let mut world = World::new();
+                    let mut schedule = Schedule::default();
+                    schedule.add_systems(drain_removed);
+                    let entities: Vec<Entity> = (0..n)
+                        .map(|i| {
+                            let f = i as f32;
+                            world.spawn(Position { x: f, y: f, z: f }).id()
+                        })
+                        .collect();
+                    schedule.run(&mut world); // prime past the spawn observation
+                    (world, schedule, entities)
+                },
+                |(mut world, mut schedule, entities)| {
+                    for e in entities {
+                        world.despawn(e);
+                    }
+                    schedule.run(&mut world);
+                },
+            );
+        },
+    );
+
+    group.finish();
+}
+
+criterion_group!(benches, iteration_benchmarks, nbody_benchmarks, entity_benchmarks, change_detection_benchmarks);
 criterion_main!(benches);
