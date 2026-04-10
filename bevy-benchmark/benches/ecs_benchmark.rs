@@ -328,5 +328,117 @@ fn change_detection_benchmarks(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, iteration_benchmarks, nbody_benchmarks, entity_benchmarks, change_detection_benchmarks);
+// === Cross-library "particle system tick" scenario ===
+//
+// Matches ParticleScenarioBenchmark (ecs-benchmark) and
+// ZayEsParticleScenarioBenchmark (ecs-benchmark-zayes). Per tick:
+//   1. move     — Position += Velocity
+//   2. damage   — Health.hp -= 1
+//   3. reap     — despawn entities with hp <= 0
+//   4. stats    — count deaths (RemovedComponents<Health>) and alive
+//   5. respawn  — keep total entity count at N
+
+#[derive(Component, Clone, Copy)]
+struct Lifetime {
+    ttl: i32,
+}
+
+#[derive(Component, Clone, Copy)]
+struct Health {
+    hp: i32,
+}
+
+#[derive(Resource, Default)]
+struct TotalDeaths(u64);
+
+#[derive(Resource, Default)]
+struct AliveCount(u64);
+
+fn scenario_move(mut q: Query<(&Velocity, &mut Position)>) {
+    for (v, mut p) in &mut q {
+        p.x += v.dx;
+        p.y += v.dy;
+        p.z += v.dz;
+    }
+}
+
+fn scenario_damage(mut q: Query<&mut Health>) {
+    for mut h in &mut q {
+        h.hp -= 1;
+    }
+}
+
+fn scenario_reap(mut commands: Commands, q: Query<(Entity, &Health)>) {
+    for (e, h) in &q {
+        if h.hp <= 0 {
+            commands.entity(e).despawn();
+        }
+    }
+}
+
+fn scenario_stats(
+    mut removed: RemovedComponents<Health>,
+    alive_q: Query<&Lifetime>,
+    mut total: ResMut<TotalDeaths>,
+    mut alive: ResMut<AliveCount>,
+) {
+    let mut deaths = 0u64;
+    for _ in removed.read() { deaths += 1; }
+    total.0 += deaths;
+    alive.0 = alive_q.iter().filter(|l| l.ttl > 0).count() as u64;
+}
+
+fn scenario_respawn(mut commands: Commands, q: Query<&Position>) {
+    const TARGET: usize = 10_000;
+    let current = q.iter().count();
+    for _ in current..TARGET {
+        commands.spawn((
+            Position { x: 0.0, y: 0.0, z: 0.0 },
+            Velocity { dx: 1.0, dy: 1.0, dz: 1.0 },
+            Lifetime { ttl: 1000 },
+            Health { hp: 100 },
+        ));
+    }
+}
+
+fn scenario_benchmarks(c: &mut Criterion) {
+    let mut group = c.benchmark_group("scenario");
+
+    group.bench_with_input(
+        BenchmarkId::new("particle_tick", 10000),
+        &10000usize,
+        |b, &n| {
+            let mut world = World::new();
+            world.insert_resource(TotalDeaths::default());
+            world.insert_resource(AliveCount::default());
+            for i in 0..n {
+                let f = i as f32;
+                let start_hp = 1 + (i as i32) % 100;
+                world.spawn((
+                    Position { x: f, y: f, z: f },
+                    Velocity { dx: 1.0, dy: 1.0, dz: 1.0 },
+                    Lifetime { ttl: 1000 },
+                    Health { hp: start_hp },
+                ));
+            }
+            let mut schedule = Schedule::default();
+            schedule.add_systems((
+                scenario_move,
+                scenario_damage,
+                scenario_reap,
+                scenario_stats,
+                scenario_respawn,
+            ).chain());
+            // Prime one tick so the baseline is consistent.
+            schedule.run(&mut world);
+            b.iter(|| {
+                schedule.run(&mut world);
+            });
+        },
+    );
+
+    group.finish();
+}
+
+criterion_group!(benches, iteration_benchmarks, nbody_benchmarks, entity_benchmarks, change_detection_benchmarks, scenario_benchmarks);
 criterion_main!(benches);
