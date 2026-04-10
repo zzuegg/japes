@@ -12,7 +12,10 @@ public final class ChangeTracker {
 
     public void markAdded(int slot, long tick) {
         addedTicks[slot] = tick;
-        changedTicks[slot] = tick;
+        // Intentionally not updating changedTicks: 'added' and 'changed' are
+        // independent in Bevy-style change detection. Newly spawned entities
+        // are observable via @Filter(Added) but not @Filter(Changed) until
+        // something actually mutates them.
     }
 
     public void markChanged(int slot, long tick) {

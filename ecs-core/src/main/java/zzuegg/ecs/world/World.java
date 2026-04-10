@@ -102,7 +102,20 @@ public final class World {
             }
         }
 
-        var plan = new SystemExecutionPlan(params.length, componentSlots, serviceArgIndices, desc.whereFilters());
+        // Resolve change filters (@Filter(Added/Changed, target = X)) into
+        // (ComponentId, kind) pairs the execution plan can consult directly.
+        var resolvedChangeFilters = new ArrayList<SystemExecutionPlan.ResolvedChangeFilter>();
+        for (var f : desc.changeFilters()) {
+            var kind = f.filterType() == Added.class ? SystemExecutionPlan.FilterKind.ADDED
+                     : f.filterType() == Changed.class ? SystemExecutionPlan.FilterKind.CHANGED
+                     : null;
+            if (kind == null) continue;  // Removed is unsupported for now
+            var targetId = componentRegistry.getOrRegister(f.target());
+            resolvedChangeFilters.add(new SystemExecutionPlan.ResolvedChangeFilter(targetId, kind));
+        }
+
+        var plan = new SystemExecutionPlan(params.length, componentSlots, serviceArgIndices,
+            desc.whereFilters(), resolvedChangeFilters);
 
         // Resolve service args once per system so the generated-processor path and the
         // SystemExecutionPlan path observe the same Commands/EventWriter/Local instances.
@@ -118,8 +131,12 @@ public final class World {
 
         systemPlans.put(desc.name(), plan);
 
-        // Build generated processor if enabled
-        if (useGeneratedProcessors && !desc.isExclusive() && !desc.componentAccesses().isEmpty()) {
+        // Build generated processor if enabled. Systems with change filters must
+        // go through the SystemExecutionPlan path — the generated processors
+        // don't know how to consult per-target ChangeTrackers and would run the
+        // system on every entity regardless.
+        if (useGeneratedProcessors && !desc.isExclusive() && !desc.componentAccesses().isEmpty()
+                && desc.changeFilters().isEmpty()) {
             chunkProcessors.put(desc.name(), ChunkProcessorGenerator.generate(desc, resolvedServiceArgs));
         }
     }
@@ -491,6 +508,7 @@ public final class World {
             withoutIds.add(componentRegistry.getOrRegister(withoutType));
         }
 
+        var currentTick = tick.current();
         for (var archetype : matchingArchetypes) {
             boolean skip = false;
             for (var withoutId : withoutIds) {
@@ -502,7 +520,6 @@ public final class World {
             if (skip) continue;
 
             var processor = chunkProcessors.get(desc.name());
-            var currentTick = tick.current();
             if (processor != null) {
                 for (var chunk : archetype.chunks()) {
                     processor.process(chunk, currentTick);
@@ -513,6 +530,12 @@ public final class World {
                     plan.processChunk(chunk, invoker, currentTick);
                 }
             }
+        }
+        // Advance the per-system "last seen" watermark so change filters on the
+        // next tick compare against this tick's boundary.
+        var plan = systemPlans.get(desc.name());
+        if (plan != null && plan.hasChangeFilters()) {
+            plan.markExecuted(currentTick);
         }
     }
 

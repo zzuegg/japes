@@ -16,6 +16,10 @@ public final class SystemExecutionPlan {
 
     public record ParamSlot(int argIndex, ComponentAccess access, boolean isWrite, boolean isValueTracked) {}
 
+    public enum FilterKind { ADDED, CHANGED }
+
+    public record ResolvedChangeFilter(ComponentId targetId, FilterKind kind) {}
+
     private final Object[] args;
     private final ParamSlot[] slots; // array for indexed access, no List overhead
     private final Mut<?>[] mutCache;
@@ -25,14 +29,49 @@ public final class SystemExecutionPlan {
     private final ChangeTracker[] cachedTrackers;
     private final Map<Integer, FieldFilter> whereFilters;
 
+    // Change-filter state: resolved filters + per-chunk tracker cache + per-system
+    // "last seen" tick so isAddedSince / isChangedSince compare against the tick
+    // at which the system last ran.
+    private final ResolvedChangeFilter[] changeFilters;
+    private final ChangeTracker[] cachedFilterTrackers;
+    private long lastSeenTick = 0;
+
     public SystemExecutionPlan(int paramCount, List<ParamSlot> componentSlots, List<Integer> serviceArgIndices,
                                Map<Integer, FieldFilter> whereFilters) {
+        this(paramCount, componentSlots, serviceArgIndices, whereFilters, List.of());
+    }
+
+    public SystemExecutionPlan(int paramCount, List<ParamSlot> componentSlots, List<Integer> serviceArgIndices,
+                               Map<Integer, FieldFilter> whereFilters,
+                               List<ResolvedChangeFilter> changeFilters) {
         this.args = new Object[paramCount];
         this.slots = componentSlots.toArray(ParamSlot[]::new);
         this.mutCache = new Mut<?>[slots.length];
         this.cachedStorages = new ComponentStorage<?>[slots.length];
         this.cachedTrackers = new ChangeTracker[slots.length];
         this.whereFilters = whereFilters;
+        this.changeFilters = changeFilters.toArray(ResolvedChangeFilter[]::new);
+        this.cachedFilterTrackers = new ChangeTracker[this.changeFilters.length];
+    }
+
+    public boolean hasChangeFilters() {
+        return changeFilters.length > 0;
+    }
+
+    /**
+     * Called by World after the system has finished iterating every chunk for
+     * a given tick. Advances the "last seen" watermark used by @Filter(Added)
+     * and @Filter(Changed) for the next run.
+     *
+     * We store (currentTick - 1) rather than currentTick so that entities
+     * spawned or mutated DURING the current tick (e.g., commands flushed
+     * between stages, or user code between world.tick() calls) remain visible
+     * to the system on its next run — their addedTick/changedTick equals the
+     * current tick, and strict &gt; comparison against (currentTick - 1) lets
+     * them through.
+     */
+    public void markExecuted(long currentTick) {
+        this.lastSeenTick = currentTick - 1;
     }
 
     public Object[] args() {
@@ -53,6 +92,9 @@ public final class SystemExecutionPlan {
             if (slots[i].isWrite) {
                 cachedTrackers[i] = chunk.changeTracker(compId);
             }
+        }
+        for (int i = 0; i < changeFilters.length; i++) {
+            cachedFilterTrackers[i] = chunk.changeTracker(changeFilters[i].targetId());
         }
     }
 
@@ -108,6 +150,22 @@ public final class SystemExecutionPlan {
         int count = chunk.count();
 
         for (int slot = 0; slot < count; slot++) {
+            // Change filters (@Filter(Added/Changed, target=X)): skip entities whose
+            // target-component tracker is stale relative to the last tick this system ran.
+            if (changeFilters.length > 0) {
+                boolean match = true;
+                for (int i = 0; i < changeFilters.length; i++) {
+                    var cf = changeFilters[i];
+                    var tracker = cachedFilterTrackers[i];
+                    boolean ok = switch (cf.kind()) {
+                        case ADDED -> tracker.isAddedSince(slot, lastSeenTick);
+                        case CHANGED -> tracker.isChangedSince(slot, lastSeenTick);
+                    };
+                    if (!ok) { match = false; break; }
+                }
+                if (!match) continue;
+            }
+
             // Fill args
             for (int i = 0; i < slots.length; i++) {
                 var cs = slots[i];
