@@ -6,17 +6,22 @@ quick-start + headline numbers, see the [README](README.md).
 
 ## Contents
 
-- [Methodology](#methodology)
-- [Iteration micro-benchmark](#iteration-micro-benchmark)
-- [N-body integration](#n-body-integration)
-- [Particle scenario](#particle-scenario-move--damage--reap--respawn--stats)
-- [Sparse delta (change-detection workload)](#sparse-delta-change-detection-workload)
-- [Realistic multi-observer tick](#realistic-multi-observer-tick)
-- [Does Valhalla help?](#does-valhalla-help-jdk-27-ea-jep-401-value-records)
-- [The "write-path tax"](#the-write-path-tax--why-japes-looks-slow-on-naked-writes)
-- [Speed-up matrix vs. Bevy](#speed-up-matrix-vs-bevy-lower-is-better-10-matches-bevy)
-- [Why so many ceremony-like params?](#why-so-many-ceremony-like-params)
-- [Reproduction / raw JMH logs](#raw-benchmark-logs)
+| # | Section | What it covers |
+|--:|---|---|
+| 1 | [Methodology](#methodology) | Hardware, JMH config, stock vs Valhalla setup |
+| 2 | [Iteration micro-benchmark](#iteration-micro-benchmark) | Tight read/write loops at 1k / 10k / 100k entities |
+| 3 | [N-body integration](#n-body-integration) | One integrator system, full-world tick |
+| 4 | [Particle scenario](#particle-scenario-move--damage--reap--respawn--stats) | Move / damage / reap / respawn / stats, 10k entities |
+| 5 | [Sparse delta](#sparse-delta-change-detection-workload) | 100 changed per tick, the canonical change-detection workload |
+| 6 | [Realistic multi-observer tick](#realistic-multi-observer-tick) | Three observers on disjoint components, st vs mt |
+| 7 | [Does Valhalla help?](#does-valhalla-help-jdk-27-ea-jep-401-value-records) | JEP 401 EA sweep, flat-array opt-in A/B, the DCE caveat |
+| 8 | [The "write-path tax"](#the-write-path-tax--why-japes-looks-slow-on-naked-writes) | Why Dominion/Artemis win the naked-write micros |
+| 9 | [Speed-up matrix vs. Bevy](#speed-up-matrix-vs-bevy-lower-is-better-10-matches-bevy) | One-line relative perf summary across every benchmark |
+| 10 | [Why so many ceremony-like params?](#why-so-many-ceremony-like-params) | Design rationale for `@Read C` / `@Write Mut<C>` / `Res<R>` |
+| 11 | [Raw benchmark logs](#raw-benchmark-logs) | Commands to reproduce every number above |
+
+See [README](README.md) for the quick-start and [TUTORIAL.md](TUTORIAL.md)
+for a step-by-step walkthrough of the API.
 
 ## Methodology
 

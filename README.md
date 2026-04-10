@@ -13,6 +13,24 @@ parallelises disjoint systems automatically.
 > Pre-release. API is stable enough to benchmark but reserves the
 > right to change before 1.0.
 
+## Contents
+
+| Section | Description |
+|---|---|
+| [Quick start](#quick-start) | Minimum world + system in a dozen lines |
+| [Change detection](#change-detection) | `@Filter(Changed)` + `RemovedComponents<T>` |
+| [Deferred structural edits](#deferred-structural-edits) | `Commands` buffers for spawn/despawn/insert/remove |
+| [Headline benchmark](#headline-benchmark) | One-line cross-library comparison |
+| [Build](#build) | JDK 26, Gradle wrapper, running benchmarks |
+| [Project layout](#project-layout) | What's in each module |
+
+**Other docs**
+| Document | For who |
+|---|---|
+| [TUTORIAL.md](TUTORIAL.md) | Step-by-step walkthrough: components, systems, queries, filters, resources, events, commands, scheduling, multi-threading |
+| [DEEP_DIVE.md](DEEP_DIVE.md) | Full benchmark tables, per-benchmark analysis, Valhalla investigation, API design rationale |
+| [docs/notes/](docs/notes) | Session logs / design notes |
+
 ## Quick start
 
 ```java
