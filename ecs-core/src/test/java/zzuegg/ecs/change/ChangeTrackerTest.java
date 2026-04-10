@@ -7,12 +7,14 @@ class ChangeTrackerTest {
 
     @Test
     void tickIncrementsMonotonically() {
+        // 0 is reserved as the "never added/changed" sentinel; Tick starts at 1.
+        // See TickInitialValueTest for the invariant and reasoning.
         var tick = new Tick();
-        assertEquals(0, tick.current());
-        tick.advance();
         assertEquals(1, tick.current());
         tick.advance();
         assertEquals(2, tick.current());
+        tick.advance();
+        assertEquals(3, tick.current());
     }
 
     @Test
