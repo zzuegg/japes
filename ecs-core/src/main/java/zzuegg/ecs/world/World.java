@@ -244,12 +244,24 @@ public final class World {
 
         var newLocation = newArchetype.add(entity);
 
+        var oldChunk = oldArchetype.chunks().get(oldLocation.chunkIndex());
+        var newChunk = newArchetype.chunks().get(newLocation.chunkIndex());
+        int oldSlot = oldLocation.slotIndex();
+        int newSlot = newLocation.slotIndex();
+
         for (var existingCompId : oldLocation.archetypeId().components()) {
             var value = oldArchetype.get(existingCompId, oldLocation);
             newArchetype.set(existingCompId, newLocation, value);
+            // Preserve added/changed history across the archetype migration.
+            var src = oldChunk.changeTracker(existingCompId);
+            var dst = newChunk.changeTracker(existingCompId);
+            dst.markAdded(newSlot, src.addedTick(oldSlot));
+            dst.markChanged(newSlot, src.changedTick(oldSlot));
         }
 
         newArchetype.set(compId, newLocation, component);
+        // The newly added component is "added at the current tick" so @Added filters fire.
+        newChunk.changeTracker(compId).markAdded(newSlot, tick.current());
 
         var swapped = oldArchetype.remove(oldLocation);
         swapped.ifPresent(swappedEntity ->
@@ -272,9 +284,19 @@ public final class World {
 
         var newLocation = newArchetype.add(entity);
 
+        var oldChunk = oldArchetype.chunks().get(oldLocation.chunkIndex());
+        var newChunk = newArchetype.chunks().get(newLocation.chunkIndex());
+        int oldSlot = oldLocation.slotIndex();
+        int newSlot = newLocation.slotIndex();
+
         for (var existingCompId : newArchetypeId.components()) {
             var value = oldArchetype.get(existingCompId, oldLocation);
             newArchetype.set(existingCompId, newLocation, value);
+            // Preserve added/changed history for components that survive the move.
+            var src = oldChunk.changeTracker(existingCompId);
+            var dst = newChunk.changeTracker(existingCompId);
+            dst.markAdded(newSlot, src.addedTick(oldSlot));
+            dst.markChanged(newSlot, src.changedTick(oldSlot));
         }
 
         var swapped = oldArchetype.remove(oldLocation);
