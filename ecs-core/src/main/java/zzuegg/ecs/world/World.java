@@ -44,6 +44,9 @@ public final class World {
     // Components observed via RemovedComponents<T> in any plan. GC walks only
     // these each tick.
     private final Set<ComponentId> trackedRemovedComponents = new HashSet<>();
+    // Components observed via @Filter(Added/Changed) in any plan. Used to
+    // drive per-chunk dirty-list pruning at end of tick.
+    private final Set<ComponentId> trackedChangeFilterComponents = new HashSet<>();
     private final boolean useGeneratedProcessors;
 
     World(WorldBuilder builder) {
@@ -82,6 +85,7 @@ public final class World {
         // Removal consumers must be re-registered by each plan below.
         removalLog.clearConsumers();
         trackedRemovedComponents.clear();
+        trackedChangeFilterComponents.clear();
         this.schedule = new Schedule(allDescriptors, stages);
 
         for (var entry : schedule.orderedStages()) {
@@ -127,6 +131,8 @@ public final class World {
             if (kind == null) continue;  // Removed is unsupported for now
             var targetId = componentRegistry.getOrRegister(f.target());
             resolvedChangeFilters.add(new SystemExecutionPlan.ResolvedChangeFilter(targetId, kind));
+            trackedChangeFilterComponents.add(targetId);
+            archetypeGraph.enableDirtyTracking(targetId);
         }
 
         var plan = new SystemExecutionPlan(params.length, componentSlots, serviceArgIndices,
@@ -462,6 +468,34 @@ public final class World {
                 }
                 if (minWatermark != Long.MAX_VALUE) {
                     removalLog.collectGarbage(compId, minWatermark);
+                }
+            }
+        }
+
+        // End-of-tick prune of per-chunk change-tracker dirty lists. For each
+        // component observed via @Filter(Added/Changed), compute the minimum
+        // lastSeenTick across plans that consume it, walk every chunk of every
+        // archetype containing that component, and drop dirty-list entries
+        // whose ticks are ≤ minWatermark. Systems with older watermarks (e.g.
+        // disabled / RunIf-skipped) hold their entries until they catch up.
+        if (!trackedChangeFilterComponents.isEmpty()) {
+            for (var compId : trackedChangeFilterComponents) {
+                long minWatermark = Long.MAX_VALUE;
+                for (var p : systemPlans.values()) {
+                    if (!p.hasChangeFilters()) continue;
+                    for (var f : p.resolvedChangeFilters()) {
+                        if (f.targetId().equals(compId) && p.lastSeenTick() < minWatermark) {
+                            minWatermark = p.lastSeenTick();
+                        }
+                    }
+                }
+                if (minWatermark == Long.MAX_VALUE) continue;
+                var matching = archetypeGraph.findMatching(Set.of(compId));
+                for (var archetype : matching) {
+                    for (var chunk : archetype.chunks()) {
+                        var tracker = chunk.changeTracker(compId);
+                        if (tracker != null) tracker.pruneDirtyList(minWatermark);
+                    }
                 }
             }
         }

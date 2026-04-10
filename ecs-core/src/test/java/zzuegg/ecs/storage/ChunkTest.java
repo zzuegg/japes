@@ -5,6 +5,7 @@ import zzuegg.ecs.component.ComponentId;
 import zzuegg.ecs.entity.Entity;
 
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -20,7 +21,7 @@ class ChunkTest {
         return new Chunk(capacity, Map.of(
             POS_ID, Position.class,
             VEL_ID, Velocity.class
-        ), ComponentStorage.defaultFactory());
+        ), ComponentStorage.defaultFactory(), Set.of());
     }
 
     @Test

@@ -14,12 +14,16 @@ public final class Archetype {
     private final Map<ComponentId, Class<? extends Record>> componentTypes;
     private final int chunkCapacity;
     private final ComponentStorage.Factory storageFactory;
+    private final java.util.Set<ComponentId> dirtyTrackedComponents;
     private final List<Chunk> chunks = new ArrayList<>();
 
-    public Archetype(ArchetypeId id, ComponentRegistry registry, int chunkCapacity, ComponentStorage.Factory storageFactory) {
+    public Archetype(ArchetypeId id, ComponentRegistry registry, int chunkCapacity,
+                     ComponentStorage.Factory storageFactory,
+                     java.util.Set<ComponentId> dirtyTrackedComponents) {
         this.id = id;
         this.chunkCapacity = chunkCapacity;
         this.storageFactory = storageFactory;
+        this.dirtyTrackedComponents = dirtyTrackedComponents;
         this.componentTypes = new LinkedHashMap<>();
         for (var compId : id.components()) {
             componentTypes.put(compId, registry.info(compId).type());
@@ -87,7 +91,7 @@ public final class Archetype {
                 return i;
             }
         }
-        chunks.add(new Chunk(chunkCapacity, componentTypes, storageFactory));
+        chunks.add(new Chunk(chunkCapacity, componentTypes, storageFactory, dirtyTrackedComponents));
         return chunks.size() - 1;
     }
 }

@@ -6,6 +6,7 @@ import zzuegg.ecs.entity.Entity;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 public final class Chunk {
 
@@ -15,14 +16,22 @@ public final class Chunk {
     private final Map<ComponentId, ChangeTracker> changeTrackers;
     private int count = 0;
 
-    public Chunk(int capacity, Map<ComponentId, Class<? extends Record>> componentTypes, ComponentStorage.Factory factory) {
+    public Chunk(int capacity, Map<ComponentId, Class<? extends Record>> componentTypes,
+                 ComponentStorage.Factory factory, Set<ComponentId> dirtyTrackedComponents) {
         this.capacity = capacity;
         this.entities = new Entity[capacity];
         this.storages = new HashMap<>();
         this.changeTrackers = new HashMap<>();
         for (var entry : componentTypes.entrySet()) {
             storages.put(entry.getKey(), factory.create(entry.getValue(), capacity));
-            changeTrackers.put(entry.getKey(), new ChangeTracker(capacity));
+            var tracker = new ChangeTracker(capacity);
+            // Enable dirty-list bookkeeping only for components that have a
+            // @Filter(Added/Changed) consumer — pure-write components pay
+            // nothing on markChanged.
+            if (dirtyTrackedComponents.contains(entry.getKey())) {
+                tracker.setDirtyTracked(true);
+            }
+            changeTrackers.put(entry.getKey(), tracker);
         }
     }
 

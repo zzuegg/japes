@@ -18,6 +18,12 @@ public final class ArchetypeGraph {
     // archetype is created; mutations of existing archetypes' entity contents
     // don't affect which archetypes match a given required set.
     private final Map<Set<ComponentId>, List<Archetype>> findMatchingCache = new HashMap<>();
+    // Components for which ChangeTracker dirty-list bookkeeping is enabled
+    // on every chunk. Mutated by World when @Filter(Added/Changed) consumers
+    // register/unregister at plan build time. The set is shared by reference
+    // with every Archetype created here so new chunks pick up the current
+    // state at construction time without an explicit callback.
+    private final Set<ComponentId> dirtyTrackedComponents = new HashSet<>();
 
     public ArchetypeGraph(ComponentRegistry registry, int chunkCapacity, ComponentStorage.Factory storageFactory) {
         this.registry = registry;
@@ -28,12 +34,33 @@ public final class ArchetypeGraph {
     public Archetype getOrCreate(ArchetypeId id) {
         var existing = archetypes.get(id);
         if (existing != null) return existing;
-        var created = new Archetype(id, registry, chunkCapacity, storageFactory);
+        var created = new Archetype(id, registry, chunkCapacity, storageFactory, dirtyTrackedComponents);
         archetypes.put(id, created);
         // New archetype invalidates every cached query — any previously-cached
         // match set could now be missing this archetype.
         findMatchingCache.clear();
         return created;
+    }
+
+    /**
+     * Register a component as dirty-tracked. Walks every existing archetype
+     * that contains the component and enables dirty-list bookkeeping on the
+     * change trackers in each of their chunks. Archetypes created after this
+     * call pick up the state via the shared set reference.
+     */
+    public void enableDirtyTracking(ComponentId compId) {
+        if (!dirtyTrackedComponents.add(compId)) return;
+        for (var archetype : archetypes.values()) {
+            if (!archetype.id().contains(compId)) continue;
+            for (var chunk : archetype.chunks()) {
+                var tracker = chunk.changeTracker(compId);
+                if (tracker != null) tracker.setDirtyTracked(true);
+            }
+        }
+    }
+
+    public Set<ComponentId> dirtyTrackedComponents() {
+        return dirtyTrackedComponents;
     }
 
     public ArchetypeId addEdge(ArchetypeId source, ComponentId added) {

@@ -94,6 +94,10 @@ public final class SystemExecutionPlan {
         return changeFilters.length > 0;
     }
 
+    public ResolvedChangeFilter[] resolvedChangeFilters() {
+        return changeFilters;
+    }
+
     public long lastSeenTick() {
         return lastSeenTick;
     }
@@ -184,15 +188,27 @@ public final class SystemExecutionPlan {
      * dispatch overhead by keeping fill/invoke/flush in one method body that the
      * JIT can optimize as a single hot loop.
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public void processChunk(Chunk chunk, SystemInvoker invoker, long currentTick) {
         prepareChunk(chunk);
         int count = chunk.count();
 
-        for (int slot = 0; slot < count; slot++) {
-            // Change filters (@Filter(Added/Changed, target=X)): skip entities whose
-            // target-component tracker is stale relative to the last tick this system ran.
-            if (changeFilters.length > 0) {
+        if (changeFilters.length > 0) {
+            // Sparse path: iterate only the slots that were appended to the
+            // first filter's dirty list since the last prune. The AND semantics
+            // of multiple filters guarantees any matching slot must appear in
+            // the first filter's dirty list, so using it as the iteration
+            // source is safe — we still do the per-slot filter check to weed
+            // out stale entries and multi-filter mismatches. The tracker's
+            // own bitmap guarantees each slot appears at most once in the
+            // list, so no iteration-side dedup is needed.
+            var primary = cachedFilterTrackers[0];
+            int[] dirty = primary.dirtySlots();
+            int dirtyN = primary.dirtyCount();
+
+            for (int d = 0; d < dirtyN; d++) {
+                int slot = dirty[d];
+                if (slot >= count) continue;  // swap-removed since the mark
+
                 boolean match = true;
                 for (int i = 0; i < changeFilters.length; i++) {
                     var cf = changeFilters[i];
@@ -204,64 +220,76 @@ public final class SystemExecutionPlan {
                     if (!ok) { match = false; break; }
                 }
                 if (!match) continue;
-            }
 
-            // Fill args
+                processSlot(chunk, slot, invoker, currentTick);
+            }
+        } else {
+            // Dense path: full slot scan. Unchanged from the pre-dirty-list
+            // implementation; systems without change filters pay no bitmap
+            // setup, no dirty-list bookkeeping.
+            for (int slot = 0; slot < count; slot++) {
+                processSlot(chunk, slot, invoker, currentTick);
+            }
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void processSlot(Chunk chunk, int slot, SystemInvoker invoker, long currentTick) {
+        // Fill args
+        for (int i = 0; i < slots.length; i++) {
+            var cs = slots[i];
+            if (cs.isWrite()) {
+                var value = cachedStorages[i].get(slot);
+                var existing = (Mut) mutCache[i];
+                if (existing == null) {
+                    var mut = new Mut(value, slot, cachedTrackers[i], currentTick, cs.isValueTracked());
+                    mutCache[i] = mut;
+                    args[cs.argIndex()] = mut;
+                } else {
+                    existing.reset(value, slot, cachedTrackers[i], currentTick);
+                }
+            } else {
+                args[cs.argIndex()] = cachedStorages[i].get(slot);
+            }
+        }
+
+        // Fill Entity-typed parameters with the current iteration entity.
+        if (entitySlotIndices.length > 0) {
+            var entity = chunk.entity(slot);
+            for (int i = 0; i < entitySlotIndices.length; i++) {
+                args[entitySlotIndices[i]] = entity;
+            }
+        }
+
+        // Check @Where filters — reuse a single lookup map per plan to avoid
+        // per-entity HashMap allocation in the inner loop.
+        if (whereLookup != null) {
+            whereLookup.clear();
             for (int i = 0; i < slots.length; i++) {
                 var cs = slots[i];
-                if (cs.isWrite()) {
-                    var value = cachedStorages[i].get(slot);
-                    var existing = (Mut) mutCache[i];
-                    if (existing == null) {
-                        var mut = new Mut(value, slot, cachedTrackers[i], currentTick, cs.isValueTracked());
-                        mutCache[i] = mut;
-                        args[cs.argIndex()] = mut;
-                    } else {
-                        existing.reset(value, slot, cachedTrackers[i], currentTick);
-                    }
-                } else {
-                    args[cs.argIndex()] = cachedStorages[i].get(slot);
-                }
+                var value = cs.isWrite() ? ((Mut) mutCache[i]).get() : args[cs.argIndex()];
+                whereLookup.put(cs.access().type(), (Record) value);
             }
-
-            // Fill Entity-typed parameters with the current iteration entity.
-            if (entitySlotIndices.length > 0) {
-                var entity = chunk.entity(slot);
-                for (int i = 0; i < entitySlotIndices.length; i++) {
-                    args[entitySlotIndices[i]] = entity;
-                }
+            boolean pass = true;
+            for (var filter : whereFilters.values()) {
+                if (!filter.test(whereLookup)) { pass = false; break; }
             }
+            if (!pass) return;
+        }
 
-            // Check @Where filters — reuse a single lookup map per plan to avoid
-            // per-entity HashMap allocation in the inner loop.
-            if (whereLookup != null) {
-                whereLookup.clear();
-                for (int i = 0; i < slots.length; i++) {
-                    var cs = slots[i];
-                    var value = cs.isWrite() ? ((Mut) mutCache[i]).get() : args[cs.argIndex()];
-                    whereLookup.put(cs.access().type(), (Record) value);
-                }
-                boolean pass = true;
-                for (var filter : whereFilters.values()) {
-                    if (!filter.test(whereLookup)) { pass = false; break; }
-                }
-                if (!pass) continue;
-            }
+        // Invoke
+        try {
+            invoker.invoke(args);
+        } catch (Throwable e) {
+            throw new RuntimeException("System invocation failed at slot " + slot, e);
+        }
 
-            // Invoke
-            try {
-                invoker.invoke(args);
-            } catch (Throwable e) {
-                throw new RuntimeException("System invocation failed at slot " + slot, e);
-            }
-
-            // Flush writes
-            for (int i = 0; i < slots.length; i++) {
-                if (slots[i].isWrite()) {
-                    var mut = (Mut) mutCache[i];
-                    var newValue = mut.flush();
-                    ((ComponentStorage) cachedStorages[i]).set(mut.slot(), newValue);
-                }
+        // Flush writes
+        for (int i = 0; i < slots.length; i++) {
+            if (slots[i].isWrite()) {
+                var mut = (Mut) mutCache[i];
+                var newValue = mut.flush();
+                ((ComponentStorage) cachedStorages[i]).set(mut.slot(), newValue);
             }
         }
     }
