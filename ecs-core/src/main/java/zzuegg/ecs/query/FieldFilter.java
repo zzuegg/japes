@@ -29,16 +29,41 @@ public sealed interface FieldFilter {
     }
 
     /**
-     * Parse a simple expression like "hp > 0", "defense >= 10", "name == 'foo'"
+     * Parse a simple expression against a record's accessor. Grammar:
+     * <pre>
+     *   field op value
+     * </pre>
+     * Whitespace between tokens is optional; {@code hp>0} parses the same as
+     * {@code hp > 0}. Supported operators, in order of match precedence so
+     * {@code >=} binds before {@code >}:
+     * {@code >=}, {@code <=}, {@code ==}, {@code !=}, {@code >}, {@code <}.
+     * Numeric values are parsed as int then double; string literals use
+     * single quotes, e.g. {@code name == 'alice'}.
      */
     static FieldFilter parse(String expression, Class<? extends Record> type) {
-        var parts = expression.trim().split("\\s+", 3);
-        if (parts.length != 3) {
-            throw new IllegalArgumentException("Invalid filter expression: " + expression);
+        var expr = expression.trim();
+        // Longest operators first so ">=" doesn't prematurely match ">".
+        String[] ops = { ">=", "<=", "==", "!=", ">", "<" };
+        String op = null;
+        int opIdx = -1;
+        for (var candidate : ops) {
+            int idx = expr.indexOf(candidate);
+            if (idx > 0) {
+                op = candidate;
+                opIdx = idx;
+                break;
+            }
         }
-        var field = parts[0];
-        var op = parts[1];
-        var value = parts[2];
+        if (op == null) {
+            throw new IllegalArgumentException(
+                "Filter '" + expression + "' has no recognised operator; expected one of: >=, <=, ==, !=, >, <");
+        }
+        var field = expr.substring(0, opIdx).trim();
+        var value = expr.substring(opIdx + op.length()).trim();
+        if (field.isEmpty() || value.isEmpty()) {
+            throw new IllegalArgumentException(
+                "Filter '" + expression + "' must have the form 'field " + op + " value'");
+        }
 
         var builder = of(type, field);
         return switch (op) {
