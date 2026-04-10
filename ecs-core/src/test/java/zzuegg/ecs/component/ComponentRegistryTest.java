@@ -43,11 +43,13 @@ class ComponentRegistryTest {
     }
 
     @Test
-    void infoReflectsSparseAnnotation() {
+    void sparseAnnotationRejectedUntilImplemented() {
+        // @SparseStorage is scaffolded but not yet wired through the archetype
+        // pipeline. Silently falling back to table storage would mask the gap;
+        // registration throws until the sparse path exists.
         var registry = new ComponentRegistry();
-        registry.register(Marker.class);
-        var info = registry.info(Marker.class);
-        assertTrue(info.isSparseStorage());
+        assertThrows(UnsupportedOperationException.class,
+            () -> registry.register(Marker.class));
     }
 
     @Test

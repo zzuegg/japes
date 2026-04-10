@@ -21,10 +21,19 @@ public final class ComponentRegistry {
         var recordType = (Class<? extends Record>) type;
 
         boolean sparse = type.isAnnotationPresent(SparseStorage.class);
+        if (sparse) {
+            // Sparse storage was scaffolded (annotation + ComponentArray / SparseSet)
+            // but never wired into the archetype/chunk pipeline. Silently falling
+            // back to table storage would mask the gap; a hard failure is clearer
+            // until the sparse path is actually implemented.
+            throw new UnsupportedOperationException(
+                "@SparseStorage is not yet implemented; mark " + type.getName()
+                    + " with @TableStorage (default) instead");
+        }
         boolean valueTracked = type.isAnnotationPresent(ValueTracked.class);
 
         var id = new ComponentId(nextId++);
-        var info = new ComponentInfo(id, recordType, !sparse, sparse, valueTracked);
+        var info = new ComponentInfo(id, recordType, true, false, valueTracked);
         byType.put(type, info);
         byId.put(id, info);
         return id;
