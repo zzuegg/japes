@@ -21,7 +21,11 @@ public final class World {
     private final ComponentRegistry componentRegistry = new ComponentRegistry();
     private final ArchetypeGraph archetypeGraph;
     private final zzuegg.ecs.entity.EntityAllocator entityAllocator = new zzuegg.ecs.entity.EntityAllocator();
-    private final Map<Integer, EntityLocation> entityLocations = new HashMap<>();
+    // Index-keyed (not boxed). EntityAllocator hands out compact indices with
+    // a free-list, so an ArrayList sized to the high-water mark is strictly
+    // cheaper than HashMap<Integer, EntityLocation>: zero boxing, zero hash,
+    // O(1) get/set, and good cache locality on iteration.
+    private final ArrayList<EntityLocation> entityLocations = new ArrayList<>();
     private final ResourceStore resourceStore = new ResourceStore();
     private final EventRegistry eventRegistry = new EventRegistry();
     private final Executor executor;
@@ -209,7 +213,7 @@ public final class World {
         var archetypeId = ArchetypeId.of(compIds);
         var archetype = archetypeGraph.getOrCreate(archetypeId);
         var location = archetype.add(entity);
-        entityLocations.put(entity.index(), location);
+        setLocation(entity.index(), location);
 
         for (var comp : components) {
             var info = componentRegistry.info(comp.getClass());
@@ -230,12 +234,12 @@ public final class World {
             throw new IllegalArgumentException("Entity is not alive: " + entity);
         }
 
-        var location = entityLocations.remove(entity.index());
+        var location = removeLocation(entity.index());
         if (location != null) {
             var archetype = archetypeGraph.get(location.archetypeId());
             var swapped = archetype.remove(location);
             swapped.ifPresent(swappedEntity ->
-                entityLocations.put(swappedEntity.index(), location)
+                setLocation(swappedEntity.index(), location)
             );
         }
 
@@ -247,7 +251,7 @@ public final class World {
         if (!entityAllocator.isAlive(entity)) {
             throw new IllegalArgumentException("Entity is not alive: " + entity);
         }
-        var location = entityLocations.get(entity.index());
+        var location = getLocation(entity.index());
         if (location == null) {
             throw new IllegalArgumentException("Entity has no location: " + entity);
         }
@@ -265,7 +269,7 @@ public final class World {
             throw new IllegalArgumentException("Entity not alive: " + entity);
         }
         var compId = componentRegistry.getOrRegister(component.getClass());
-        var location = entityLocations.get(entity.index());
+        var location = getLocation(entity.index());
         var archetype = archetypeGraph.get(location.archetypeId());
         archetype.set(compId, location, component);
     }
@@ -275,7 +279,7 @@ public final class World {
             throw new IllegalArgumentException("Entity not alive: " + entity);
         }
         var compId = componentRegistry.getOrRegister(component.getClass());
-        var oldLocation = entityLocations.get(entity.index());
+        var oldLocation = getLocation(entity.index());
         var oldArchetype = archetypeGraph.get(oldLocation.archetypeId());
 
         var newArchetypeId = archetypeGraph.addEdge(oldLocation.archetypeId(), compId);
@@ -304,10 +308,10 @@ public final class World {
 
         var swapped = oldArchetype.remove(oldLocation);
         swapped.ifPresent(swappedEntity ->
-            entityLocations.put(swappedEntity.index(), oldLocation)
+            setLocation(swappedEntity.index(), oldLocation)
         );
 
-        entityLocations.put(entity.index(), newLocation);
+        setLocation(entity.index(), newLocation);
     }
 
     public void removeComponent(zzuegg.ecs.entity.Entity entity, Class<? extends Record> type) {
@@ -315,7 +319,7 @@ public final class World {
             throw new IllegalArgumentException("Entity not alive: " + entity);
         }
         var compId = componentRegistry.getOrRegister(type);
-        var oldLocation = entityLocations.get(entity.index());
+        var oldLocation = getLocation(entity.index());
         var oldArchetype = archetypeGraph.get(oldLocation.archetypeId());
 
         var newArchetypeId = archetypeGraph.removeEdge(oldLocation.archetypeId(), compId);
@@ -340,10 +344,10 @@ public final class World {
 
         var swapped = oldArchetype.remove(oldLocation);
         swapped.ifPresent(swappedEntity ->
-            entityLocations.put(swappedEntity.index(), oldLocation)
+            setLocation(swappedEntity.index(), oldLocation)
         );
 
-        entityLocations.put(entity.index(), newLocation);
+        setLocation(entity.index(), newLocation);
     }
 
     public void tick() {
@@ -361,6 +365,20 @@ public final class World {
 
     public boolean isAlive(zzuegg.ecs.entity.Entity entity) {
         return entityAllocator.isAlive(entity);
+    }
+
+    private void setLocation(int index, EntityLocation location) {
+        while (entityLocations.size() <= index) entityLocations.add(null);
+        entityLocations.set(index, location);
+    }
+
+    private EntityLocation getLocation(int index) {
+        return index < entityLocations.size() ? entityLocations.get(index) : null;
+    }
+
+    private EntityLocation removeLocation(int index) {
+        if (index >= entityLocations.size()) return null;
+        return entityLocations.set(index, null);
     }
 
     public void close() {

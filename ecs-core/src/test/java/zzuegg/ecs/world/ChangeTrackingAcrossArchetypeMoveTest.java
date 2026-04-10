@@ -9,7 +9,7 @@ import zzuegg.ecs.component.ComponentRegistry;
 import zzuegg.ecs.entity.Entity;
 
 import java.lang.reflect.Field;
-import java.util.Map;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -22,7 +22,7 @@ class ChangeTrackingAcrossArchetypeMoveTest {
     private static ChangeTracker trackerOf(World world, Entity entity, Class<? extends Record> type) throws Exception {
         Field locF = World.class.getDeclaredField("entityLocations");
         locF.setAccessible(true);
-        var locations = (Map<Integer, EntityLocation>) locF.get(world);
+        var locations = (List<EntityLocation>) locF.get(world);
         var loc = locations.get(entity.index());
 
         Field graphF = World.class.getDeclaredField("archetypeGraph");
@@ -59,7 +59,7 @@ class ChangeTrackingAcrossArchetypeMoveTest {
         // find the entity's new slot
         Field locF = World.class.getDeclaredField("entityLocations");
         locF.setAccessible(true);
-        var locations = (Map<Integer, EntityLocation>) locF.get(world);
+        var locations = (List<EntityLocation>) locF.get(world);
         int slot = locations.get(entity.index()).slotIndex();
 
         assertEquals(tickBeforeAdd, velTracker.addedTick(slot),
@@ -89,7 +89,7 @@ class ChangeTrackingAcrossArchetypeMoveTest {
         Field locF = World.class.getDeclaredField("entityLocations");
         locF.setAccessible(true);
         @SuppressWarnings("unchecked")
-        var locations = (Map<Integer, EntityLocation>) locF.get(world);
+        var locations = (List<EntityLocation>) locF.get(world);
         int slot = locations.get(entity.index()).slotIndex();
 
         assertEquals(posAddedAtSpawn, posTracker.addedTick(slot),
@@ -116,7 +116,7 @@ class ChangeTrackingAcrossArchetypeMoveTest {
         Field locF = World.class.getDeclaredField("entityLocations");
         locF.setAccessible(true);
         @SuppressWarnings("unchecked")
-        var locations = (Map<Integer, EntityLocation>) locF.get(world);
+        var locations = (List<EntityLocation>) locF.get(world);
         int slot = locations.get(entity.index()).slotIndex();
 
         assertEquals(spawnTick, posTracker.addedTick(slot),
