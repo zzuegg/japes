@@ -423,6 +423,79 @@ thread-pool lifecycle, and do all of this over again every time an
 observer is added or removed. japes knows all of that from
 `@Read`/`@Write`/`@Filter` annotations and the scheduler's DAG builder.
 
+### Does Valhalla help? (JDK 27 EA, JEP 401 value records)
+
+Every component in japes is a `record`, which means the backing
+component storage is a reference array — reading a `Position` is a
+pointer-chase and writing one allocates a fresh heap record. Valhalla's
+JEP 401 promises flat layout for `value record`s: the same backing array
+becomes a flat `float[]` and loads become plain array indexing.
+
+The `ecs-benchmark-valhalla` module ports every japes benchmark with
+`value record` components and runs them against a Valhalla EA build
+(`openjdk 27-jep401ea3`). The two runs use the same Java source, same
+`--enable-preview`, same JMH settings, same tier-1 generator — only the
+component declaration (`record` vs `value record`) and the runtime JVM
+differ.
+
+**Results (µs/op, lower is better — `japes-v` is japes on the Valhalla EA JVM with value records):**
+
+| benchmark                     |          case | **japes** | **japes-v** | Δ              |
+|-------------------------------|--------------:|----------:|------------:|---------------:|
+| iterateSingleComponent        |           10k |      2.33 |        0.12 | "20×" (DCE ¹)  |
+| iterateSingleComponent        |          100k |      37.5 |        0.73 | "51×" (DCE ¹)  |
+| iterateTwoComponents          |           10k |      4.28 |        0.15 | "28×" (DCE ¹)  |
+| iterateTwoComponents          |          100k |      64.5 |        1.26 | "51×" (DCE ¹)  |
+| iterateWithWrite              |           10k |      57.3 |        51.6 | **1.11×** real |
+| iterateWithWrite              |          100k |       569 |         519 | **1.10×** real |
+| NBody simulateOneTick         |            1k |      6.26 |        5.77 | **1.08×** real |
+| NBody simulateOneTick         |           10k |      62.6 |        57.0 | **1.10×** real |
+| NBody simulateTenTicks        |           10k |       625 |         573 | **1.09×** real |
+| ParticleScenario tick         |           10k |       161 |         184 | 0.88× slower   |
+| SparseDelta tick              |           10k |      5.22 |        5.05 | 1.03× (noise)  |
+| RealisticTick tick            |     10k / st  |      16.4 |        22.1 | 0.74× slower   |
+| RealisticTick tick            |     10k / mt  |      21.5 |        27.9 | 0.77× slower   |
+
+**¹ DCE caveat.** `iterateSingleComponent` / `iterateTwoComponents` are
+read-only systems with empty method bodies (`void iterate(@Read Position
+p) {}`). A value-record load into a never-used local is trivially
+eliminable, so the JIT deletes the whole iteration loop. 0.73 µs for
+100k iterations works out to ~7 ps/entity, which is physically
+impossible — it's the "20–51×" rows measuring nothing, not Valhalla
+actually touching memory 51× faster. Treat them as an upper bound on how
+little the JIT *can* do when the observer is empty, not as a real win.
+The `iterateWithWrite` and NBody rows do real work and survive DCE.
+
+**What the meaningful rows say:**
+
+- **Write-path microbenchmarks** (iterateWithWrite, NBody) — Valhalla
+  gives a consistent ~**8–11% improvement**. That's the value-record
+  win the JEP advertises: the `new Position(...)` in the integration
+  loop goes from "allocate-a-heap-record-and-chase-it" to "store three
+  floats into a flat backing region." Real, measurable, modest.
+- **Scenario benchmarks** (ParticleScenario, RealisticTick) — Valhalla
+  **hurts** by 12–35%. These are the ones that exercise the change
+  tracker, the command buffer, the scheduler, `setComponent`, and the
+  tier-1 generator's dispatch path. Something in that machinery doesn't
+  interact well with the EA JVM's value-record layout — most likely the
+  `ChangeTracker`'s indexed-bitmap bookkeeping and the
+  `Commands`-buffered respawns, which are built around reference
+  semantics and don't get any flatness benefit but do pay the cost of
+  Valhalla's not-yet-fully-optimised JIT paths.
+- **SparseDelta** is within noise. The benchmark's bottleneck is dirty
+  tracking and observer dispatch, not component reads, so there's
+  nothing for Valhalla to flatten.
+
+**Honest takeaway.** Under JEP 401 EA, Valhalla gives japes a ~10% win
+on allocation-heavy linear iteration loops and is currently a net
+*regression* on the change-detection and scheduling hot paths. That is
+directly consistent with where the library's hot code lives: the tier-1
+generator benefits (flatter loads, cheaper temporaries) but the
+per-mutation bookkeeping in `ChangeTracker` and friends does not. The
+tier-1 code path will almost certainly need to be re-tuned once Valhalla
+ships stable — the shape is right and the trajectory is favourable, but
+"just set the JVM to Valhalla" is not a free performance switch today.
+
 ### The "write-path tax" — why japes looks slow on naked writes
 
 The `iterateWithWrite`, `NBody` and sparse-delta rows all show japes paying a
