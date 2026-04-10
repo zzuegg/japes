@@ -26,11 +26,17 @@ public final class ChunkProcessorGenerator {
     private ChunkProcessorGenerator() {}
 
     public static ChunkProcessor generate(SystemDescriptor desc, Object[] serviceArgs) {
-        return generate(desc, serviceArgs, true);
+        return generate(desc, serviceArgs, true, null);
     }
 
     public static ChunkProcessor generate(SystemDescriptor desc, Object[] serviceArgs,
                                           boolean useDefaultStorageFactory) {
+        return generate(desc, serviceArgs, useDefaultStorageFactory, null);
+    }
+
+    public static ChunkProcessor generate(SystemDescriptor desc, Object[] serviceArgs,
+                                          boolean useDefaultStorageFactory,
+                                          SystemExecutionPlan plan) {
         var accesses = desc.componentAccesses();
         var method = desc.method();
         var instance = desc.instance();
@@ -60,7 +66,7 @@ public final class ChunkProcessorGenerator {
         // Tier 1: Maximally optimized generator. Uses direct array access if
         // the world is known to use the default storage factory; otherwise
         // falls back to interface-based dispatch (still tier-1 but slower).
-        var generatedProcessor = GeneratedChunkProcessor.tryGenerate(desc, serviceArgs, useDefaultStorageFactory);
+        var generatedProcessor = GeneratedChunkProcessor.tryGenerate(desc, serviceArgs, useDefaultStorageFactory, plan);
         if (generatedProcessor != null) {
             return generatedProcessor;
         }

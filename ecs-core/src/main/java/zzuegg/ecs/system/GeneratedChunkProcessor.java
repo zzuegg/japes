@@ -79,19 +79,33 @@ public final class GeneratedChunkProcessor {
         if (componentCount > 4) return "system has " + componentCount + " component parameters (tier-1 limit is 4)";
         if (params.length > 8) return "system has " + params.length + " total parameters (tier-1 limit is 8)";
         if (!desc.whereFilters().isEmpty()) return "system uses @Where filters";
-        if (!desc.changeFilters().isEmpty()) return "system uses @Filter(Added/Changed/Removed)";
+        // @Filter(Removed) isn't expressible via tracker ticks — it needs a
+        // separate removal log. Only Added/Changed are supported in tier-1.
+        for (var f : desc.changeFilters()) {
+            if (f.filterType() != Added.class && f.filterType() != Changed.class) {
+                return "system uses @Filter(" + f.filterType().getSimpleName() + ") which is unsupported";
+            }
+        }
         return null;
     }
 
     public static ChunkProcessor tryGenerate(SystemDescriptor desc, Object[] serviceArgs) {
-        return tryGenerate(desc, serviceArgs, true);
+        return tryGenerate(desc, serviceArgs, true, null);
     }
 
     public static ChunkProcessor tryGenerate(SystemDescriptor desc, Object[] serviceArgs,
                                              boolean useDefaultStorageFactory) {
+        return tryGenerate(desc, serviceArgs, useDefaultStorageFactory, null);
+    }
+
+    public static ChunkProcessor tryGenerate(SystemDescriptor desc, Object[] serviceArgs,
+                                             boolean useDefaultStorageFactory,
+                                             SystemExecutionPlan plan) {
         if (skipReason(desc) != null) return null;
+        // Change filters need the plan reference for lastSeenTick.
+        if (!desc.changeFilters().isEmpty() && plan == null) return null;
         try {
-            return generateWithBytecode(desc, serviceArgs, useDefaultStorageFactory);
+            return generateWithBytecode(desc, serviceArgs, useDefaultStorageFactory, plan);
         } catch (Exception e) {
             // Fall back to invokeExact path. The invokeExact fallback cannot
             // handle Mut/Entity/service parameters — if any such param exists,
@@ -128,7 +142,8 @@ public final class GeneratedChunkProcessor {
     private enum ParamKind { READ, WRITE, ENTITY, SERVICE }
 
     private static ChunkProcessor generateWithBytecode(SystemDescriptor desc, Object[] serviceArgs,
-                                                        boolean useDefaultStorageFactory) throws Exception {
+                                                        boolean useDefaultStorageFactory,
+                                                        SystemExecutionPlan plan) throws Exception {
         var method = desc.method();
         var accesses = desc.componentAccesses();
         int paramCount = method.getParameterCount();
@@ -212,6 +227,18 @@ public final class GeneratedChunkProcessor {
         for (var kind : kinds) if (kind == ParamKind.SERVICE) { hasServiceLocal = true; break; }
         final boolean hasServices = hasServiceLocal;
 
+        // Change filter setup — only populated when the system has filters.
+        // The resolved filters from the plan give us ComponentIds already.
+        final boolean hasFilters = plan != null && plan.hasChangeFilters();
+        final SystemExecutionPlan.ResolvedChangeFilter[] resolvedFilters =
+            hasFilters ? plan.resolvedChangeFilters() : new SystemExecutionPlan.ResolvedChangeFilter[0];
+        var planClassDesc = ClassDesc.of("zzuegg.ecs.system.SystemExecutionPlan");
+        var planLastSeenDesc = MethodTypeDesc.of(ConstantDescs.CD_long);
+        var trackerDirtySlotsDesc = MethodTypeDesc.of(ClassDesc.ofDescriptor("[I"));
+        var trackerDirtyCountDesc = MethodTypeDesc.of(ConstantDescs.CD_int);
+        var trackerIsChangedSinceDesc = MethodTypeDesc.of(ConstantDescs.CD_boolean, ConstantDescs.CD_int, ConstantDescs.CD_long);
+        var trackerIsAddedSinceDesc = MethodTypeDesc.of(ConstantDescs.CD_boolean, ConstantDescs.CD_int, ConstantDescs.CD_long);
+
         byte[] bytes = ClassFile.of().build(genDesc, clb -> {
             clb.withFlags(ACC_PUBLIC | ACC_FINAL);
             clb.withSuperclass(ConstantDescs.CD_Object);
@@ -237,6 +264,15 @@ public final class GeneratedChunkProcessor {
             if (hasServices) {
                 clb.withField("services", objArrayDesc, fb -> fb.withFlags(ACC_PUBLIC));
             }
+            // Fields for change-filter support: a reference to the owning
+            // SystemExecutionPlan (for lastSeenTick) and an array of the
+            // filter-target ComponentIds (resolved per chunk via
+            // chunk.changeTracker() into trackers[]). Both are stable for
+            // the processor's lifetime.
+            if (hasFilters) {
+                clb.withField("plan", planClassDesc, fb -> fb.withFlags(ACC_PUBLIC));
+                clb.withField("filterCids", compIdArrayDesc, fb -> fb.withFlags(ACC_PUBLIC));
+            }
 
             // Constructor
             clb.withMethodBody("<init>", MethodTypeDesc.of(ConstantDescs.CD_void), ACC_PUBLIC, cb -> {
@@ -256,14 +292,24 @@ public final class GeneratedChunkProcessor {
                 //   2-3 tick (long)
                 //   4  count
                 //   5  slot
-                //   6..6+paramCount-1            : storages
-                //   6+paramCount..6+2*paramCount-1: trackers (only used for write slots; unused entries stay null)
-                //   6+2*paramCount               : temporary for flushed write-back value
+                //   6..6+paramCount-1                : storages (Record[] or ComponentStorage)
+                //   6+paramCount..6+2*paramCount-1   : trackers for WRITE params (unused entries stay null)
+                //   6+2*paramCount                   : tempValue for flushed write-back
+                //   6+2*paramCount+1                 : dirtyIdx (filter loop index, only if hasFilters)
+                //   6+2*paramCount+2                 : dirtyList (int[], only if hasFilters)
+                //   6+2*paramCount+3                 : dirtyCount (int, only if hasFilters)
+                //   6+2*paramCount+4..+3+filterCount : filter trackers (ChangeTracker, only if hasFilters)
+                //   +(4+filterCount)                 : lastSeen (long, 2 slots, only if hasFilters)
                 int countVar = 4;
                 int slotVar = 5;
                 int firstStorageVar = 6;
                 int firstTrackerVar = firstStorageVar + paramCount;
                 int tempValueVar = firstTrackerVar + paramCount;
+                int dirtyIdxVar = tempValueVar + 1;
+                int dirtyListVar = dirtyIdxVar + 1;
+                int dirtyCountVar = dirtyListVar + 1;
+                int firstFilterTrackerVar = dirtyCountVar + 1;
+                int lastSeenVar = firstFilterTrackerVar + resolvedFilters.length;
 
                 cb.aload(1); // chunk
                 cb.invokevirtual(chunkDesc, "count", MethodTypeDesc.of(ConstantDescs.CD_int));
@@ -316,17 +362,89 @@ public final class GeneratedChunkProcessor {
                     cb.invokevirtual(mutDesc, "setContext", mutSetContextDesc);
                 }
 
-                // int slot = 0
-                cb.iconst_0();
-                cb.istore(slotVar);
+                // Filter setup: load a ChangeTracker for each filter target,
+                // grab the primary filter's dirty list + count, and cache
+                // plan.lastSeenTick() in a local so the per-slot check is a
+                // plain long comparison.
+                if (hasFilters) {
+                    for (int fi = 0; fi < resolvedFilters.length; fi++) {
+                        var targetCid = resolvedFilters[fi].targetId();
+                        // Look up component's access index so we push the right
+                        // cids[] entry. If the target isn't among this system's
+                        // component params, we look it up on the chunk directly
+                        // using the filter's own ComponentId — generated via a
+                        // static method that constructs the id from a field on
+                        // the plan's descriptor. Simpler: we add a filterCids
+                        // field and store the resolved ids there.
+                        // For now: the plan exposes resolvedChangeFilters; we
+                        // use their targetId via a filterCids field.
+                        cb.aload(1); // chunk
+                        cb.aload(0); // this
+                        cb.getfield(genDesc, "filterCids", compIdArrayDesc);
+                        cb.ldc(fi);
+                        cb.aaload();
+                        cb.invokevirtual(chunkDesc, "changeTracker", chunkChangeTrackerDesc);
+                        cb.astore(firstFilterTrackerVar + fi);
+                    }
+                    // Primary filter's dirty list
+                    cb.aload(firstFilterTrackerVar);
+                    cb.invokevirtual(trackerDesc, "dirtySlots", trackerDirtySlotsDesc);
+                    cb.astore(dirtyListVar);
+                    cb.aload(firstFilterTrackerVar);
+                    cb.invokevirtual(trackerDesc, "dirtyCount", trackerDirtyCountDesc);
+                    cb.istore(dirtyCountVar);
+                    // lastSeen = plan.lastSeenTick()
+                    cb.aload(0);
+                    cb.getfield(genDesc, "plan", planClassDesc);
+                    cb.invokevirtual(planClassDesc, "lastSeenTick", planLastSeenDesc);
+                    cb.lstore(lastSeenVar);
+                    // dirtyIdx = 0
+                    cb.iconst_0();
+                    cb.istore(dirtyIdxVar);
+                } else {
+                    // int slot = 0
+                    cb.iconst_0();
+                    cb.istore(slotVar);
+                }
 
                 var loopStart = cb.newLabel();
                 var loopEnd = cb.newLabel();
+                var loopContinue = cb.newLabel();
 
                 cb.labelBinding(loopStart);
-                cb.iload(slotVar);
-                cb.iload(countVar);
-                cb.if_icmpge(loopEnd);
+                if (hasFilters) {
+                    // if (dirtyIdx >= dirtyCount) goto end
+                    cb.iload(dirtyIdxVar);
+                    cb.iload(dirtyCountVar);
+                    cb.if_icmpge(loopEnd);
+                    // slot = dirty[dirtyIdx++]
+                    cb.aload(dirtyListVar);
+                    cb.iload(dirtyIdxVar);
+                    cb.iaload();
+                    cb.istore(slotVar);
+                    cb.iinc(dirtyIdxVar, 1);
+                    // if (slot >= count) continue  (swap-removed)
+                    cb.iload(slotVar);
+                    cb.iload(countVar);
+                    cb.if_icmpge(loopContinue);
+                    // Per-filter check: for each filter, isXxxSince(slot, lastSeen)
+                    for (int fi = 0; fi < resolvedFilters.length; fi++) {
+                        cb.aload(firstFilterTrackerVar + fi);
+                        cb.iload(slotVar);
+                        cb.lload(lastSeenVar);
+                        var kind = resolvedFilters[fi].kind();
+                        if (kind == SystemExecutionPlan.FilterKind.ADDED) {
+                            cb.invokevirtual(trackerDesc, "isAddedSince", trackerIsAddedSinceDesc);
+                        } else {
+                            cb.invokevirtual(trackerDesc, "isChangedSince", trackerIsChangedSinceDesc);
+                        }
+                        cb.ifeq(loopContinue);
+                    }
+                } else {
+                    cb.iload(slotVar);
+                    cb.iload(countVar);
+                    cb.if_icmpge(loopEnd);
+                }
 
                 // Load instance for invokevirtual (non-static only)
                 if (!isStatic) {
@@ -428,7 +546,10 @@ public final class GeneratedChunkProcessor {
                     }
                 }
 
-                cb.iinc(slotVar, 1);
+                cb.labelBinding(loopContinue);
+                if (!hasFilters) {
+                    cb.iinc(slotVar, 1);
+                }
                 cb.goto_(loopStart);
                 cb.labelBinding(loopEnd);
                 cb.return_();
@@ -469,6 +590,15 @@ public final class GeneratedChunkProcessor {
             // services is just the same resolvedServiceArgs the plan uses —
             // indexed by parameter slot, with nulls for non-service slots.
             clazz.getField("services").set(instance, serviceArgs);
+        }
+
+        if (hasFilters) {
+            clazz.getField("plan").set(instance, plan);
+            var filterCids = new ComponentId[resolvedFilters.length];
+            for (int fi = 0; fi < resolvedFilters.length; fi++) {
+                filterCids[fi] = resolvedFilters[fi].targetId();
+            }
+            clazz.getField("filterCids").set(instance, filterCids);
         }
 
         return (ChunkProcessor) instance;

@@ -197,10 +197,9 @@ public final class World {
         // are now supported by the BytecodeChunkProcessor and DirectProcessor
         // tiers (GeneratedChunkProcessor tier-1 still bails via skipReason
         // because its read-only fast path doesn't emit the entity load).
-        if (useGeneratedProcessors && !desc.isExclusive() && !desc.componentAccesses().isEmpty()
-                && desc.changeFilters().isEmpty()) {
+        if (useGeneratedProcessors && !desc.isExclusive() && !desc.componentAccesses().isEmpty()) {
             chunkProcessors.put(desc.name(),
-                ChunkProcessorGenerator.generate(desc, resolvedServiceArgs, useDefaultStorageFactory));
+                ChunkProcessorGenerator.generate(desc, resolvedServiceArgs, useDefaultStorageFactory, plan));
         }
     }
 
