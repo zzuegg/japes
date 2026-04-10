@@ -68,31 +68,14 @@ public class ParticleScenarioBenchmark {
         }
     }
 
+    // Per-entity reaper — uses Entity injection for the current entity handle
+    // and Commands.despawn to defer the despawn to the stage-flush boundary.
+    // Replaces the earlier @Exclusive + world.snapshot fallback.
     public static class ReapSystem {
-        public static long tickIndex;
-
         @System
-        void reap(@Read Health h, Entity entity, Commands cmds) {
-            // Note: our system param model doesn't inject Entity directly into
-            // per-entity systems — we emulate it by reading via a write-free
-            // path. See the wired version below.
-        }
-    }
-
-    // Because we don't (yet) inject Entity handles into per-entity systems,
-    // the reaper runs as an exclusive pass that walks the world snapshot.
-    // This matches the realistic shape: "at end of damage stage, sweep for
-    // dead entities."
-    public static class ReaperExclusive {
-        @Exclusive
-        @System
-        void reap(World w) {
-            var snap = w.snapshot(Health.class);
-            for (var entry : snap.entries()) {
-                var h = (Health) entry.components()[0];
-                if (h.hp() <= 0) {
-                    w.despawn(entry.entity());
-                }
+        void reap(@Read Health h, Entity self, Commands cmds) {
+            if (h.hp() <= 0) {
+                cmds.despawn(self);
             }
         }
     }
@@ -129,7 +112,7 @@ public class ParticleScenarioBenchmark {
             .addResource(new Stats(0, 0))
             .addSystem(MoveSystem.class)
             .addSystem(DamageSystem.class)
-            .addSystem(ReaperExclusive.class)
+            .addSystem(ReapSystem.class)
             .addSystem(StatsSystem.class)
             .addSystem(RespawnSystem.class)
             .build();

@@ -63,6 +63,14 @@ public final class SystemExecutionPlan {
         this.consumedRemovedComponents = types;
     }
 
+    // Parameter indices that receive the current iteration entity handle
+    // (Entity-typed method parameters). Filled per-slot inside processChunk.
+    private int[] entitySlotIndices = new int[0];
+    public int[] entitySlotIndices() { return entitySlotIndices; }
+    public void setEntitySlotIndices(int[] indices) {
+        this.entitySlotIndices = indices;
+    }
+
     public SystemExecutionPlan(int paramCount, List<ParamSlot> componentSlots, List<Integer> serviceArgIndices,
                                Map<Integer, FieldFilter> whereFilters) {
         this(paramCount, componentSlots, serviceArgIndices, whereFilters, List.of());
@@ -213,6 +221,14 @@ public final class SystemExecutionPlan {
                     }
                 } else {
                     args[cs.argIndex()] = cachedStorages[i].get(slot);
+                }
+            }
+
+            // Fill Entity-typed parameters with the current iteration entity.
+            if (entitySlotIndices.length > 0) {
+                var entity = chunk.entity(slot);
+                for (int i = 0; i < entitySlotIndices.length; i++) {
+                    args[entitySlotIndices[i]] = entity;
                 }
             }
 

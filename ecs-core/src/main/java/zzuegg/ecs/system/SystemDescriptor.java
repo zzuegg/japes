@@ -24,6 +24,10 @@ public record SystemDescriptor(
     Set<Class<? extends Record>> withoutFilters,
     List<FilterDescriptor> changeFilters,
     Set<Class<? extends Record>> removedReads,
+    // Parameter indices of Entity arguments — filled per-iteration with
+    // chunk.entity(slot). Collected at parse time so the execution plan can
+    // populate them without re-scanning the method signature.
+    Set<Integer> entityParamSlots,
     boolean usesCommands,
     boolean usesLocal,
     String runIf,

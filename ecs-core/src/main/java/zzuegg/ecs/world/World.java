@@ -108,6 +108,10 @@ public final class World {
                 var access = desc.componentAccesses().get(componentIndex++);
                 var info = componentRegistry.info(access.type());
                 componentSlots.add(new SystemExecutionPlan.ParamSlot(i, access, true, info.isValueTracked()));
+            } else if (desc.entityParamSlots().contains(i)) {
+                // Entity parameters are filled per-iteration from chunk.entity(slot);
+                // they are NOT service args (one-shot resolution) and NOT component
+                // accesses (no tracker, no storage).
             } else {
                 serviceArgIndices.add(i);
             }
@@ -144,6 +148,13 @@ public final class World {
         plan.setQuerySets(Set.copyOf(required), Set.copyOf(without));
         plan.setConsumedRemovedComponents(Set.copyOf(desc.removedReads()));
 
+        // Entity injection: flatten the descriptor's entity param slots into
+        // an int[] the plan can loop over per iteration.
+        var entityIdx = new int[desc.entityParamSlots().size()];
+        int ei = 0;
+        for (int slot : desc.entityParamSlots()) entityIdx[ei++] = slot;
+        plan.setEntitySlotIndices(entityIdx);
+
         // Resolve service args once per system so the generated-processor path and the
         // SystemExecutionPlan path observe the same Commands/EventWriter/Local instances.
         // Duplicating the call previously leaked a second Commands into allCommandBuffers
@@ -172,12 +183,13 @@ public final class World {
 
         systemPlans.put(desc.name(), plan);
 
-        // Build generated processor if enabled. Systems with change filters must
-        // go through the SystemExecutionPlan path — the generated processors
-        // don't know how to consult per-target ChangeTrackers and would run the
-        // system on every entity regardless.
+        // Build generated processor if enabled. Systems with change filters or
+        // Entity-injected parameters must go through the SystemExecutionPlan
+        // path — the generated processors don't know how to consult per-target
+        // ChangeTrackers or how to fill the current iteration entity.
         if (useGeneratedProcessors && !desc.isExclusive() && !desc.componentAccesses().isEmpty()
-                && desc.changeFilters().isEmpty()) {
+                && desc.changeFilters().isEmpty()
+                && desc.entityParamSlots().isEmpty()) {
             chunkProcessors.put(desc.name(), ChunkProcessorGenerator.generate(desc, resolvedServiceArgs));
         }
     }

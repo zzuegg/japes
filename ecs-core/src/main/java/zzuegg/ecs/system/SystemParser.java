@@ -80,13 +80,22 @@ public final class SystemParser {
             var eventReads = new HashSet<Class<?>>();
             var eventWrites = new HashSet<Class<?>>();
             var removedReads = new HashSet<Class<? extends Record>>();
+            var entityParamSlots = new HashSet<Integer>();
             boolean usesCommands = false;
             boolean usesLocal = false;
 
-            for (var param : method.getParameters()) {
+            var methodParams = method.getParameters();
+            for (int pIdx = 0; pIdx < methodParams.length; pIdx++) {
+                var param = methodParams[pIdx];
                 var paramType = param.getType();
 
                 if (paramType == World.class) continue;
+                if (paramType == zzuegg.ecs.entity.Entity.class) {
+                    // Per-iteration current-entity handle. Filled by
+                    // SystemExecutionPlan.processChunk from chunk.entity(slot).
+                    entityParamSlots.add(pIdx);
+                    continue;
+                }
                 if (paramType == Commands.class) { usesCommands = true; continue; }
                 if (paramType == Local.class) { usesLocal = true; continue; }
 
@@ -184,7 +193,8 @@ public final class SystemParser {
                 componentAccesses, whereFilters,
                 resourceReads, resourceWrites,
                 eventReads, eventWrites, withFilters, withoutFilters,
-                changeFilters, removedReads, usesCommands, usesLocal, runIf,
+                changeFilters, removedReads, entityParamSlots,
+                usesCommands, usesLocal, runIf,
                 method, Modifier.isStatic(method.getModifiers()) ? null : instance
             ));
         }
