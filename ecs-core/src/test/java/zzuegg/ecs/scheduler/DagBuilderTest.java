@@ -89,6 +89,33 @@ class DagBuilderTest {
         assertTrue(nextReady.getFirst().descriptor().name().endsWith(".first"));
     }
 
+    static class AmbiguousClassA {
+        @System void update(@Read Position pos) {}
+    }
+
+    static class AmbiguousClassB {
+        @System void update(@Read Position pos) {}
+        @System(after = "update") void consumer(@Read Position pos) {}
+    }
+
+    @Test
+    void ambiguousSimpleNameReferenceThrows() {
+        var reg = new ComponentRegistry();
+        reg.register(Position.class);
+        var descA = SystemParser.parse(AmbiguousClassA.class, reg);
+        var descB = SystemParser.parse(AmbiguousClassB.class, reg);
+        var combined = new java.util.ArrayList<SystemDescriptor>();
+        combined.addAll(descA);
+        combined.addAll(descB);
+
+        // Two distinct "update" methods exist; "after = update" is ambiguous.
+        // Silent binding to the first one is a footgun; the build must throw.
+        var ex = assertThrows(IllegalStateException.class,
+            () -> DagBuilder.build(combined));
+        assertTrue(ex.getMessage().toLowerCase().contains("ambiguous"),
+            "expected 'ambiguous' in error; got: " + ex.getMessage());
+    }
+
     static class ExclusiveAndReaders {
         @System void readA(@Read Position pos) {}
         @System void readB(@Read Position pos) {}

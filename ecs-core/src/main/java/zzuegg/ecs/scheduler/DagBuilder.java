@@ -11,16 +11,20 @@ public final class DagBuilder {
 
     public static ScheduleGraph build(List<SystemDescriptor> descriptors) {
         var nodes = new ArrayList<ScheduleGraph.SystemNode>();
+        // Qualified names resolve unambiguously.
         var nameToIndex = new HashMap<String, Integer>();
+        // Simple (method-only) names may shadow across classes: track every index
+        // that registers a given simple name so we can fail loudly at resolution
+        // time instead of silently binding to the first-registered candidate.
+        var simpleNameCandidates = new HashMap<String, List<Integer>>();
 
         for (int i = 0; i < descriptors.size(); i++) {
             var desc = descriptors.get(i);
             nodes.add(new ScheduleGraph.SystemNode(desc));
             nameToIndex.put(desc.name(), i);
-            // Also register the simple method name for ordering references
             if (desc.name().contains(".")) {
                 var simpleName = desc.name().substring(desc.name().lastIndexOf('.') + 1);
-                nameToIndex.putIfAbsent(simpleName, i);
+                simpleNameCandidates.computeIfAbsent(simpleName, k -> new ArrayList<>()).add(i);
             }
         }
 
@@ -31,13 +35,15 @@ public final class DagBuilder {
         for (int i = 0; i < n; i++) {
             var desc = descriptors.get(i);
             for (var afterName : desc.after()) {
-                var depIdx = nameToIndex.get(afterName);
+                var depIdx = resolveReference(afterName, nameToIndex, simpleNameCandidates,
+                    descriptors, desc.name(), "after");
                 if (depIdx != null) {
                     addEdge(edges, inDegree, depIdx, i);
                 }
             }
             for (var beforeName : desc.before()) {
-                var depIdx = nameToIndex.get(beforeName);
+                var depIdx = resolveReference(beforeName, nameToIndex, simpleNameCandidates,
+                    descriptors, desc.name(), "before");
                 if (depIdx != null) {
                     addEdge(edges, inDegree, i, depIdx);
                 }
@@ -57,6 +63,31 @@ public final class DagBuilder {
         validateNoCycles(nodes, edges, inDegree);
 
         return new ScheduleGraph(nodes, edges, inDegree);
+    }
+
+    private static Integer resolveReference(
+            String reference,
+            Map<String, Integer> nameToIndex,
+            Map<String, List<Integer>> simpleNameCandidates,
+            List<SystemDescriptor> descriptors,
+            String referrer,
+            String direction) {
+        // Qualified match wins unambiguously.
+        var qualified = nameToIndex.get(reference);
+        if (qualified != null) return qualified;
+
+        // Fall back to simple-name resolution; throw if it would bind ambiguously.
+        var candidates = simpleNameCandidates.get(reference);
+        if (candidates == null || candidates.isEmpty()) return null;
+        if (candidates.size() > 1) {
+            var options = new ArrayList<String>();
+            for (var idx : candidates) options.add(descriptors.get(idx).name());
+            throw new IllegalStateException(
+                "Ambiguous " + direction + " reference '" + reference + "' from "
+                    + referrer + "; matches: " + options
+                    + ". Use the qualified 'Class.method' form.");
+        }
+        return candidates.getFirst();
     }
 
     private static boolean hasConflict(SystemDescriptor a, SystemDescriptor b) {
