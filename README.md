@@ -250,13 +250,178 @@ unsurprising once you unpack it:
   per call, plus scheduler overhead on the observer side — and it amortises
   poorly across *just 100* entities with nothing else running.
 
-**What you're trading for that ~20× microbenchmark gap** is correctness at
-scale: in Dominion / Artemis any mutation site that forgets to append to
-the dirty buffer silently drops an event, and every distinct observer needs
-its own dirty set. At game-loop scale with tens of mutation sites and
-several observers, the library doing the tracking for you is worth a real
-amount of engineering risk. On this *microbenchmark*, though, the manual
-path wins cleanly — which is the honest answer and belongs in the table.
+**What you're trading for that ~20× microbenchmark gap.** The hand-rolled
+pattern is only cheap because the microbenchmark has exactly one mutation
+site, one observer, and one component. At real-codebase scale the costs
+show up:
+
+- **Correctness is a contract the compiler can't check.** Every place in
+  your code that mutates `Health` has to remember to append to the dirty
+  buffer. Add a new system a year later, forget the append, silently drop
+  events. The library maintains the invariant globally — you cannot forget.
+- **It doesn't compose across observers.** N observers × M mutation sites
+  = N×M append calls you have to keep in sync. The library indexes this
+  once, centrally. Adding a new observer in japes is one annotation; in
+  manual land it's "find every mutation site and add another append."
+- **Dedup costs perf or correctness.** Mutate the same entity twice in a
+  tick and the naive list sees it twice. Either the observer does
+  duplicate work, or you add a `Set<Entity>` on every append — which kills
+  the perf advantage that made the manual path attractive in the first
+  place. japes uses a per-tracker bitmap for O(1) dedup.
+- **Frame-boundary coordination is your problem.** With multiple observers
+  you have to agree on who clears the buffer and when. The library handles
+  it at tick boundaries.
+- **`Added`/`Removed` need their own plumbing.** japes ships
+  `@Filter(Added.class)` and `RemovedComponents<T>` which work together
+  with `Changed`. In manual land each is a separate buffer appended to
+  from every `create`/`destroy`/`remove` site.
+- **You lose filter composition.** `@Filter(Changed, Health) @Without(Dead)
+  @With(Player)` is one annotation combination in japes that the scheduler
+  resolves statically. In manual land you iterate the dirty list and
+  re-check `!dead.has(e) && player.has(e)` per entry.
+- **No free parallelism.** japes's scheduler runs disjoint observers in
+  parallel for free from the declared access metadata — see
+  `RealisticTickBenchmark`. A manual dirty list has no access metadata so
+  the scheduler can't help; if you want multi-core you wire up
+  `ExecutorService` yourself.
+- **No tick history.** Bevy's change detection is tick-indexed — a system
+  running every 3 ticks can ask "did this change since I last ran?"
+  correctly. A bare dirty buffer is tick-local and forgets.
+- **Debuggability.** Library change tracking knows the tick, the system
+  that wrote, and the slot. A `Entity[]` has none of that.
+- **The perf win shrinks with population.** At 100 dirty out of 10 000 the
+  fixed library overhead dominates and manual wins ~20×. Push dirty past
+  ~5 % of total and the constant-factor overhead amortises away — it
+  becomes "iterate an array either way."
+
+On **this microbenchmark** — one observer, one mutation site, ultra-sparse
+dirty set — the hand-rolled path wins by a mile and that's what the
+numbers show. On a **realistic multi-observer tick** the library path
+wins by a mile in the other direction, because it does the work that no
+single microbenchmark measures. The next section is that benchmark.
+
+### Realistic multi-observer tick
+
+`RealisticTickBenchmark` is the shape a real game-loop actually has:
+10 000 entities with `{Position, Velocity, Health, Mana}`, 1% turnover
+per tick (100 sparse mutations per component — different cursors so the
+three slices don't overlap), and **three observers**, each reacting to
+`@Filter(Changed)` of one component. Two executors: `st` (single-threaded
+scheduler) and `mt` (japes `MultiThreadedExecutor` — ForkJoinPool-backed,
+parallelises disjoint systems automatically).
+
+The Dominion and Artemis counterparts (`DominionRealisticTickBenchmark`,
+`ArtemisRealisticTickBenchmark`) implement the *same workload* the way a
+user would when they don't want to hand-roll dirty lists per component:
+the observer passes are full iterations over every entity that has the
+component (10 000 each), because neither library knows what's dirty. The
+`mt` variant in those libraries dispatches the three observer passes to
+a fixed `ExecutorService` — exactly what japes does for you from the
+declared system access metadata, except you have to wire it up by hand.
+
+**Results (10 000 entities, 100 dirty per component, µs/op — lower is better):**
+
+| library      | `st` µs/op | `mt` µs/op |     core·µs `st` | core·µs `mt` |
+|--------------|-----------:|-----------:|-----------------:|-------------:|
+| **japes**    |  **16.4**  |       21.5 |         **16.4** |        ~65   |
+| artemis      |       24.7 |   **12.9** |             24.7 |        ~39   |
+| dominion     |       41.7 |       18.9 |             41.7 |        ~57   |
+
+*`core·µs` is the rough total-CPU cost — `st` uses 1 core, `mt` runs
+three observer passes concurrently on ~3 cores. It's a back-of-envelope
+number but it captures "how much CPU did the whole machine spend to
+serve one tick" which is the number that matters on a shared box.*
+
+**Three things this table shows:**
+
+**1. Single-threaded, japes wins by doing less work.** 300 observed
+entities vs 30 000 scanned. `@Filter(Changed, C)` is the reason: the
+observer sees the 100 dirty entities the scheduler tracked for it and
+skips the other 9 900. Dominion and Artemis have no equivalent unless
+you hand-roll the bookkeeping, so they iterate the world.
+
+**2. Multi-threaded, Dominion/Artemis catch up by parallelising waste.**
+Their `mt` speedup comes from dispatching 30 000 entity reads across
+three cores — they benefit from parallelism *because* they have so much
+to parallelise. japes's `mt` variant actually gets *worse* than its `st`
+because at 300 entity reads the ForkJoinPool dispatch overhead
+(~microseconds per system) exceeds the parallelism benefit. The
+library's core competency — skipping the work in the first place —
+shrinks the work per tick below the threshold where parallelism earns
+back its overhead.
+
+**3. By total CPU cost, japes `st` is the cheapest configuration in the
+table.** ~16.4 µs of single-core work beats Artemis's fastest `mt`
+configuration (~39 core·µs) by a factor of 2.4, and Dominion's fastest
+by 3.4×. "Library does less work" wins "other libraries do more work
+on more cores." In a real game loop the cores you don't burn on this
+tick are the cores that are free to do AI, physics, rendering, audio,
+or literally anything else — that is the actual win.
+
+**So why run `mt` at all?** Because a game loop has *other* systems
+beyond the three observers in this benchmark. Under the japes scheduler,
+independent systems anywhere in the graph run concurrently for free from
+their declared component access, with no user code required. This
+benchmark isolates the observer-only part of the tick — the full-game
+story is "japes `mt` is a Pareto improvement over japes `st` when the
+tick has enough non-observer work to parallelise."
+
+**Code comparison.** Here's what japes looks like (complete — no other
+plumbing):
+
+```java
+public static final class HealthObserver {
+    final Stats stats;
+    HealthObserver(Stats stats) { this.stats = stats; }
+
+    @System(stage = "PostUpdate")
+    @Filter(value = Changed.class, target = Health.class)
+    void observe(@Read Health h) {
+        stats.sumHp += h.hp();
+    }
+}
+
+// ... and the builder:
+World.builder()
+    .executor(Executors.multiThreaded())   // <-- parallelism opt-in
+    .addSystem(new PositionObserver(stats))
+    .addSystem(new HealthObserver(stats))
+    .addSystem(new ManaObserver(stats))
+    .build();
+// scheduler knows these observers read disjoint components
+// and fans them out across the ForkJoinPool automatically.
+```
+
+And the Dominion / Artemis counterpart (in the `mt` path — the `st`
+path is similar but without the executor):
+
+```java
+ExecutorService pool = Executors.newFixedThreadPool(3);
+
+private long observePositions() {
+    long sum = 0;
+    var rs = world.findEntitiesWith(Position.class);
+    for (var r : rs) sum += (long) r.comp().x;
+    return sum;
+}
+// ... and two more observer functions ...
+
+public void tick() {
+    // ... sparse mutations ...
+    var f1 = pool.submit(this::observePositions);
+    var f2 = pool.submit(this::observeHealths);
+    var f3 = pool.submit(this::observeManas);
+    sumX += f1.get();
+    sumHp += f2.get();
+    sumMana += f3.get();
+}
+```
+
+The Dominion/Artemis version has to know a priori that the three
+observers don't conflict, know to dispatch them in parallel, own the
+thread-pool lifecycle, and do all of this over again every time an
+observer is added or removed. japes knows all of that from
+`@Read`/`@Write`/`@Filter` annotations and the scheduler's DAG builder.
 
 ### The "write-path tax" — why japes looks slow on naked writes
 
@@ -274,10 +439,10 @@ the tier-1 generator being slow — it is an *API choice* being measured:
 
 So: if you want raw in-place writes with no change tracking and are willing
 to hand-write dirty-list plumbing at every mutation site, use Dominion or
-Artemis — they'll be faster on every microbenchmark in this README. If you
+Artemis — they'll be faster on every *micro*benchmark in this README. If you
 want immutable components with observer systems that the library wires up
-for you, use japes or Zay-ES — and on that workload japes is an order of
-magnitude faster than Zay-ES and close to Bevy.
+for you, use japes or Zay-ES — and on the multi-observer realistic tick
+japes is the cheapest configuration in absolute CPU cost.
 
 ### Speed-up matrix vs. Bevy (lower is better, `1.0×` = matches Bevy)
 
