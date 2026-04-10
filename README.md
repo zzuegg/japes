@@ -29,7 +29,6 @@ parallelises disjoint systems automatically.
 |---|---|
 | [TUTORIAL.md](TUTORIAL.md) | Step-by-step walkthrough: components, systems, queries, filters, resources, events, commands, scheduling, multi-threading |
 | [DEEP_DIVE.md](DEEP_DIVE.md) | Full benchmark tables, per-benchmark analysis, Valhalla investigation, API design rationale |
-| [docs/notes/](docs/notes) | Session logs / design notes |
 
 ## Quick start
 
@@ -156,8 +155,8 @@ benchmark/
   ecs-benchmark-artemis/        Artemis-odb counterpart
   ecs-benchmark-zayes/          Zay-ES counterpart
   bevy-benchmark/               Bevy (Rust) reference, `cargo bench`
-docs/
-  notes/                        session logs / design notes
+README.md                       this file
+TUTORIAL.md                     step-by-step API walkthrough
 DEEP_DIVE.md                    full benchmark tables + analysis
 ```
 
