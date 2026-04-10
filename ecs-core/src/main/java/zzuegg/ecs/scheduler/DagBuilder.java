@@ -96,21 +96,55 @@ public final class DagBuilder {
         if (a.isExclusive() || b.isExclusive()) {
             return true;
         }
+
+        boolean sharedWrite = false;
         for (var accessA : a.componentAccesses()) {
             for (var accessB : b.componentAccesses()) {
                 if (accessA.componentId().equals(accessB.componentId())) {
                     if (accessA.accessType() == AccessType.WRITE || accessB.accessType() == AccessType.WRITE) {
-                        return true;
+                        sharedWrite = true;
+                        break;
                     }
                 }
             }
+            if (sharedWrite) break;
         }
+
+        if (sharedWrite && disjointArchetypeSets(a, b)) {
+            // A write-conflict on component X still lets the systems run in
+            // parallel if their @With/@Without filters guarantee they operate
+            // on disjoint archetype sets — no chunk is ever visible to both.
+            sharedWrite = false;
+        }
+
+        if (sharedWrite) return true;
+
         for (var res : a.resourceWrites()) {
             if (b.resourceReads().contains(res) || b.resourceWrites().contains(res)) return true;
         }
         for (var res : b.resourceWrites()) {
             if (a.resourceReads().contains(res) || a.resourceWrites().contains(res)) return true;
         }
+        return false;
+    }
+
+    /**
+     * True if the archetype sets selected by a and b cannot overlap. An
+     * archetype matches a system iff it contains every required component
+     * (from @Read/@Write/@With) and contains no forbidden component (from
+     * @Without). A component that one system requires and the other forbids
+     * makes their match sets disjoint.
+     */
+    private static boolean disjointArchetypeSets(SystemDescriptor a, SystemDescriptor b) {
+        var reqA = new HashSet<Class<?>>();
+        for (var ca : a.componentAccesses()) reqA.add(ca.type());
+        reqA.addAll(a.withFilters());
+        var reqB = new HashSet<Class<?>>();
+        for (var cb : b.componentAccesses()) reqB.add(cb.type());
+        reqB.addAll(b.withFilters());
+
+        for (var f : a.withoutFilters()) if (reqB.contains(f)) return true;
+        for (var f : b.withoutFilters()) if (reqA.contains(f)) return true;
         return false;
     }
 

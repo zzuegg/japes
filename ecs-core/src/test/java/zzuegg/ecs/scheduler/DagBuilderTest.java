@@ -89,6 +89,30 @@ class DagBuilderTest {
         assertTrue(nextReady.getFirst().descriptor().name().endsWith(".first"));
     }
 
+    record Alpha(int a) {}
+    record Beta(int b) {}
+
+    static class DisjointWriters {
+        @System @Without(Beta.class) void writeAlphaWithoutBeta(@Write Mut<Alpha> a) {}
+        @System @With(Beta.class)    void writeAlphaWithBeta(@Write Mut<Alpha> a) {}
+    }
+
+    @Test
+    void writersWithDisjointFiltersRunInParallel() {
+        // Both systems write Alpha — normally a conflict — but @With(Beta) and
+        // @Without(Beta) guarantee they pick disjoint archetype sets, so the
+        // scheduler should leave them independent.
+        var reg = new ComponentRegistry();
+        reg.register(Alpha.class);
+        reg.register(Beta.class);
+        var descriptors = SystemParser.parse(DisjointWriters.class, reg);
+        var graph = DagBuilder.build(descriptors);
+
+        var ready = graph.readySystems();
+        assertEquals(2, ready.size(),
+            "writers on disjoint @With/@Without filter sets must be independent");
+    }
+
     static class AmbiguousClassA {
         @System void update(@Read Position pos) {}
     }
