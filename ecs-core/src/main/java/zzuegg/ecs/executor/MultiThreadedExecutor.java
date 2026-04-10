@@ -4,6 +4,7 @@ import zzuegg.ecs.scheduler.ScheduleGraph;
 
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Phaser;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -71,6 +72,16 @@ public final class MultiThreadedExecutor implements Executor {
     public void shutdown() {
         if (ownsPool) {
             pool.shutdown();
+            try {
+                if (!pool.awaitTermination(10, TimeUnit.SECONDS)) {
+                    pool.shutdownNow();
+                    // Best-effort: give cancelled tasks a chance to return.
+                    pool.awaitTermination(1, TimeUnit.SECONDS);
+                }
+            } catch (InterruptedException e) {
+                pool.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
