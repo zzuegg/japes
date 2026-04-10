@@ -91,6 +91,100 @@ class DagBuilderTest {
 
     record Alpha(int a) {}
     record Beta(int b) {}
+    record GameClock(float dt) {}
+    record Budget(int v) {}
+
+    static class BeforeOrdering {
+        @System(before = "consumer") void producer(@Read Position pos) {}
+        @System void consumer(@Read Position pos) {}
+    }
+
+    @Test
+    void beforeCreatesEdge() {
+        var reg = new ComponentRegistry();
+        reg.register(Position.class);
+        var descriptors = SystemParser.parse(BeforeOrdering.class, reg);
+        var graph = DagBuilder.build(descriptors);
+
+        var ready = graph.readySystems();
+        assertEquals(1, ready.size(),
+            "@Before should force the referenced system after this one; only producer ready");
+        assertTrue(ready.getFirst().descriptor().name().endsWith(".producer"));
+
+        graph.complete(ready.getFirst());
+        var next = graph.readySystems();
+        assertEquals(1, next.size());
+        assertTrue(next.getFirst().descriptor().name().endsWith(".consumer"));
+    }
+
+    static class ResourceConflictWriters {
+        @System void writesClock(zzuegg.ecs.resource.ResMut<GameClock> clock) {}
+        @System void alsoWritesClock(zzuegg.ecs.resource.ResMut<GameClock> clock) {}
+    }
+
+    @Test
+    void resourceWriteWriteConflictsSerialize() {
+        var reg = new ComponentRegistry();
+        var descriptors = SystemParser.parse(ResourceConflictWriters.class, reg);
+        var graph = DagBuilder.build(descriptors);
+        assertEquals(1, graph.readySystems().size());
+    }
+
+    static class ResourceReadWriteConflict {
+        @System void readsClock(zzuegg.ecs.resource.Res<GameClock> clock) {}
+        @System void writesClock(zzuegg.ecs.resource.ResMut<GameClock> clock) {}
+    }
+
+    @Test
+    void resourceReadWriteConflictSerializes() {
+        var reg = new ComponentRegistry();
+        var descriptors = SystemParser.parse(ResourceReadWriteConflict.class, reg);
+        var graph = DagBuilder.build(descriptors);
+        // Read+Write on the same resource: not disjoint, must serialize.
+        assertEquals(1, graph.readySystems().size());
+    }
+
+    static class ResourceReadOnly {
+        @System void readA(zzuegg.ecs.resource.Res<GameClock> clock) {}
+        @System void readB(zzuegg.ecs.resource.Res<GameClock> clock) {}
+    }
+
+    @Test
+    void resourceReadReadRunsInParallel() {
+        var reg = new ComponentRegistry();
+        var descriptors = SystemParser.parse(ResourceReadOnly.class, reg);
+        var graph = DagBuilder.build(descriptors);
+        assertEquals(2, graph.readySystems().size(),
+            "two read-only resource accesses must be independent");
+    }
+
+    static class TransitiveConflictChain {
+        @System void a(@Write Mut<Position> pos) {}
+        @System void b(@Read Position pos) {}
+        @System void c(@Write Mut<Position> pos) {}
+    }
+
+    @Test
+    void transitiveWriteReadWriteChainIsTotallyOrdered() {
+        var reg = new ComponentRegistry();
+        reg.register(Position.class);
+        var descriptors = SystemParser.parse(TransitiveConflictChain.class, reg);
+        var graph = DagBuilder.build(descriptors);
+
+        // Only one system can be ready at any time — the chain forces a->b->c
+        // (order within a class isn't guaranteed, but the pairwise conflicts
+        // plus 'no cycle' leave at most one ready per wave).
+        int waves = 0;
+        while (!graph.isComplete()) {
+            var ready = graph.readySystems();
+            assertEquals(1, ready.size(),
+                "expected a total order across the write/read/write chain; wave " + waves);
+            graph.complete(ready.getFirst());
+            waves++;
+            if (waves > 5) fail("runaway schedule");
+        }
+        assertEquals(3, waves);
+    }
 
     static class DisjointWriters {
         @System @Without(Beta.class) void writeAlphaWithoutBeta(@Write Mut<Alpha> a) {}
