@@ -35,6 +35,7 @@ public final class ChunkProcessorGenerator {
         // Pre-compute param info
         boolean[] isRead = new boolean[paramCount];
         boolean[] isWrite = new boolean[paramCount];
+        boolean[] isEntity = new boolean[paramCount];
         boolean[] isValueTracked = new boolean[paramCount];
         ComponentId[] compIds = new ComponentId[paramCount];
         int compIdx = 0;
@@ -46,6 +47,8 @@ public final class ChunkProcessorGenerator {
             } else if (params[i].isAnnotationPresent(Write.class)) {
                 isWrite[i] = true;
                 compIds[i] = accesses.get(compIdx++).componentId();
+            } else if (desc.entityParamSlots().contains(i)) {
+                isEntity[i] = true;
             }
         }
 
@@ -63,7 +66,7 @@ public final class ChunkProcessorGenerator {
 
         // Fallback: optimized concrete class
         return new DirectProcessor(
-            desc, instance, paramCount, isRead, isWrite, isValueTracked,
+            desc, instance, paramCount, isRead, isWrite, isEntity, isValueTracked,
             compIds, serviceArgs
         );
     }
@@ -83,28 +86,36 @@ public final class ChunkProcessorGenerator {
         private final int paramCount;
         private final boolean[] isRead;
         private final boolean[] isWrite;
+        private final boolean[] isEntity;
         private final boolean[] isValueTracked;
         private final ComponentId[] compIds;
         private final Object[] args;
         @SuppressWarnings("rawtypes")
         private final Mut[] muts;
+        private final boolean anyEntity;
 
         DirectProcessor(SystemDescriptor desc, Object instance, int paramCount,
-                        boolean[] isRead, boolean[] isWrite, boolean[] isValueTracked,
+                        boolean[] isRead, boolean[] isWrite, boolean[] isEntity,
+                        boolean[] isValueTracked,
                         ComponentId[] compIds, Object[] serviceArgs) {
             this.instance = instance;
             this.invoker = SystemInvoker.create(desc);
             this.paramCount = paramCount;
             this.isRead = isRead;
             this.isWrite = isWrite;
+            this.isEntity = isEntity;
             this.isValueTracked = isValueTracked;
             this.compIds = compIds;
             this.args = new Object[paramCount];
             this.muts = new Mut[paramCount];
+            boolean anyEnt = false;
+            for (boolean e : isEntity) if (e) { anyEnt = true; break; }
+            this.anyEntity = anyEnt;
 
-            // Pre-fill service args
+            // Pre-fill service args (non-component, non-entity params stay
+            // constant across the whole run).
             for (int i = 0; i < paramCount; i++) {
-                if (!isRead[i] && !isWrite[i]) {
+                if (!isRead[i] && !isWrite[i] && !isEntity[i]) {
                     args[i] = serviceArgs[i];
                 }
             }
@@ -113,12 +124,6 @@ public final class ChunkProcessorGenerator {
         @Override
         @SuppressWarnings({"unchecked", "rawtypes"})
         public void process(Chunk chunk, long currentTick) {
-            // Cache per-chunk — one HashMap lookup per component
-            int numSlots = 0;
-            for (int i = 0; i < paramCount; i++) {
-                if (isRead[i] || isWrite[i]) numSlots++;
-            }
-
             var storages = new ComponentStorage[paramCount];
             var trackers = new ChangeTracker[paramCount];
             for (int i = 0; i < paramCount; i++) {
@@ -136,6 +141,7 @@ public final class ChunkProcessorGenerator {
             var localStorages = storages;
 
             for (int slot = 0; slot < count; slot++) {
+                zzuegg.ecs.entity.Entity currentEntity = anyEntity ? chunk.entity(slot) : null;
                 for (int i = 0; i < paramCount; i++) {
                     if (isRead[i]) {
                         localArgs[i] = localStorages[i].get(slot);
@@ -148,6 +154,8 @@ public final class ChunkProcessorGenerator {
                         } else {
                             m.reset(localStorages[i].get(slot), slot, trackers[i], currentTick);
                         }
+                    } else if (isEntity[i]) {
+                        localArgs[i] = currentEntity;
                     }
                 }
 

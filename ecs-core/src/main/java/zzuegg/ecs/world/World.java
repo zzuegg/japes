@@ -183,13 +183,14 @@ public final class World {
 
         systemPlans.put(desc.name(), plan);
 
-        // Build generated processor if enabled. Systems with change filters or
-        // Entity-injected parameters must go through the SystemExecutionPlan
-        // path — the generated processors don't know how to consult per-target
-        // ChangeTrackers or how to fill the current iteration entity.
+        // Build generated processor if enabled. Systems with change filters
+        // still need the SystemExecutionPlan path — the generated processors
+        // don't consult per-target ChangeTrackers. Entity-injected parameters
+        // are now supported by the BytecodeChunkProcessor and DirectProcessor
+        // tiers (GeneratedChunkProcessor tier-1 still bails via skipReason
+        // because its read-only fast path doesn't emit the entity load).
         if (useGeneratedProcessors && !desc.isExclusive() && !desc.componentAccesses().isEmpty()
-                && desc.changeFilters().isEmpty()
-                && desc.entityParamSlots().isEmpty()) {
+                && desc.changeFilters().isEmpty()) {
             chunkProcessors.put(desc.name(), ChunkProcessorGenerator.generate(desc, resolvedServiceArgs));
         }
     }
