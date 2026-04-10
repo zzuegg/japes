@@ -27,8 +27,8 @@ public final class Archetype {
     }
 
     public EntityLocation add(Entity entity) {
-        Chunk chunk = findOrCreateChunk();
-        int chunkIndex = chunks.indexOf(chunk);
+        int chunkIndex = findOrCreateChunkIndex();
+        Chunk chunk = chunks.get(chunkIndex);
         int slot = chunk.add(entity);
         return new EntityLocation(id, chunkIndex, slot);
     }
@@ -81,14 +81,13 @@ public final class Archetype {
         return id;
     }
 
-    private Chunk findOrCreateChunk() {
-        for (var chunk : chunks) {
-            if (!chunk.isFull()) {
-                return chunk;
+    private int findOrCreateChunkIndex() {
+        for (int i = 0; i < chunks.size(); i++) {
+            if (!chunks.get(i).isFull()) {
+                return i;
             }
         }
-        var chunk = new Chunk(chunkCapacity, componentTypes, storageFactory);
-        chunks.add(chunk);
-        return chunk;
+        chunks.add(new Chunk(chunkCapacity, componentTypes, storageFactory));
+        return chunks.size() - 1;
     }
 }
