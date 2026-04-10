@@ -3,27 +3,21 @@ package zzuegg.ecs.system;
 import zzuegg.ecs.change.ChangeTracker;
 import zzuegg.ecs.component.ComponentId;
 import zzuegg.ecs.component.Mut;
-import zzuegg.ecs.storage.Chunk;
 import zzuegg.ecs.storage.ComponentStorage;
 
-import java.lang.classfile.*;
-import java.lang.classfile.instruction.*;
-import java.lang.constant.*;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.lang.reflect.Modifier;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static java.lang.classfile.ClassFile.*;
-import static java.lang.constant.ConstantDescs.*;
 
 /**
- * Generates a hidden class via ClassFile API that contains an invokevirtual
- * to the system method, eliminating MethodHandle dispatch.
+ * Fallback processor tier built on arity-specialised MethodHandle.invokeExact
+ * lambdas — handles writes and @Where filters for 1..4 component parameters.
+ * Faster than the spreader path in {@link SystemExecutionPlan} because
+ * invokeExact avoids the argument-array copy, slower than
+ * {@link GeneratedChunkProcessor} because dispatch still goes through a
+ * MethodHandle. The name is historical: the initial plan was to emit real
+ * bytecode here; the actual implementation uses specialised lambdas.
  */
 public final class BytecodeChunkProcessor {
-
-    private static final AtomicInteger COUNTER = new AtomicInteger(0);
 
     private BytecodeChunkProcessor() {}
 
@@ -69,35 +63,21 @@ public final class BytecodeChunkProcessor {
 
         var whereFilters = desc.whereFilters();
 
-        // Generate a Runnable-like wrapper class with defineHiddenClass.
-        // The hidden class captures the system instance and service args,
-        // and calls the system method via an invokedynamic or invokevirtual
-        // that the JIT can devirtualize.
-
-        // For now, use MethodHandles.Lookup.defineHiddenClass with a
-        // generated class that has a single method calling through a
-        // pre-bound MethodHandle stored as a static final field.
-
-        // Actually, the simplest high-impact approach:
-        // Use MethodHandles.Lookup to create a direct MethodHandle, then
-        // use MethodHandle.invokeExact with proper type signatures.
-        // The key: invokeExact with exact types avoids the spreader overhead.
-
+        // Build a private lookup + MethodHandle once. Uniform Object-typed
+        // signature lets invokeExact avoid the spreader's array copy while
+        // still handling any primitive/boxing adaptation uniformly.
         var lookup = MethodHandles.privateLookupIn(method.getDeclaringClass(), MethodHandles.lookup());
         var mh = lookup.unreflect(method);
         if (desc.instance() != null) {
             mh = mh.bindTo(desc.instance());
         }
 
-        // Convert all params to Object for a uniform call signature
         var objectParamTypes = new Class<?>[paramCount];
         java.util.Arrays.fill(objectParamTypes, Object.class);
         var genericMh = mh.asType(MethodType.methodType(void.class, objectParamTypes));
 
-        // Now genericMh.invokeExact(Object, Object, Object...) avoids
-        // the spreader's array copy. But we need to call with exact arity.
-
-        // Generate arity-specific invoker
+        // Dispatch to an arity-specialised lambda so each invokeExact site
+        // has a fixed signature the JIT can fully inline.
         return switch (paramCount) {
             case 1 -> createProcessor1(genericMh, isRead, isWrite, isValueTracked, compIds, compTypes, serviceArgs, whereFilters);
             case 2 -> createProcessor2(genericMh, isRead, isWrite, isValueTracked, compIds, compTypes, serviceArgs, whereFilters);
