@@ -158,27 +158,35 @@ public final class World {
     private void parseRunConditions(Class<?> clazz) {
         Object instance = null;
         for (var method : clazz.getDeclaredMethods()) {
-            if (method.getReturnType() == boolean.class && method.getParameterCount() == 0
-                    && !method.isAnnotationPresent(zzuegg.ecs.system.System.class)) {
-                method.setAccessible(true);
-                if (instance == null && !java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
-                    try {
-                        var ctor = clazz.getDeclaredConstructor();
-                        ctor.setAccessible(true);
-                        instance = ctor.newInstance();
-                    } catch (Exception e) {
-                        continue;
-                    }
-                }
-                final Object inst = instance;
-                runConditions.put(method.getName(), () -> {
-                    try {
-                        return (boolean) method.invoke(inst);
-                    } catch (Exception e) {
-                        return false;
-                    }
-                });
+            // Only register methods explicitly opted in via @RunCondition. Previously
+            // any no-arg boolean method was registered, so unrelated helpers like
+            // isInitialized() polluted the global run-condition namespace and could
+            // shadow a real condition defined elsewhere.
+            var rcAnnotation = method.getAnnotation(RunCondition.class);
+            if (rcAnnotation == null) continue;
+            if (method.getReturnType() != boolean.class || method.getParameterCount() != 0) {
+                throw new IllegalStateException(
+                    "@RunCondition methods must be no-arg and return boolean: " + method);
             }
+            method.setAccessible(true);
+            if (instance == null && !java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
+                try {
+                    var ctor = clazz.getDeclaredConstructor();
+                    ctor.setAccessible(true);
+                    instance = ctor.newInstance();
+                } catch (Exception e) {
+                    continue;
+                }
+            }
+            final Object inst = instance;
+            var name = rcAnnotation.value().isEmpty() ? method.getName() : rcAnnotation.value();
+            runConditions.put(name, () -> {
+                try {
+                    return (boolean) method.invoke(inst);
+                } catch (Exception e) {
+                    return false;
+                }
+            });
         }
     }
 

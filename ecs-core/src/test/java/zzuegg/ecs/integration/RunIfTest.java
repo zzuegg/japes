@@ -18,6 +18,7 @@ class RunIfTest {
     static boolean enabled = true;
 
     static class ConditionalSystems {
+        @RunCondition
         boolean isEnabled() {
             return enabled;
         }
