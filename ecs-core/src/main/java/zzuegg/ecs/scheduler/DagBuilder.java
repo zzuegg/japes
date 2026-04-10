@@ -60,6 +60,11 @@ public final class DagBuilder {
     }
 
     private static boolean hasConflict(SystemDescriptor a, SystemDescriptor b) {
+        // Exclusive systems take the whole World — they must not run in parallel
+        // with anything, regardless of declared component/resource access.
+        if (a.isExclusive() || b.isExclusive()) {
+            return true;
+        }
         for (var accessA : a.componentAccesses()) {
             for (var accessB : b.componentAccesses()) {
                 if (accessA.componentId().equals(accessB.componentId())) {

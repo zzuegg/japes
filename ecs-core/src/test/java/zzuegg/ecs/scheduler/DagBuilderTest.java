@@ -89,6 +89,38 @@ class DagBuilderTest {
         assertTrue(nextReady.getFirst().descriptor().name().endsWith(".first"));
     }
 
+    static class ExclusiveAndReaders {
+        @System void readA(@Read Position pos) {}
+        @System void readB(@Read Position pos) {}
+        @Exclusive
+        @System void exclusive(zzuegg.ecs.world.World world) {}
+    }
+
+    @Test
+    void exclusiveSystemIsNeverReadyWithOthers() {
+        var reg = new ComponentRegistry();
+        reg.register(Position.class);
+        var descriptors = SystemParser.parse(ExclusiveAndReaders.class, reg);
+        var graph = DagBuilder.build(descriptors);
+
+        // Walk the entire schedule and assert the exclusive system never shares a ready wave
+        // with any other system — the cardinal safety property it exists to provide.
+        int waves = 0;
+        while (!graph.isComplete()) {
+            var ready = graph.readySystems();
+            assertFalse(ready.isEmpty(), "deadlock — no systems ready");
+            boolean hasExclusive = ready.stream().anyMatch(n -> n.descriptor().isExclusive());
+            if (hasExclusive) {
+                assertEquals(1, ready.size(),
+                    "exclusive system must not share a ready wave with others; got " +
+                        ready.stream().map(n -> n.descriptor().name()).toList());
+            }
+            for (var node : ready) graph.complete(node);
+            waves++;
+            if (waves > 100) fail("runaway schedule");
+        }
+    }
+
     @Test
     void allSystemsComplete() {
         var reg = new ComponentRegistry();
