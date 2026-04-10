@@ -68,6 +68,9 @@ public final class World {
     private void rebuildSchedule() {
         systemPlans.clear();
         chunkProcessors.clear();
+        // Every rebuild re-resolves service args, which allocates fresh Commands
+        // buffers. Drop the old ones so the list doesn't grow unbounded.
+        allCommandBuffers.clear();
         this.schedule = new Schedule(allDescriptors, stages);
 
         for (var entry : schedule.orderedStages()) {
@@ -101,20 +104,23 @@ public final class World {
 
         var plan = new SystemExecutionPlan(params.length, componentSlots, serviceArgIndices, desc.whereFilters());
 
-        // Pre-fill service args (they don't change per entity)
+        // Resolve service args once per system so the generated-processor path and the
+        // SystemExecutionPlan path observe the same Commands/EventWriter/Local instances.
+        // Duplicating the call previously leaked a second Commands into allCommandBuffers
+        // that could silently swallow user commands when the unused path happened to be
+        // the one exposed to the system at runtime.
+        var resolvedServiceArgs = new Object[params.length];
         for (int idx : serviceArgIndices) {
-            plan.setServiceArg(idx, resolveServiceParam(desc, params[idx], idx));
+            var arg = resolveServiceParam(desc, params[idx], idx);
+            resolvedServiceArgs[idx] = arg;
+            plan.setServiceArg(idx, arg);
         }
 
         systemPlans.put(desc.name(), plan);
 
         // Build generated processor if enabled
         if (useGeneratedProcessors && !desc.isExclusive() && !desc.componentAccesses().isEmpty()) {
-            var serviceArgsArray = new Object[params.length];
-            for (int idx : serviceArgIndices) {
-                serviceArgsArray[idx] = resolveServiceParam(desc, params[idx], idx);
-            }
-            chunkProcessors.put(desc.name(), ChunkProcessorGenerator.generate(desc, serviceArgsArray));
+            chunkProcessors.put(desc.name(), ChunkProcessorGenerator.generate(desc, resolvedServiceArgs));
         }
     }
 
