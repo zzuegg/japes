@@ -107,9 +107,9 @@ public final class SystemExecutionPlan {
      */
     public void prepareChunk(Chunk chunk) {
         for (int i = 0; i < slots.length; i++) {
-            var compId = slots[i].access.componentId();
+            var compId = slots[i].access().componentId();
             cachedStorages[i] = chunk.componentStorage(compId);
-            if (slots[i].isWrite) {
+            if (slots[i].isWrite()) {
                 cachedTrackers[i] = chunk.changeTracker(compId);
             }
         }
@@ -125,18 +125,18 @@ public final class SystemExecutionPlan {
     public void fillComponentArgs(int slot, long currentTick) {
         for (int i = 0; i < slots.length; i++) {
             var cs = slots[i];
-            if (cs.isWrite) {
+            if (cs.isWrite()) {
                 var value = cachedStorages[i].get(slot);
                 var existing = (Mut) mutCache[i];
                 if (existing == null) {
-                    var mut = new Mut(value, slot, cachedTrackers[i], currentTick, cs.isValueTracked);
+                    var mut = new Mut(value, slot, cachedTrackers[i], currentTick, cs.isValueTracked());
                     mutCache[i] = mut;
-                    args[cs.argIndex] = mut;
+                    args[cs.argIndex()] = mut;
                 } else {
                     existing.reset(value, slot, cachedTrackers[i], currentTick);
                 }
             } else {
-                args[cs.argIndex] = cachedStorages[i].get(slot);
+                args[cs.argIndex()] = cachedStorages[i].get(slot);
             }
         }
     }
@@ -147,7 +147,7 @@ public final class SystemExecutionPlan {
     @SuppressWarnings({"unchecked", "rawtypes"})
     public void flushMuts() {
         for (int i = 0; i < slots.length; i++) {
-            if (slots[i].isWrite) {
+            if (slots[i].isWrite()) {
                 var mut = (Mut) mutCache[i];
                 var newValue = mut.flush();
                 ((ComponentStorage) cachedStorages[i]).set(mut.slot(), newValue);
@@ -189,18 +189,18 @@ public final class SystemExecutionPlan {
             // Fill args
             for (int i = 0; i < slots.length; i++) {
                 var cs = slots[i];
-                if (cs.isWrite) {
+                if (cs.isWrite()) {
                     var value = cachedStorages[i].get(slot);
                     var existing = (Mut) mutCache[i];
                     if (existing == null) {
-                        var mut = new Mut(value, slot, cachedTrackers[i], currentTick, cs.isValueTracked);
+                        var mut = new Mut(value, slot, cachedTrackers[i], currentTick, cs.isValueTracked());
                         mutCache[i] = mut;
-                        args[cs.argIndex] = mut;
+                        args[cs.argIndex()] = mut;
                     } else {
                         existing.reset(value, slot, cachedTrackers[i], currentTick);
                     }
                 } else {
-                    args[cs.argIndex] = cachedStorages[i].get(slot);
+                    args[cs.argIndex()] = cachedStorages[i].get(slot);
                 }
             }
 
@@ -210,8 +210,8 @@ public final class SystemExecutionPlan {
                 whereLookup.clear();
                 for (int i = 0; i < slots.length; i++) {
                     var cs = slots[i];
-                    var value = cs.isWrite ? ((Mut) mutCache[i]).get() : args[cs.argIndex];
-                    whereLookup.put(cs.access.type(), (Record) value);
+                    var value = cs.isWrite() ? ((Mut) mutCache[i]).get() : args[cs.argIndex()];
+                    whereLookup.put(cs.access().type(), (Record) value);
                 }
                 boolean pass = true;
                 for (var filter : whereFilters.values()) {
@@ -229,7 +229,7 @@ public final class SystemExecutionPlan {
 
             // Flush writes
             for (int i = 0; i < slots.length; i++) {
-                if (slots[i].isWrite) {
+                if (slots[i].isWrite()) {
                     var mut = (Mut) mutCache[i];
                     var newValue = mut.flush();
                     ((ComponentStorage) cachedStorages[i]).set(mut.slot(), newValue);

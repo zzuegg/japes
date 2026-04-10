@@ -43,11 +43,16 @@ public final class GeneratedChunkProcessor {
         return GENERATED_PACKAGE + ".Proc_" + sb + "_" + COUNTER.incrementAndGet();
     }
 
-    public static ChunkProcessor tryGenerate(SystemDescriptor desc, Object[] serviceArgs) {
+    /**
+     * Package-private skip-reason introspection. Returns {@code null} if this
+     * processor tier can handle the system; otherwise a human-readable reason
+     * the system was rejected. Kept on this class so callers (e.g. future
+     * diagnostics, a {@code -Dzzuegg.ecs.logGenerated} flag) can explain why
+     * the slower fallback path was picked without digging through code.
+     */
+    static String skipReason(SystemDescriptor desc) {
         var method = desc.method();
         var params = method.getParameters();
-
-        // Only handle read-only systems with 1-4 component params, no service params, no filters
         boolean allRead = true;
         boolean hasService = false;
         for (var param : params) {
@@ -56,9 +61,17 @@ public final class GeneratedChunkProcessor {
                 else hasService = true;
             }
         }
-        if (!allRead || hasService || params.length < 1 || params.length > 4) return null;
-        if (!desc.whereFilters().isEmpty()) return null;
+        if (!allRead) return "system writes components — tier-1 path is read-only";
+        if (hasService) return "system has non-component parameters (Commands/Res/EventWriter/...)";
+        if (params.length < 1) return "system has no component parameters";
+        if (params.length > 4) return "system has " + params.length + " component parameters (tier-1 limit is 4)";
+        if (!desc.whereFilters().isEmpty()) return "system uses @Where filters";
+        if (!desc.changeFilters().isEmpty()) return "system uses @Filter(Added/Changed/Removed)";
+        return null;
+    }
 
+    public static ChunkProcessor tryGenerate(SystemDescriptor desc, Object[] serviceArgs) {
+        if (skipReason(desc) != null) return null;
         try {
             return generateWithBytecode(desc);
         } catch (Exception e) {
