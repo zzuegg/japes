@@ -190,6 +190,95 @@ class RemovedComponentsTest {
         assertEquals(0, graveyard.gravedIds.size(), "GC'd removals must not replay");
     }
 
+    static class InvocationCounter {
+        int invocations;
+        int posSeen;
+
+        @System
+        void watch(RemovedComponents<Position> posGone) {
+            invocations++;
+            for (var ignored : posGone) posSeen++;
+        }
+    }
+
+    @Test
+    void systemRunsEveryTickEvenWhenNothingWasRemoved() {
+        var w = new InvocationCounter();
+        var world = World.builder().addSystem(w).build();
+        // Spawn something irrelevant so the world isn't completely idle.
+        world.spawn(new Position(1, 1));
+
+        world.tick();  // #1
+        world.tick();  // #2
+        world.tick();  // #3
+
+        assertEquals(3, w.invocations,
+            "system body must run every tick regardless of removal activity");
+        assertEquals(0, w.posSeen, "no removals yet");
+    }
+
+    @Test
+    void systemRunsAndObservesWhenRemovalHappens() {
+        var w = new InvocationCounter();
+        var world = World.builder().addSystem(w).build();
+        var e = world.spawn(new Position(1, 1), new Health(10));
+
+        world.tick();                       // #1 — sees nothing
+        assertEquals(1, w.invocations);
+        assertEquals(0, w.posSeen);
+
+        world.removeComponent(e, Position.class);
+        world.tick();                       // #2 — sees one
+        assertEquals(2, w.invocations);
+        assertEquals(1, w.posSeen);
+
+        world.tick();                       // #3 — sees nothing (log GC'd)
+        assertEquals(3, w.invocations);
+        assertEquals(1, w.posSeen, "removal must not replay on the following tick");
+    }
+
+    static class PartialRemovalWatcher {
+        final List<Removal<Health>> healthSeen = new ArrayList<>();
+        final List<Removal<Position>> posSeen = new ArrayList<>();
+
+        // Import the nested record type alias locally for convenience.
+        record Removal<T extends Record>(Entity entity, T value) {}
+
+        @System
+        void watch(RemovedComponents<Health> h, RemovedComponents<Position> p) {
+            for (var r : h) healthSeen.add(new Removal<>(r.entity(), r.value()));
+            for (var r : p) posSeen.add(new Removal<>(r.entity(), r.value()));
+        }
+    }
+
+    @Test
+    void removingOneComponentOfManyOnlyFiresThatReader() {
+        var watcher = new PartialRemovalWatcher();
+        var world = World.builder().addSystem(watcher).build();
+        var e = world.spawn(new Position(3, 4), new Health(77));
+
+        world.tick();
+        watcher.healthSeen.clear();
+        watcher.posSeen.clear();
+
+        // Remove Position only — Health stays on the entity.
+        world.removeComponent(e, Position.class);
+        world.tick();
+
+        assertEquals(0, watcher.healthSeen.size(),
+            "removing Position must not surface in the Health reader");
+        assertEquals(1, watcher.posSeen.size(),
+            "removing Position must surface in the Position reader");
+        assertEquals(new Position(3, 4), watcher.posSeen.getFirst().value());
+
+        // The entity is still alive — Position removal is not despawn.
+        var r = watcher.posSeen.getFirst();
+        assertTrue(world.isAlive(r.entity()),
+            "entity with only Position removed is still alive");
+        assertEquals(new Health(77), world.getComponent(r.entity(), Health.class),
+            "Health survives the Position removal intact");
+    }
+
     @Test
     void removedSeenInSameTickAsRemoval() {
         // A system that runs strictly after the removal call (i.e., user code
