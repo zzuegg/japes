@@ -320,6 +320,10 @@ public final class World {
         return entityAllocator.entityCount();
     }
 
+    public boolean isAlive(zzuegg.ecs.entity.Entity entity) {
+        return entityAllocator.isAlive(entity);
+    }
+
     public void close() {
         executor.shutdown();
     }
