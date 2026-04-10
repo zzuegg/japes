@@ -90,17 +90,22 @@ public final class BytecodeChunkProcessor {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static ChunkProcessor createProcessor1(java.lang.invoke.MethodHandle mh, boolean[] isRead, boolean[] isWrite, boolean[] isValueTracked, ComponentId[] compIds, Class<?>[] compTypes, Object[] serviceArgs, java.util.Map<Integer, zzuegg.ecs.query.FieldFilter> whereFilters) {
         boolean hasFilters = !whereFilters.isEmpty();
+        // Lifted out of the lambda: these arrays held only per-chunk state, but
+        // were re-allocated on every process() call — undoing half the point of
+        // the 'direct' processor. Lifting them here makes the lambda captures
+        // stable references that JIT escape analysis can scalarise.
+        var stores = new ComponentStorage[1];
+        var trackers = new ChangeTracker[1];
+        var muts = new Mut[1];
         return (chunk, tick) -> {
-            var stores = new ComponentStorage[1];
-            var trackers = new ChangeTracker[1];
-            var muts = new Mut[1];
-            for (int i = 0; i < 1; i++) { if (isRead[i] || isWrite[i]) stores[i] = chunk.componentStorage(compIds[i]); if (isWrite[i]) trackers[i] = chunk.changeTracker(compIds[i]); }
+            if (isRead[0] || isWrite[0]) stores[0] = chunk.componentStorage(compIds[0]);
+            if (isWrite[0]) trackers[0] = chunk.changeTracker(compIds[0]);
             int count = chunk.count();
             try { for (int slot = 0; slot < count; slot++) {
                 Object a0 = resolveArg(0, slot, tick, stores[0], trackers[0], isRead, isWrite, isValueTracked, serviceArgs, muts[0]); if (isWrite[0]) muts[0] = (Mut) a0;
                 if (hasFilters && !checkFilters(whereFilters, new Object[]{a0}, isRead, isWrite, compTypes, muts, 1)) { continue; }
                 mh.invokeExact(a0);
-                for (int i = 0; i < 1; i++) { if (isWrite[i]) ((ComponentStorage) stores[i]).set(muts[i].slot(), muts[i].flush()); }
+                if (isWrite[0]) ((ComponentStorage) stores[0]).set(muts[0].slot(), muts[0].flush());
             }} catch (Throwable e) { throw new RuntimeException(e); }
         };
     }
@@ -108,8 +113,10 @@ public final class BytecodeChunkProcessor {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static ChunkProcessor createProcessor2(java.lang.invoke.MethodHandle mh, boolean[] isRead, boolean[] isWrite, boolean[] isValueTracked, ComponentId[] compIds, Class<?>[] compTypes, Object[] serviceArgs, java.util.Map<Integer, zzuegg.ecs.query.FieldFilter> whereFilters) {
         boolean hasFilters = !whereFilters.isEmpty();
+        var stores = new ComponentStorage[2];
+        var trackers = new ChangeTracker[2];
+        var muts = new Mut[2];
         return (chunk, tick) -> {
-            var stores = new ComponentStorage[2]; var trackers = new ChangeTracker[2]; var muts = new Mut[2];
             for (int i = 0; i < 2; i++) { if (isRead[i] || isWrite[i]) stores[i] = chunk.componentStorage(compIds[i]); if (isWrite[i]) trackers[i] = chunk.changeTracker(compIds[i]); }
             int count = chunk.count();
             try { for (int slot = 0; slot < count; slot++) {
@@ -125,8 +132,10 @@ public final class BytecodeChunkProcessor {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static ChunkProcessor createProcessor3(java.lang.invoke.MethodHandle mh, boolean[] isRead, boolean[] isWrite, boolean[] isValueTracked, ComponentId[] compIds, Class<?>[] compTypes, Object[] serviceArgs, java.util.Map<Integer, zzuegg.ecs.query.FieldFilter> whereFilters) {
         boolean hasFilters = !whereFilters.isEmpty();
+        var stores = new ComponentStorage[3];
+        var trackers = new ChangeTracker[3];
+        var muts = new Mut[3];
         return (chunk, tick) -> {
-            var stores = new ComponentStorage[3]; var trackers = new ChangeTracker[3]; var muts = new Mut[3];
             for (int i = 0; i < 3; i++) { if (isRead[i] || isWrite[i]) stores[i] = chunk.componentStorage(compIds[i]); if (isWrite[i]) trackers[i] = chunk.changeTracker(compIds[i]); }
             int count = chunk.count();
             try { for (int slot = 0; slot < count; slot++) {
@@ -143,8 +152,10 @@ public final class BytecodeChunkProcessor {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static ChunkProcessor createProcessor4(java.lang.invoke.MethodHandle mh, boolean[] isRead, boolean[] isWrite, boolean[] isValueTracked, ComponentId[] compIds, Class<?>[] compTypes, Object[] serviceArgs, java.util.Map<Integer, zzuegg.ecs.query.FieldFilter> whereFilters) {
         boolean hasFilters = !whereFilters.isEmpty();
+        var stores = new ComponentStorage[4];
+        var trackers = new ChangeTracker[4];
+        var muts = new Mut[4];
         return (chunk, tick) -> {
-            var stores = new ComponentStorage[4]; var trackers = new ChangeTracker[4]; var muts = new Mut[4];
             for (int i = 0; i < 4; i++) { if (isRead[i] || isWrite[i]) stores[i] = chunk.componentStorage(compIds[i]); if (isWrite[i]) trackers[i] = chunk.changeTracker(compIds[i]); }
             int count = chunk.count();
             try { for (int slot = 0; slot < count; slot++) {
