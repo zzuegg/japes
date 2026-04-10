@@ -65,13 +65,19 @@ public final class GeneratedChunkProcessor {
     static String skipReason(SystemDescriptor desc) {
         var method = desc.method();
         var params = method.getParameters();
+        int componentCount = 0;
         for (var param : params) {
-            if (!param.isAnnotationPresent(Read.class) && !param.isAnnotationPresent(Write.class)) {
-                return "system has non-component parameters (Commands/Res/EventWriter/Entity/...)";
+            if (param.isAnnotationPresent(Read.class) || param.isAnnotationPresent(Write.class)) {
+                componentCount++;
             }
+            // Non-component params (Entity / Commands / Res / ResMut / EventReader
+            // / EventWriter / Local / RemovedComponents) compile to a
+            // constant-reference field or a chunk.entity(slot) call and don't
+            // block the fast path.
         }
-        if (params.length < 1) return "system has no component parameters";
-        if (params.length > 4) return "system has " + params.length + " component parameters (tier-1 limit is 4)";
+        if (componentCount < 1) return "system has no component parameters";
+        if (componentCount > 4) return "system has " + componentCount + " component parameters (tier-1 limit is 4)";
+        if (params.length > 8) return "system has " + params.length + " total parameters (tier-1 limit is 8)";
         if (!desc.whereFilters().isEmpty()) return "system uses @Where filters";
         if (!desc.changeFilters().isEmpty()) return "system uses @Filter(Added/Changed/Removed)";
         return null;
@@ -80,18 +86,18 @@ public final class GeneratedChunkProcessor {
     public static ChunkProcessor tryGenerate(SystemDescriptor desc, Object[] serviceArgs) {
         if (skipReason(desc) != null) return null;
         try {
-            return generateWithBytecode(desc);
+            return generateWithBytecode(desc, serviceArgs);
         } catch (Exception e) {
             // Fall back to invokeExact path. The invokeExact fallback cannot
-            // handle Mut parameters — if this system has any @Write, the
-            // fallback would attempt a direct cast and crash at runtime with
-            // a confusing ClassCastException, so surface the bytecode failure
-            // with full context instead.
+            // handle Mut/Entity/service parameters — if any such param exists,
+            // the fallback would attempt a direct cast and crash at runtime
+            // with a confusing ClassCastException, so surface the bytecode
+            // failure with full context instead.
             for (var p : desc.method().getParameters()) {
-                if (p.isAnnotationPresent(Write.class)) {
+                if (!p.isAnnotationPresent(Read.class)) {
                     throw new RuntimeException(
                         "tier-1 bytecode generation failed for " + desc.name()
-                            + " and the invokeExact fallback does not support @Write params", e);
+                            + " and the invokeExact fallback only supports all-@Read systems", e);
                 }
             }
             return generateWithInvokeExact(desc);
@@ -113,27 +119,40 @@ public final class GeneratedChunkProcessor {
      *     the value-tracked suppression and {@code ChangeTracker.markChanged}
      *     bookkeeping, so no extra logic is emitted here.
      */
-    private static ChunkProcessor generateWithBytecode(SystemDescriptor desc) throws Exception {
+    // Per-parameter classification for the generator.
+    private enum ParamKind { READ, WRITE, ENTITY, SERVICE }
+
+    private static ChunkProcessor generateWithBytecode(SystemDescriptor desc, Object[] serviceArgs) throws Exception {
         var method = desc.method();
         var accesses = desc.componentAccesses();
         int paramCount = method.getParameterCount();
         boolean isStatic = Modifier.isStatic(method.getModifiers());
         var params = method.getParameters();
 
-        // Classify each parameter. For write params, the declared type is
-        // Mut<Component>, but we need the underlying component type for the
-        // checkcast after storage.get().
-        boolean[] isWrite = new boolean[paramCount];
-        Class<?>[] componentTypes = new Class<?>[paramCount];
+        // Classify each parameter. Component params (Read/Write) consume an
+        // entry from desc.componentAccesses(); Entity and service params don't.
+        ParamKind[] kinds = new ParamKind[paramCount];
+        Class<?>[] componentTypes = new Class<?>[paramCount]; // non-null only for READ/WRITE
         int writeCount = 0;
-        int readAccessIdx = 0;
+        int componentIdx = 0;
+        // Mapping from param slot to ComponentAccess index for READ/WRITE params.
+        int[] paramToAccessIdx = new int[paramCount];
         for (int i = 0; i < paramCount; i++) {
-            if (params[i].isAnnotationPresent(Write.class)) {
-                isWrite[i] = true;
-                componentTypes[i] = accesses.get(readAccessIdx++).type();
+            if (params[i].isAnnotationPresent(Read.class)) {
+                kinds[i] = ParamKind.READ;
+                componentTypes[i] = accesses.get(componentIdx).type();
+                paramToAccessIdx[i] = componentIdx++;
+            } else if (params[i].isAnnotationPresent(Write.class)) {
+                kinds[i] = ParamKind.WRITE;
+                componentTypes[i] = accesses.get(componentIdx).type();
+                paramToAccessIdx[i] = componentIdx++;
                 writeCount++;
+            } else if (params[i].getType() == zzuegg.ecs.entity.Entity.class) {
+                kinds[i] = ParamKind.ENTITY;
+                paramToAccessIdx[i] = -1;
             } else {
-                componentTypes[i] = accesses.get(readAccessIdx++).type();
+                kinds[i] = ParamKind.SERVICE;
+                paramToAccessIdx[i] = -1;
             }
         }
 
@@ -166,6 +185,9 @@ public final class GeneratedChunkProcessor {
         var compIdArrayDesc = compIdDesc.arrayType();
         var mutArrayDesc = mutDesc.arrayType();
         var trackerArrayDesc = trackerDesc.arrayType();
+        var objArrayDesc = objDesc.arrayType();
+        var entityDesc = ClassDesc.of("zzuegg.ecs.entity.Entity");
+        var chunkEntityDesc = MethodTypeDesc.of(entityDesc, ConstantDescs.CD_int);
 
         // Descriptors for Mut.reset / Mut.flush and ComponentStorage.set / get.
         var mutResetDesc = MethodTypeDesc.of(ConstantDescs.CD_void,
@@ -176,6 +198,9 @@ public final class GeneratedChunkProcessor {
         var chunkChangeTrackerDesc = MethodTypeDesc.of(trackerDesc, compIdDesc);
 
         final boolean hasWrites = writeCount > 0;
+        boolean hasServiceLocal = false;
+        for (var kind : kinds) if (kind == ParamKind.SERVICE) { hasServiceLocal = true; break; }
+        final boolean hasServices = hasServiceLocal;
 
         byte[] bytes = ClassFile.of().build(genDesc, clb -> {
             clb.withFlags(ACC_PUBLIC | ACC_FINAL);
@@ -195,6 +220,12 @@ public final class GeneratedChunkProcessor {
             // to before the write-path extension.
             if (hasWrites) {
                 clb.withField("muts", mutArrayDesc, fb -> fb.withFlags(ACC_PUBLIC));
+            }
+            // Field for service params — resolved once at plan-build time and
+            // passed as constant references into the loop. Populated from the
+            // resolvedServiceArgs array we receive from the caller.
+            if (hasServices) {
+                clb.withField("services", objArrayDesc, fb -> fb.withFlags(ACC_PUBLIC));
             }
 
             // Constructor
@@ -228,25 +259,28 @@ public final class GeneratedChunkProcessor {
                 cb.invokevirtual(chunkDesc, "count", MethodTypeDesc.of(ConstantDescs.CD_int));
                 cb.istore(countVar);
 
-                // Load storages into local vars: storageN = chunk.componentStorage(cids[N])
+                // Load storages into local vars for READ/WRITE params only.
+                // cids is indexed by ComponentAccess order, so we use
+                // paramToAccessIdx[i] to read the right slot.
                 for (int i = 0; i < paramCount; i++) {
+                    if (kinds[i] != ParamKind.READ && kinds[i] != ParamKind.WRITE) continue;
                     cb.aload(1); // chunk
                     cb.aload(0); // this
                     cb.getfield(genDesc, "cids", compIdArrayDesc);
-                    cb.ldc(i);
+                    cb.ldc(paramToAccessIdx[i]);
                     cb.aaload();
                     cb.invokevirtual(chunkDesc, "componentStorage",
                         MethodTypeDesc.of(storageDesc, compIdDesc));
                     cb.astore(firstStorageVar + i);
                 }
 
-                // Load trackers for write params: trackerN = chunk.changeTracker(cids[N])
+                // Load trackers for WRITE params: trackerN = chunk.changeTracker(cids[accessIdx])
                 for (int i = 0; i < paramCount; i++) {
-                    if (!isWrite[i]) continue;
+                    if (kinds[i] != ParamKind.WRITE) continue;
                     cb.aload(1); // chunk
                     cb.aload(0); // this
                     cb.getfield(genDesc, "cids", compIdArrayDesc);
-                    cb.ldc(i);
+                    cb.ldc(paramToAccessIdx[i]);
                     cb.aaload();
                     cb.invokevirtual(chunkDesc, "changeTracker", chunkChangeTrackerDesc);
                     cb.astore(firstTrackerVar + i);
@@ -273,30 +307,44 @@ public final class GeneratedChunkProcessor {
 
                 // Build the arg list
                 for (int i = 0; i < paramCount; i++) {
-                    if (!isWrite[i]) {
-                        // Read param: (Type) storageN.get(slot)
-                        cb.aload(firstStorageVar + i);
-                        cb.iload(slotVar);
-                        cb.invokeinterface(storageDesc, "get", storageGetDesc);
-                        cb.checkcast(componentTypes[i].describeConstable().orElseThrow());
-                    } else {
-                        // Write param: push muts[i], dup, call reset(value, slot, tracker, tick),
-                        // leaving the duplicated Mut on the stack as the method argument.
-                        cb.aload(0);
-                        cb.getfield(genDesc, "muts", mutArrayDesc);
-                        cb.ldc(i);
-                        cb.aaload();
-                        cb.dup();
-                        // reset args: (value, slot, tracker, tick)
-                        cb.aload(firstStorageVar + i);
-                        cb.iload(slotVar);
-                        cb.invokeinterface(storageDesc, "get", storageGetDesc);
-                        cb.iload(slotVar);
-                        cb.aload(firstTrackerVar + i);
-                        cb.lload(2); // tick
-                        cb.invokevirtual(mutDesc, "reset", mutResetDesc);
-                        // reset is void; it popped the receiver (second Mut) + 4 args,
-                        // leaving the first Mut on top of the stack as the system arg.
+                    switch (kinds[i]) {
+                        case READ -> {
+                            // (Type) storageN.get(slot)
+                            cb.aload(firstStorageVar + i);
+                            cb.iload(slotVar);
+                            cb.invokeinterface(storageDesc, "get", storageGetDesc);
+                            cb.checkcast(componentTypes[i].describeConstable().orElseThrow());
+                        }
+                        case WRITE -> {
+                            // push muts[i], dup, call reset(value, slot, tracker, tick);
+                            // the duplicated Mut remains on the stack as the method argument.
+                            cb.aload(0);
+                            cb.getfield(genDesc, "muts", mutArrayDesc);
+                            cb.ldc(i);
+                            cb.aaload();
+                            cb.dup();
+                            cb.aload(firstStorageVar + i);
+                            cb.iload(slotVar);
+                            cb.invokeinterface(storageDesc, "get", storageGetDesc);
+                            cb.iload(slotVar);
+                            cb.aload(firstTrackerVar + i);
+                            cb.lload(2); // tick
+                            cb.invokevirtual(mutDesc, "reset", mutResetDesc);
+                        }
+                        case ENTITY -> {
+                            // chunk.entity(slot) — returns Entity directly, no cast needed
+                            cb.aload(1);
+                            cb.iload(slotVar);
+                            cb.invokevirtual(chunkDesc, "entity", chunkEntityDesc);
+                        }
+                        case SERVICE -> {
+                            // (ParamType) services[i]
+                            cb.aload(0);
+                            cb.getfield(genDesc, "services", objArrayDesc);
+                            cb.ldc(i);
+                            cb.aaload();
+                            cb.checkcast(params[i].getType().describeConstable().orElseThrow());
+                        }
                     }
                 }
 
@@ -312,7 +360,7 @@ public final class GeneratedChunkProcessor {
                 // ChangeTracker.markChanged (honouring @ValueTracked), so we
                 // only need to do the storage write here.
                 for (int i = 0; i < paramCount; i++) {
-                    if (!isWrite[i]) continue;
+                    if (kinds[i] != ParamKind.WRITE) continue;
                     cb.aload(0);
                     cb.getfield(genDesc, "muts", mutArrayDesc);
                     cb.ldc(i);
@@ -341,8 +389,10 @@ public final class GeneratedChunkProcessor {
             clazz.getField("inst").set(instance, desc.instance());
         }
 
-        var compIds = new ComponentId[paramCount];
-        for (int i = 0; i < paramCount; i++) {
+        // cids is indexed by ComponentAccess order, matching
+        // paramToAccessIdx[i] for READ/WRITE param slots.
+        var compIds = new ComponentId[accesses.size()];
+        for (int i = 0; i < accesses.size(); i++) {
             compIds[i] = accesses.get(i).componentId();
         }
         clazz.getField("cids").set(instance, compIds);
@@ -350,7 +400,7 @@ public final class GeneratedChunkProcessor {
         if (hasWrites) {
             var muts = new Mut[paramCount];
             for (int i = 0; i < paramCount; i++) {
-                if (isWrite[i]) {
+                if (kinds[i] == ParamKind.WRITE) {
                     // @ValueTracked is a type-level annotation on the record
                     // itself, so we can read it without needing the registry.
                     boolean valueTracked = componentTypes[i].isAnnotationPresent(
@@ -359,6 +409,12 @@ public final class GeneratedChunkProcessor {
                 }
             }
             clazz.getField("muts").set(instance, muts);
+        }
+
+        if (hasServices) {
+            // services is just the same resolvedServiceArgs the plan uses —
+            // indexed by parameter slot, with nulls for non-service slots.
+            clazz.getField("services").set(instance, serviceArgs);
         }
 
         return (ChunkProcessor) instance;
