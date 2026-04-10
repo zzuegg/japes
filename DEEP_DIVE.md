@@ -1,152 +1,38 @@
 # japes — deep dive
 
-Everything the [README](README.md) glosses over: the full cross-library
-benchmark sweep, per-benchmark analysis, the Valhalla investigation,
-and the API design commentary. See the README for a quick-start and
-the one-table headline results.
+Full cross-library benchmark sweep, per-benchmark analysis, the
+Valhalla investigation, and the API design commentary. For the
+quick-start + headline numbers, see the [README](README.md).
 
----
+## Contents
 
-## Highlights
+- [Methodology](#methodology)
+- [Iteration micro-benchmark](#iteration-micro-benchmark)
+- [N-body integration](#n-body-integration)
+- [Particle scenario](#particle-scenario-move--damage--reap--respawn--stats)
+- [Sparse delta (change-detection workload)](#sparse-delta-change-detection-workload)
+- [Realistic multi-observer tick](#realistic-multi-observer-tick)
+- [Does Valhalla help?](#does-valhalla-help-jdk-27-ea-jep-401-value-records)
+- [The "write-path tax"](#the-write-path-tax--why-japes-looks-slow-on-naked-writes)
+- [Speed-up matrix vs. Bevy](#speed-up-matrix-vs-bevy-lower-is-better-10-matches-bevy)
+- [Why so many ceremony-like params?](#why-so-many-ceremony-like-params)
+- [Reproduction / raw JMH logs](#raw-benchmark-logs)
 
-- **Archetype + chunk storage** — entities are grouped by component set and stored
-  in SoA chunks. Per-component arrays are dense, contiguous, and cache-friendly.
-- **Systems as methods** — annotate a method with `@System` and declare its
-  params; the scheduler derives reads/writes and slots it into the DAG.
-- **Immutable components by default** — writes go through `Mut<C>` with explicit
-  `set(...)`, giving clean change-detection semantics without Unsafe-style
-  in-place mutation. (For raw write benchmarks japes also supports mutable
-  components, but the idiomatic shape is `record`.)
-- **Tier-1 direct dispatch** — the `GeneratedChunkProcessor` emits a hidden class
-  per system that loads component arrays once per chunk and calls the system
-  method via `invokevirtual` with no MethodHandle or boxing overhead.
-- **First-class change detection** — `@Filter(Added.class, target = C.class)`,
-  `@Filter(Changed.class, ...)`, and `RemovedComponents<C>` let observer
-  systems do work proportional to the *delta*, not the total entity count.
-- **Commands / deferred mutation** — structural edits inside a parallel stage
-  go through a `Commands` buffer and flush at the stage boundary.
-- **Resources, events, locals** — `Res<R>`, `ResMut<R>`, `EventReader<E>`,
-  `EventWriter<E>`, `Local<T>` — all injected as system params.
-- **DAG scheduler with conflict detection** — systems in the same stage run in
-  parallel when their component-access sets are disjoint.
+## Methodology
 
----
+All numbers below are µs per benchmark op, **lower is better**. Each
+Java library is tested in its own idiomatic shape (see the per-library
+benchmark source for what that means); Bevy is the Rust reference.
+Same workload across every column.
 
-## A ten-second example
+Hardware: single workstation, single-threaded unless noted, JMH
+`@Fork=2`, `@Warmup=3×1s`, `@Measurement=5×1s` (NBody uses 2 s
+windows). Stock numbers are JDK 26 with `--enable-preview`; Valhalla
+numbers use an EA build of JDK 27 with JEP 401 preview. Treat
+absolute values as a point-in-time snapshot — relative ordering is
+what matters.
 
-```java
-record Position(float x, float y, float z) {}
-record Velocity(float dx, float dy, float dz) {}
-record DeltaTime(float dt) {}
-
-class Physics {
-    @System
-    void integrate(@Read Velocity v, @Write Mut<Position> p, Res<DeltaTime> dt) {
-        var cur = p.get();
-        var d = dt.get().dt();
-        p.set(new Position(cur.x() + v.dx()*d, cur.y() + v.dy()*d, cur.z() + v.dz()*d));
-    }
-}
-
-var world = World.builder()
-    .addResource(new DeltaTime(0.016f))
-    .addSystem(Physics.class)
-    .build();
-
-world.spawn(new Position(0, 0, 0), new Velocity(1, 2, 3));
-world.tick();
-```
-
----
-
-## Change detection
-
-```java
-class DeathObserver {
-    @System
-    @Filter(value = Changed.class, target = Health.class)
-    void onHealthChanged(@Read Health h, Entity self) {
-        // Runs once per entity whose Health changed this tick.
-    }
-
-    @System
-    void onDead(RemovedComponents<Health> dead, ResMut<Stats> stats) {
-        long count = 0;
-        for (var e : dead) count++;
-        stats.set(new Stats(stats.get().deaths() + count));
-    }
-}
-```
-
-`@Filter(Changed.class, target = C.class)` walks a per-tracker dirty slot list
-that is maintained by `Mut.set(...)` and `world.setComponent(...)`. For sparse
-workloads (1% of entities touched per tick) the observer's cost is proportional
-to the dirty count, not the archetype size — see the `SparseDelta` benchmark.
-
----
-
-## Deferred structural edits
-
-```java
-class Reaper {
-    @System
-    void reap(@Read Health h, Entity self, Commands cmds) {
-        if (h.hp() <= 0) {
-            cmds.despawn(self);
-        }
-    }
-}
-```
-
-`Commands` buffers spawn/despawn/insert/remove calls so a parallel stage can
-issue them without racing on the archetype graph. All buffers flush at the
-stage boundary in a single-threaded pass.
-
----
-
-## Project layout
-
-```
-ecs-core/                      — library source + unit tests
-benchmark/
-  ecs-benchmark/               — japes JMH benches (iteration, NBody,
-                                 particle scenario, sparse delta, micro)
-  ecs-benchmark-valhalla/      — same benches, running against a Valhalla JDK
-  ecs-benchmark-dominion/      — Dominion-odb counterpart (idiomatic)
-  ecs-benchmark-artemis/       — Artemis-odb counterpart (idiomatic)
-  ecs-benchmark-zayes/         — Zay-ES counterpart (idiomatic)
-  bevy-benchmark/              — Bevy (Rust) reference — run with `cargo bench`
-```
-
-Every Java benchmark module has a `jmhJar` target:
-
-```
-./gradlew :benchmark:ecs-benchmark:jmhJar
-java --enable-preview -jar benchmark/ecs-benchmark/build/libs/ecs-benchmark-jmh.jar
-```
-
-The Bevy benchmarks use Criterion:
-
-```
-cd benchmark/bevy-benchmark
-cargo bench
-```
-
----
-
-## Benchmark results
-
-All numbers below are µs per benchmark op, **lower is better**. Each Java
-library is tested in its own idiomatic shape (see the per-library benchmark
-source for what that means); Bevy is the Rust reference. Same workload across
-every column. The raw JMH / Criterion output is in the section below.
-
-Hardware: the numbers were collected on a single workstation, single-threaded,
-JMH `@Fork=2`, `@Warmup=3x1s`, `@Measurement=5x1s` (NBody uses 2 s windows).
-JDK 26 with `--enable-preview`. Treat absolute numbers as a point-in-time
-snapshot — relative ordering is what matters.
-
-### Iteration micro-benchmark
+## Iteration micro-benchmark
 
 Tight per-entity loop, nothing else going on. The read paths measure raw
 query + iteration cost; `iterateWithWrite` writes back a mutated Position.
@@ -183,7 +69,7 @@ in place — no allocation, no tracking — so they come out 5–10× ahead on
 the naive microbenchmark. See "The write-path tax" below for what the fair
 comparison looks like once you want change detection.
 
-### N-body integration
+## N-body integration
 
 Full world tick with a single integrate system, `dt` supplied via `Res<T>`
 (japes) or a world-level field (others).
@@ -199,7 +85,7 @@ Same shape as the write-path iteration benchmark — the integrator allocates a
 new `Position` record per body per tick. Dominion's and Artemis's in-place
 floats mean the JIT can keep the whole loop in SIMD-ish registers.
 
-### Particle scenario (move + damage + reap + respawn + stats)
+## Particle scenario (move + damage + reap + respawn + stats)
 
 This is the full end-to-end benchmark: 10 000 entities, ~1% turnover per tick,
 five systems wired through the scheduler. This is what real game-loop code
@@ -209,7 +95,7 @@ looks like.
 |-----------|------------:|-----:|----------:|------:|---------:|--------:|
 | tick      |       10000 | 22.4 |   **157** |  1777 |     68.7 |    98.3 |
 
-### Sparse delta (change-detection workload)
+## Sparse delta (change-detection workload)
 
 10 000 entities, 100 touched per tick. An observer reacts only to the entities
 whose `Health` changed. This is the scenario change detection is *built for*:
@@ -316,7 +202,7 @@ numbers show. On a **realistic multi-observer tick** the library path
 wins by a mile in the other direction, because it does the work that no
 single microbenchmark measures. The next section is that benchmark.
 
-### Realistic multi-observer tick
+## Realistic multi-observer tick
 
 `RealisticTickBenchmark` is the shape a real game-loop actually has:
 10 000 entities with `{Position, Velocity, Health, Mana}`, 1% turnover
@@ -443,7 +329,7 @@ thread-pool lifecycle, and do all of this over again every time an
 observer is added or removed. japes knows all of that from
 `@Read`/`@Write`/`@Filter` annotations and the scheduler's DAG builder.
 
-### Does Valhalla help? (JDK 27 EA, JEP 401 value records)
+## Does Valhalla help? (JDK 27 EA, JEP 401 value records)
 
 Every component in japes is a `record`, which means the backing
 component storage is a reference array — reading a `Position` is a
@@ -558,7 +444,7 @@ once the Valhalla JIT catches up. "Just set the JVM to Valhalla" is
 not a free performance switch today but the read-side numbers are
 *very* compelling, and the trajectory is clearly favourable.
 
-### The "write-path tax" — why japes looks slow on naked writes
+## The "write-path tax" — why japes looks slow on naked writes
 
 The `iterateWithWrite`, `NBody` and sparse-delta rows all show japes paying a
 measurable cost against Dominion/Artemis on the same workload. That is not
@@ -579,7 +465,7 @@ want immutable components with observer systems that the library wires up
 for you, use japes or Zay-ES — and on the multi-observer realistic tick
 japes is the cheapest configuration in absolute CPU cost.
 
-### Speed-up matrix vs. Bevy (lower is better, `1.0×` = matches Bevy)
+## Speed-up matrix vs. Bevy (lower is better, `1.0×` = matches Bevy)
 
 | benchmark                   |         case |  **japes** | **japes-v** | zayes |  dominion | artemis |
 |-----------------------------|-------------:|-----------:|------------:|------:|----------:|--------:|
@@ -602,11 +488,29 @@ japes is the cheapest configuration in absolute CPU cost.
 > (one field write, one array append, no tick counter, no scheduler) —
 > faster on the micro, but the correctness burden is on the user.
 
-### Raw benchmark logs
+## Why so many ceremony-like params?
 
-If you want to reproduce these numbers:
+Every system parameter is a self-describing query token. `@Read C`,
+`@Write Mut<C>`, `Res<R>`, `ResMut<R>`, `Commands`, `Entity`,
+`RemovedComponents<C>`, `EventReader<E>`, `EventWriter<E>`, `Local<T>`
+— each maps to a declarative access in the scheduler's access map,
+which is how the DAG builder knows two systems are disjoint and can
+run concurrently.
+
+This is also what powers the tier-1 bytecode generator: because
+parameter semantics are statically known, the generator can load each
+param once per chunk and emit a tight per-entity loop with no virtual
+dispatch. The same information drives `@Filter(Changed)` dirty-list
+walking, `RemovedComponents<T>` subscription, and the scheduler's
+disjoint-access parallelism — everything falls out of "what does this
+system ask for, statically?" The ceremony is the contract.
+
+## Raw benchmark logs
+
+Reproducing the numbers in this document:
 
 ```bash
+# Stock JDK 26 full sweep:
 ./gradlew :benchmark:ecs-benchmark:jmhJar \
           :benchmark:ecs-benchmark-zayes:jmhJar \
           :benchmark:ecs-benchmark-dominion:jmhJar \
@@ -616,40 +520,20 @@ java --enable-preview -jar benchmark/ecs-benchmark/build/libs/ecs-benchmark-jmh.
 java --enable-preview -jar benchmark/ecs-benchmark-zayes/build/libs/ecs-benchmark-zayes-jmh.jar
 java --enable-preview -jar benchmark/ecs-benchmark-dominion/build/libs/ecs-benchmark-dominion-jmh.jar
 java --enable-preview -jar benchmark/ecs-benchmark-artemis/build/libs/ecs-benchmark-artemis-jmh.jar
-```
 
-Bevy:
+# Valhalla JDK 27 EA sweep (needs VALHALLA_HOME or the default
+# ~/.sdkman/candidates/java/valhalla-ea path, plus JEP 401 preview):
+./gradlew :benchmark:ecs-benchmark-valhalla:jmhJar
+$VALHALLA_HOME/bin/java --enable-preview \
+  --add-exports java.base/jdk.internal.value=ALL-UNNAMED \
+  --add-exports java.base/jdk.internal.vm.annotation=ALL-UNNAMED \
+  -jar benchmark/ecs-benchmark-valhalla/build/libs/ecs-benchmark-valhalla-jmh.jar
 
-```bash
+# Opt-in experiments available via system properties:
+#   -Dzzuegg.ecs.useFlatStorage=true    → enable JEP 401 flat arrays
+#   -Dzzuegg.ecs.debugFlat=true         → log per-storage flat/non-flat
+
+# Bevy (Rust) reference:
 cd benchmark/bevy-benchmark
 cargo bench
 ```
-
----
-
-## Why so many ceremony-like params?
-
-Every system parameter is a self-describing query token. `@Read C`, `@Write Mut<C>`,
-`Res<R>`, `ResMut<R>`, `Commands`, `Entity`, `RemovedComponents<C>`,
-`EventReader<E>`, `EventWriter<E>`, `Local<T>` — each maps to a declarative
-access in the scheduler's access map, which is how the DAG builder knows two
-systems are disjoint and can run concurrently.
-
-This also powers the tier-1 bytecode generator: because parameter semantics are
-statically known, the generator can load each param once per chunk and emit a
-tight per-entity loop with no virtual dispatch.
-
----
-
-## Build + requirements
-
-- **JDK 26** with `--enable-preview` (uses `java.lang.classfile`)
-- Gradle wrapper included — `./gradlew build`
-- For Valhalla comparisons: a Valhalla JDK build, pointed at via the
-  `benchmark/ecs-benchmark-valhalla` toolchain config.
-
----
-
-## License
-
-TBD
