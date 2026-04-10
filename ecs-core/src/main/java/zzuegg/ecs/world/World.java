@@ -274,9 +274,27 @@ public final class World {
             throw new IllegalArgumentException("Entity not alive: " + entity);
         }
         var compId = componentRegistry.getOrRegister(component.getClass());
+        var info = componentRegistry.info(component.getClass());
         var location = getLocation(entity.index());
         var archetype = archetypeGraph.get(location.archetypeId());
+
+        // For @ValueTracked components, skip the change-detection bump when the
+        // new value equals the existing one — matches Mut.flush()'s semantics so
+        // both mutation paths behave the same way.
+        boolean fireChanged = true;
+        if (info.isValueTracked()) {
+            var existing = archetype.<Record>get(compId, location);
+            if (existing != null && existing.equals(component)) {
+                fireChanged = false;
+            }
+        }
+
         archetype.set(compId, location, component);
+
+        if (fireChanged) {
+            var chunk = archetype.chunks().get(location.chunkIndex());
+            chunk.changeTracker(compId).markChanged(location.slotIndex(), tick.current());
+        }
     }
 
     public void addComponent(zzuegg.ecs.entity.Entity entity, Record component) {
