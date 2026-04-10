@@ -9,7 +9,6 @@ import zzuegg.ecs.executor.Executor;
 import zzuegg.ecs.query.AccessType;
 import zzuegg.ecs.resource.*;
 import zzuegg.ecs.scheduler.*;
-import zzuegg.ecs.storage.Chunk;
 import zzuegg.ecs.system.*;
 import zzuegg.ecs.system.System;
 
@@ -544,34 +543,6 @@ public final class World {
         }
     }
 
-    private Object[] buildEntityArgs(SystemDescriptor desc, Chunk chunk, int slot) {
-        var params = desc.method().getParameters();
-        var args = new Object[params.length];
-        int componentIndex = 0;
-
-        for (int i = 0; i < params.length; i++) {
-            var param = params[i];
-            var paramType = param.getType();
-
-            if (param.isAnnotationPresent(Read.class)) {
-                var access = desc.componentAccesses().get(componentIndex++);
-                args[i] = chunk.get(access.componentId(), slot);
-            } else if (param.isAnnotationPresent(Write.class)) {
-                var access = desc.componentAccesses().get(componentIndex++);
-                var value = chunk.get(access.componentId(), slot);
-                var info = componentRegistry.info(access.type());
-                var tracker = chunk.changeTracker(access.componentId());
-                @SuppressWarnings({"unchecked", "rawtypes"})
-                var mut = new Mut(value, slot, tracker, tick.current(), info.isValueTracked());
-                args[i] = mut;
-            } else {
-                args[i] = resolveServiceParam(desc, param, i);
-            }
-        }
-
-        return args;
-    }
-
     private Object[] buildServiceArgs(SystemDescriptor desc) {
         var params = desc.method().getParameters();
         var args = new Object[params.length];
@@ -603,22 +574,6 @@ public final class World {
             return locals.computeIfAbsent(key, k -> new Local<>());
         }
         return null;
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private void flushMuts(SystemDescriptor desc, Chunk chunk, int slot, Object[] args) {
-        var params = desc.method().getParameters();
-        int componentIndex = 0;
-        for (int i = 0; i < params.length; i++) {
-            if (params[i].isAnnotationPresent(Read.class)) {
-                componentIndex++;
-            } else if (params[i].isAnnotationPresent(Write.class)) {
-                var access = desc.componentAccesses().get(componentIndex++);
-                var mut = (Mut) args[i];
-                var newValue = mut.flush();
-                chunk.set(access.componentId(), slot, newValue);
-            }
-        }
     }
 
     private Class<?> extractTypeArg(Parameter param) {
