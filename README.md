@@ -211,60 +211,89 @@ looks like.
 
 ### Sparse delta (change-detection workload)
 
-10 000 entities, 100 touched per tick via `setComponent`. An observer system
-reacts only to the entities whose `Health` changed. This is the scenario
-change detection is *built for* — per-tick work should scale with the dirty
-count, not the total entity count.
+10 000 entities, 100 touched per tick. An observer reacts only to the entities
+whose `Health` changed. This is the scenario change detection is *built for*:
+per-tick work should scale with the dirty count, not the total entity count.
 
-| benchmark | entityCount | bevy | **japes** | zayes | dominion       | artemis        |
-|-----------|------------:|-----:|----------:|------:|---------------:|---------------:|
-| tick      |       10000 | 4.01 |  **5.22** |  4.60 | n/a — no CD    | n/a — no CD    |
+| benchmark | entityCount | bevy | **japes** | zayes | dominion | artemis |
+|-----------|------------:|-----:|----------:|------:|---------:|--------:|
+| tick      |       10000 | 4.01 |  **5.22** |  4.60 |     0.38 |    0.25 |
 
-This is the first table where japes is competitive with Bevy in absolute
-terms, and it is also the only one where the comparison against Dominion and
-Artemis would become *unfavourable for them*. Neither library has built-in
-change detection. To implement the same observer workload they would have to
-either scan all 10 000 entities per tick (≈5–7 µs floor just for the read
-pass — already at japes/Bevy levels, with zero actual "change" semantics), or
-hand-maintain a dirty set themselves. japes and Zay-ES do this for you.
+This is the most interesting row in the whole table, so it deserves the most
+explanation.
+
+**japes / Zay-ES / Bevy** implement the workload the way the API advertises:
+the driver calls `world.setComponent(e, new Health(...))` (or Zay-ES's
+`data.setComponent(...)`), which the library records in a per-tick dirty
+tracker; the observer system is scheduled automatically and walks the library's
+dirty view. The user writes zero bookkeeping code and the contract "every
+mutation is observed" is enforced globally.
+
+**Dominion / Artemis** have no change detection. The honest implementation is
+the pattern a performance-conscious user would hand-write: mutate the
+component's field in place *and* push the entity handle onto a
+caller-maintained dirty buffer (`Entity[]` for Dominion, `IntBag` for
+Artemis). The "observer" is just a second loop over that buffer. See
+`DominionSparseDeltaBenchmark` / `ArtemisSparseDeltaBenchmark` for the exact
+shape.
+
+That hand-written path turns out to be **dramatically faster** on the
+microbenchmark — Artemis is ~20× faster than japes here. The reason is
+unsurprising once you unpack it:
+
+- Dominion / Artemis do a `hp -= 1` int write and append an entity reference.
+  No allocation, no tick-counter comparison, no atomic state update, no
+  scheduler.
+- japes / Bevy / Zay-ES pay for change-tracking bookkeeping at every
+  `setComponent` call *and* at the observer side when walking the dirty view.
+  In japes this is one indexed bitmap update + one dirty-slot list append
+  per call, plus scheduler overhead on the observer side — and it amortises
+  poorly across *just 100* entities with nothing else running.
+
+**What you're trading for that ~20× microbenchmark gap** is correctness at
+scale: in Dominion / Artemis any mutation site that forgets to append to
+the dirty buffer silently drops an event, and every distinct observer needs
+its own dirty set. At game-loop scale with tens of mutation sites and
+several observers, the library doing the tracking for you is worth a real
+amount of engineering risk. On this *microbenchmark*, though, the manual
+path wins cleanly — which is the honest answer and belongs in the table.
 
 ### The "write-path tax" — why japes looks slow on naked writes
 
-The `iterateWithWrite` and `NBody` rows look dramatically worse for japes than
-for Dominion/Artemis. That is not the tier-1 generator being slow — it is an
-*API choice* being measured:
+The `iterateWithWrite`, `NBody` and sparse-delta rows all show japes paying a
+measurable cost against Dominion/Artemis on the same workload. That is not
+the tier-1 generator being slow — it is an *API choice* being measured:
 
 - **japes**'s idiomatic write path is `@Write Mut<Position>` + `record Position`,
   so `p.set(new Position(...))` allocates and records a change so
-  `@Filter(Changed.class)` observers can react.
+  `@Filter(Changed.class)` observers can react automatically.
 - **Dominion / Artemis** components are mutable POJO classes; `p.x += v.dx`
-  does no allocation and leaves no audit trail — which also means you can't
-  write `@Filter(Changed)` or `RemovedComponents` systems against them.
+  does no allocation and leaves no audit trail — which also means if you
+  want `@Filter(Changed)` or `RemovedComponents` semantics, you have to
+  open-code them yourself at every mutation site.
 
-On the **sparse-delta workload** where change detection actually earns its
-keep, japes is ~1.3× Bevy and ~25× what Dominion/Artemis would need if they
-scanned all 10 000 entities (and infinitely better than their actual
-zero-support baseline).
+So: if you want raw in-place writes with no change tracking and are willing
+to hand-write dirty-list plumbing at every mutation site, use Dominion or
+Artemis — they'll be faster on every microbenchmark in this README. If you
+want immutable components with observer systems that the library wires up
+for you, use japes or Zay-ES — and on that workload japes is an order of
+magnitude faster than Zay-ES and close to Bevy.
 
-So: if you want raw in-place writes with no change tracking, use Dominion or
-Artemis. If you want immutable components with cheap observer systems, use
-japes or Zay-ES — and on that workload japes is an order of magnitude faster
-than Zay-ES.
+### Speed-up matrix vs. Bevy (lower is better, `1.0×` = matches Bevy)
 
-### Speed-up matrix vs. Bevy (lower is better, `1.0` = matches Bevy)
+| benchmark                   |         case | **japes** | zayes |  dominion | artemis |
+|-----------------------------|-------------:|----------:|------:|----------:|--------:|
+| iterateSingleComponent      |          10k |  **1.1×** | 13.3× |     3.4×  |   2.2×  |
+| iterateTwoComponents        |          10k |  **1.3×** | 11.2× |     3.7×  |   3.4×  |
+| iterateWithWrite            |          10k |  **9.3×** |  309× |     3.7×  |   3.0×  |
+| NBody simulateOneTick       |          10k |  **7.1×** |   51× |     2.7×  |   2.2×  |
+| ParticleScenario tick       |          10k |  **7.2×** |   79× |     3.1×  |   4.4×  |
+| SparseDelta tick            |          10k |  **1.3×** |  1.1× |  **0.09×**| **0.06×**|
 
-| benchmark                     |         case | **japes** | zayes |  dominion | artemis |
-|-------------------------------|-------------:|----------:|------:|----------:|--------:|
-| iterateSingleComponent        |          10k |  **1.1×** | 13.3× |     3.4×  |   2.2×  |
-| iterateTwoComponents          |          10k |  **1.3×** | 11.2× |     3.7×  |   3.4×  |
-| iterateWithWrite              |          10k |  **9.3×** |  309× |     3.7×  |   3.0×  |
-| NBody simulateOneTick         |          10k |  **7.1×** |   51× |     2.7×  |   2.2×  |
-| ParticleScenario tick         |          10k |  **7.2×** |   79× |     3.1×  |   4.4×  |
-| SparseDelta tick (change det) |          10k |  **1.3×** |  1.1× |   n/a     |  n/a    |
-
-> "n/a" in the sparse-delta row means the library has no change detection at
-> all; the comparison would need a manual re-implementation on the user's
-> side, which is itself the point.
+> In the sparse-delta row, "below 1.0×" means *faster than Bevy*. Dominion and
+> Artemis beat Bevy here because they use manually-maintained dirty lists
+> (one field write, one array append, no tick counter, no scheduler) —
+> faster on the micro, but the correctness burden is on the user.
 
 ### Raw benchmark logs
 
