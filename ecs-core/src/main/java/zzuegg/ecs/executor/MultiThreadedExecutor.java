@@ -57,7 +57,12 @@ public final class MultiThreadedExecutor implements Executor {
                         }
                     });
                 }
-                phaser.awaitAdvance(0);
+                try {
+                    phaser.awaitAdvanceInterruptibly(0);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("executor interrupted while awaiting stage completion", e);
+                }
                 var t = failure.get();
                 if (t != null) {
                     if (t instanceof RuntimeException re) throw re;
