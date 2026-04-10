@@ -76,6 +76,36 @@ class SystemParserTest {
         void integrate(@Read Velocity vel, @Write Mut<Position> pos) {}
     }
 
+    @SystemSet(name = "physics", stage = "PostUpdate")
+    static class PhysicsSetExplicitOverride {
+        // Author explicitly wants THIS method in Update, overriding the set's PostUpdate.
+        @zzuegg.ecs.system.System(stage = "Update")
+        void gravity(@Write Mut<Velocity> vel) {}
+    }
+
+    @Test
+    void explicitStageOnMethodOverridesSystemSet() {
+        var reg = new ComponentRegistry();
+        reg.register(Velocity.class);
+        var descriptors = SystemParser.parse(PhysicsSetExplicitOverride.class, reg);
+        var desc = descriptors.getFirst();
+        assertEquals("Update", desc.stage(),
+            "explicit @System(stage=\"Update\") must override @SystemSet(stage=\"PostUpdate\")");
+    }
+
+    static class DefaultStageNoSet {
+        @zzuegg.ecs.system.System
+        void foo(@Read Position pos) {}
+    }
+
+    @Test
+    void defaultStageWithoutSetIsUpdate() {
+        var reg = new ComponentRegistry();
+        reg.register(Position.class);
+        var descriptors = SystemParser.parse(DefaultStageNoSet.class, reg);
+        assertEquals("Update", descriptors.getFirst().stage());
+    }
+
     @Test
     void parsesComponentAccess() {
         var reg = new ComponentRegistry();

@@ -58,10 +58,13 @@ public final class SystemParser {
 
             method.setAccessible(true);
 
-            // Stage resolution: method overrides set, but only if method explicitly changed from default
+            // Stage resolution: if the method didn't specify an explicit stage
+            // (the "" sentinel), inherit from the enclosing SystemSet or fall
+            // back to "Update". A non-empty method stage always wins — even if
+            // it happens to equal the set's stage.
             String stage = sysAnnotation.stage();
-            if (setStage != null && stage.equals("Update")) {
-                stage = setStage;
+            if (stage.isEmpty()) {
+                stage = setStage != null ? setStage : "Update";
             }
 
             var after = new HashSet<>(setAfter);
