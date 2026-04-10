@@ -4,6 +4,7 @@ import zzuegg.ecs.scheduler.ScheduleGraph;
 
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Phaser;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 public final class MultiThreadedExecutor implements Executor {
@@ -36,10 +37,17 @@ public final class MultiThreadedExecutor implements Executor {
                 graph.complete(ready.getFirst());
             } else {
                 var phaser = new Phaser(ready.size());
+                var failure = new AtomicReference<Throwable>();
                 for (var node : ready) {
                     pool.execute(() -> {
                         try {
                             runner.accept(node);
+                        } catch (Throwable t) {
+                            // Keep the first failure; subsequent ones are suppressed
+                            // onto it so we don't lose diagnostic data.
+                            if (!failure.compareAndSet(null, t)) {
+                                failure.get().addSuppressed(t);
+                            }
                         } finally {
                             synchronized (graph) {
                                 graph.complete(node);
@@ -49,6 +57,12 @@ public final class MultiThreadedExecutor implements Executor {
                     });
                 }
                 phaser.awaitAdvance(0);
+                var t = failure.get();
+                if (t != null) {
+                    if (t instanceof RuntimeException re) throw re;
+                    if (t instanceof Error err) throw err;
+                    throw new RuntimeException(t);
+                }
             }
         }
     }
