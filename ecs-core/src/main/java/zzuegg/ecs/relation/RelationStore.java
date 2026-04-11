@@ -319,6 +319,42 @@ public final class RelationStore<T extends Record> {
     }
 
     /**
+     * Raw-long bulk walk over every live pair. Same iteration
+     * semantics as {@link #forEachPair(PairConsumer)} but hands the
+     * packed {@code long} entity ids to the consumer directly —
+     * callers that already operate on long ids (tier-1 pair runners,
+     * cleanup scans over {@code ComponentReader.getById}) avoid the
+     * per-pair {@link Entity} allocation that the {@code PairConsumer}
+     * variant forces through the interface boundary.
+     *
+     * <p>See {@link #forEachPair(PairConsumer)} for the mutation
+     * contract (don't mutate the store during iteration).
+     */
+    @SuppressWarnings("unchecked")
+    public void forEachPairLong(LongPairConsumer<T> consumer) {
+        var outerKeys = forward.keysArray();
+        var outerVals = forward.valuesArray();
+        for (int si = 0; si < outerKeys.length; si++) {
+            var sliceRaw = outerVals[si];
+            if (sliceRaw == null) continue;
+            var slice = (TargetSlice<T>) sliceRaw;
+            long sourceId = outerKeys[si];
+            int n = slice.size();
+            var ids = slice.targetIdsArray();
+            var vals = slice.valuesArray();
+            for (int i = 0; i < n; i++) {
+                consumer.accept(sourceId, ids[i], (T) vals[i]);
+            }
+        }
+    }
+
+    /** Functional shape for {@link #forEachPairLong}. */
+    @FunctionalInterface
+    public interface LongPairConsumer<T extends Record> {
+        void accept(long sourceId, long targetId, T value);
+    }
+
+    /**
      * Iterate every {@code (target, payload)} pair stored under the
      * given source. Returns a lazy adapter over the underlying
      * {@link TargetSlice} — the hot path at

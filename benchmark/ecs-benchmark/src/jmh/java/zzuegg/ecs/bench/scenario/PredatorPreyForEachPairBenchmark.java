@@ -13,6 +13,7 @@ import zzuegg.ecs.system.FromTarget;
 import zzuegg.ecs.system.Read;
 import zzuegg.ecs.system.System;
 import zzuegg.ecs.system.Write;
+import zzuegg.ecs.util.LongArrayList;
 import zzuegg.ecs.world.World;
 
 import java.util.ArrayList;
@@ -127,29 +128,40 @@ public class PredatorPreyForEachPairBenchmark {
             if (store == null) return;
             float catchDistSq = config.get().catchDistance * config.get().catchDistance;
 
-            var caught = new ArrayList<Entity>();
-            store.forEachPair((predator, prey, val) -> {
-                var predPos = posReader.get(predator);
-                var preyPos = posReader.get(prey);
+            // Raw-long bulk walk with a primitive LongArrayList sink:
+            // zero Long autoboxing on the add path, which was the
+            // biggest post-cycle-1 hot-spot inside the lambda.
+            var caughtIds = CAUGHT_BUFFER;
+            caughtIds.clear();
+            store.forEachPairLong((predatorId, preyId, val) -> {
+                var predPos = posReader.getById(predatorId);
+                var preyPos = posReader.getById(preyId);
                 if (predPos == null || preyPos == null) return;
                 float dx = predPos.x() - preyPos.x();
                 float dy = predPos.y() - preyPos.y();
                 if (dx * dx + dy * dy <= catchDistSq) {
-                    caught.add(prey);
+                    caughtIds.add(preyId);
                 }
             });
 
-            if (!caught.isEmpty()) {
-                var alive = roster.get().alive;
-                for (int i = 0, n = caught.size(); i < n; i++) {
-                    var prey = caught.get(i);
-                    if (world.isAlive(prey)) {
-                        world.despawn(prey);
-                        alive.remove(prey);
-                    }
+            int caughtCount = caughtIds.size();
+            if (caughtCount == 0) return;
+
+            var alive = roster.get().alive;
+            var caughtRaw = caughtIds.rawArray();
+            for (int i = 0; i < caughtCount; i++) {
+                var prey = new Entity(caughtRaw[i]);
+                if (world.isAlive(prey)) {
+                    world.despawn(prey);
+                    alive.remove(prey);
                 }
             }
         }
+
+        // Reusable catch-id buffer. JMH @State(Benchmark) guarantees
+        // one Systems instance per iteration, so sharing the buffer
+        // across ticks is safe.
+        private final LongArrayList CAUGHT_BUFFER = new LongArrayList(32);
 
         @System(stage = "PostUpdate", after = "resolveCatches")
         @zzuegg.ecs.system.Exclusive

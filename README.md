@@ -150,7 +150,7 @@ maintenance the relation API does for you.
 | implementation                                  | 500 × 2000 tick µs/op |
 |-------------------------------------------------|----------------------:|
 | bevy 0.15 — hand-rolled reverse index           |             **11.2** |
-| **japes** — `@ForEachPair` (tier-1 bytecode-gen)|              **33.0** |
+| **japes** — `@ForEachPair` (tier-1 bytecode-gen)|              **32.0** |
 | japes — `@Pair` + `PairReader` (tier-1)         |                  43.8 |
 | bevy 0.15 — naive `Component<Entity>`           |                 261.9 |
 
@@ -165,7 +165,7 @@ change tracking, deferred `Commands`, archetype marker maintenance,
 `RemovedRelations<T>` log drain).
 
 The optimization journey: the 500 × 2000 cell has gone from **167 µs
-at PR landing → 33.0 µs today**, a 5.06× speedup with the API surface
+at PR landing → 32.0 µs today**, a 5.22× speedup with the API surface
 staying stable. See
 [DEEP_DIVE § Predator / prey — the relations scenario](DEEP_DIVE.md#predator--prey--the-relations-scenario)
 for the full 9-cell 4-way grid, the decision table for

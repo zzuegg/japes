@@ -98,7 +98,21 @@ public final class ComponentReader<T extends Record> {
      */
     @SuppressWarnings("unchecked")
     public T get(Entity entity) {
-        int idx = entity.index();
+        return getById(entity.id());
+    }
+
+    /**
+     * Raw-long variant of {@link #get(Entity)}. Callers that already
+     * hold the packed entity id as a {@code long} (typically bulk
+     * pair scans via
+     * {@link zzuegg.ecs.relation.RelationStore#forEachPairLong
+     * forEachPairLong}) avoid allocating an {@link Entity} wrapper
+     * just to extract the index. Same cache semantics, same
+     * null-on-dead/OOB behaviour.
+     */
+    @SuppressWarnings("unchecked")
+    public T getById(long entityId) {
+        int idx = (int) (entityId >>> 32);
         if (idx < 0 || idx >= entityLocations.size()) return null;
         var loc = entityLocations.get(idx);
         if (loc == null) return null;
@@ -106,9 +120,6 @@ public final class ComponentReader<T extends Record> {
         int chunkIdx = loc.chunkIndex();
         var storage = cachedStorage;
         if (arch != cachedArchetype || chunkIdx != cachedChunkIndex) {
-            // Cache miss: re-resolve the storage pointer for this
-            // (archetype, chunk). Every subsequent lookup in the
-            // same chunk takes the fast path above.
             storage = (ComponentStorage<T>) arch.chunks().get(chunkIdx)
                 .componentStorage(compId);
             cachedArchetype = arch;

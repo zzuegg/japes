@@ -598,15 +598,15 @@ recommended shape for per-pair work.
 
 | predators | prey | japes `@Pair` | **japes `@ForEachPair`** | Bevy naive | **Bevy optimized** |
 |---:|---:|---:|---:|---:|---:|
-| 100  |  500 |   8.5 µs |   **6.4 µs** |   14.1 µs |  **1.97 µs** |
-| 100  | 2000 |  16.2 µs |  **14.4 µs** |   51.8 µs |  **3.99 µs** |
-| 100  | 5000 |  28.0 µs |  **25.9 µs** |  126.3 µs |  **7.30 µs** |
-| 500  |  500 |  31.4 µs |  **23.0 µs** |   67.6 µs |  **7.01 µs** |
-| 500  | 2000 |  43.8 µs |  **33.0 µs** |  261.9 µs | **11.19 µs** |
-| 500  | 5000 |  69.2 µs |  **57.2 µs** |  632.1 µs | **19.13 µs** |
-| 1000 |  500 |  62.6 µs |  **45.1 µs** |  128.8 µs | **13.15 µs** |
-| 1000 | 2000 |  83.1 µs |  **59.0 µs** |  476.4 µs | **19.68 µs** |
-| 1000 | 5000 | 118.7 µs |  **90.2 µs** |   1198 µs | **32.73 µs** |
+| 100  |  500 |   8.5 µs |   **6.3 µs** |   14.1 µs |  **1.97 µs** |
+| 100  | 2000 |  16.2 µs |  **14.0 µs** |   51.8 µs |  **3.99 µs** |
+| 100  | 5000 |  28.0 µs |  **26.4 µs** |  126.3 µs |  **7.30 µs** |
+| 500  |  500 |  31.4 µs |  **22.1 µs** |   67.6 µs |  **7.01 µs** |
+| 500  | 2000 |  43.8 µs |  **32.0 µs** |  261.9 µs | **11.19 µs** |
+| 500  | 5000 |  69.2 µs |  **55.9 µs** |  632.1 µs | **19.13 µs** |
+| 1000 |  500 |  62.6 µs |  **43.1 µs** |  128.8 µs | **13.15 µs** |
+| 1000 | 2000 |  83.1 µs |  **55.3 µs** |  476.4 µs | **19.68 µs** |
+| 1000 | 5000 | 118.7 µs |  **88.4 µs** |   1198 µs | **32.73 µs** |
 
 The honest takeaways are layered.
 
@@ -648,12 +648,17 @@ replaced those with: a primitive-keyed `Long2ObjectOpenMap`, flat
 `TargetSlice` / `SourceSlice` inner maps, per-archetype
 `ComponentReader` caches on the pair reader, `@Pair(role = TARGET)`
 narrowing, tier-1 `@Pair` bytecode generation, the tier-1
-`@ForEachPair` path documented below, and finally per-archetype
-caching of *every* source-side storage ref (not just write
-storages) so cache-hit transitions skip the chunk refetch and the
-per-source `componentStorage()` lookup entirely. End-to-end the cell
-now runs at **33.0 µs/op** — a **5.06× speedup** with the API
-surface staying stable the whole time.
+`@ForEachPair` path documented below, per-archetype caching of
+*every* source-side storage ref (not just write storages) so
+cache-hit transitions skip the chunk refetch and the per-source
+`componentStorage()` lookup entirely, a raw-long
+`forEachPairLong` / `ComponentReader.getById(long)` bulk-scan path
+that avoids per-pair `Entity` allocation in cleanup systems, a
+tier-1 bytecode-generated path for service-only `@Exclusive`
+systems, and a primitive `LongArrayList` utility replacing
+`ArrayList<Long>` in the catch buffer. End-to-end the cell now
+runs at **32.0 µs/op** — a **5.22× speedup** with the API surface
+staying stable the whole time.
 
 ### What the four columns actually tell you
 

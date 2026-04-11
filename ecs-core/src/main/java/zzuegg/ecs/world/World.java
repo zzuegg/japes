@@ -45,6 +45,7 @@ public final class World {
     // Tier-1 bytecode-generated runner per @ForEachPair system.
     // When present, preferred over the reflective processor above.
     private final Map<String, zzuegg.ecs.system.PairIterationRunner> pairIterationRunners = new HashMap<>();
+    private final Map<String, zzuegg.ecs.system.ExclusiveRunner> exclusiveRunners = new HashMap<>();
     private final Set<String> disabledSystems = new HashSet<>();
     private final List<Commands> allCommandBuffers = new ArrayList<>();
     private final RemovalLog removalLog = new RemovalLog();
@@ -90,6 +91,7 @@ public final class World {
         chunkProcessors.clear();
         pairIterationProcessors.clear();
         pairIterationRunners.clear();
+        exclusiveRunners.clear();
         // Every rebuild re-resolves service args, which allocates fresh Commands
         // buffers. Drop the old ones so the list doesn't grow unbounded.
         allCommandBuffers.clear();
@@ -306,6 +308,27 @@ public final class World {
             chunkProcessors.put(desc.name(),
                 ChunkProcessorGenerator.generate(desc, resolvedServiceArgs, useDefaultStorageFactory, plan));
         }
+
+        // Tier-1 @Exclusive: service-only systems generate a hidden
+        // class whose run() unboxes the pre-resolved args array and
+        // calls the user method via direct invokevirtual, bypassing
+        // SystemInvoker's MethodHandle spreader.
+        if (useGeneratedProcessors && desc.isExclusive()) {
+            var tier1 = zzuegg.ecs.system.GeneratedExclusiveProcessor
+                .tryGenerate(desc, plan.args());
+            if (tier1 != null) {
+                exclusiveRunners.put(desc.name(), tier1);
+            }
+        }
+    }
+
+    /**
+     * Framework/test hook: return the tier-1 generated exclusive
+     * runner for a given system name, or {@code null} if the system
+     * is not exclusive or the generator bailed for some reason.
+     */
+    public zzuegg.ecs.system.ExclusiveRunner generatedExclusiveRunner(String systemName) {
+        return exclusiveRunners.get(systemName);
     }
 
     private void parseRunConditions(Class<?> clazz) {
@@ -1170,9 +1193,22 @@ public final class World {
             // The World slot was already resolved to `this` by
             // resolveServiceParam during plan build, and any extra
             // service params (Res, ResMut, Commands, ...) are also
-            // pre-filled. Previously this branch always passed
-            // {this}, which limited exclusive systems to a single
-            // World-only parameter.
+            // pre-filled.
+            //
+            // Prefer the tier-1 generated runner — it unboxes the args
+            // array and calls the user method via direct invokevirtual,
+            // eliminating the SystemInvoker MethodHandle spreader
+            // overhead. Fall back to the reflective SystemInvoker when
+            // the generator isn't available or bailed.
+            var tier1Excl = exclusiveRunners.get(desc.name());
+            if (tier1Excl != null) {
+                try {
+                    tier1Excl.run();
+                } catch (Throwable e) {
+                    throw new RuntimeException("Exclusive tier-1 failed: " + desc.name(), e);
+                }
+                return;
+            }
             var plan = systemPlans.get(desc.name());
             try {
                 invoker.invoke(plan.args());

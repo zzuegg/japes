@@ -191,6 +191,45 @@ class RelationStoreTest {
     }
 
     @Test
+    void forEachPairLongVisitsEveryLivePairWithRawLongIds() {
+        // Raw-long bulk scan: no Entity allocation per pair. Used by
+        // cleanup paths that walk every pair once (e.g. distance-based
+        // catch detection) and don't want the Entity wrapper cost —
+        // they already have the long id as the map key.
+        var store = new RelationStore<>(Distance.class);
+        var alice = Entity.of(1, 0);
+        var bob   = Entity.of(2, 0);
+        var carol = Entity.of(3, 0);
+        var dave  = Entity.of(4, 0);
+
+        store.set(alice, bob,   new Distance(1.1f));
+        store.set(alice, carol, new Distance(2.2f));
+        store.set(dave,  bob,   new Distance(3.3f));
+
+        record Visit(long src, long tgt, Distance val) {}
+        var visits = new HashSet<Visit>();
+        store.forEachPairLong((src, tgt, val) -> visits.add(new Visit(src, tgt, val)));
+
+        assertEquals(
+            Set.of(
+                new Visit(alice.id(), bob.id(),   new Distance(1.1f)),
+                new Visit(alice.id(), carol.id(), new Distance(2.2f)),
+                new Visit(dave.id(),  bob.id(),   new Distance(3.3f))
+            ),
+            visits,
+            "forEachPairLong must visit every live pair exactly once with raw long ids"
+        );
+    }
+
+    @Test
+    void forEachPairLongOverEmptyStoreRunsBodyZeroTimes() {
+        var store = new RelationStore<>(Distance.class);
+        var calls = new int[]{0};
+        store.forEachPairLong((src, tgt, val) -> calls[0]++);
+        assertEquals(0, calls[0], "empty store must not invoke the consumer");
+    }
+
+    @Test
     void entitiesWithSameIndexButDifferentGenerationAreDistinctKeys() {
         // Simulates the entity-allocator slot-reuse case: slot 7 was
         // used by an entity that's since been freed (generation 0),
