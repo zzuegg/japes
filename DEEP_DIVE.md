@@ -881,6 +881,69 @@ once the Valhalla JIT catches up. "Just set the JVM to Valhalla" is
 not a free performance switch today but the read-side numbers are
 *very* compelling, and the trajectory is clearly favourable.
 
+### Predator / prey under Valhalla
+
+The relations scenario (`PredatorPreyForEachPairBenchmarkValhalla`,
+in the `ecs-benchmark-valhalla` module) ports the benchmark to
+`@LooselyConsistentValue value record Position`, `Velocity`,
+`Predator`, `Prey`. The `Hunting` relation payload stays a plain
+`record` because it lives in `TargetSlice.values`, an `Object[]`
+inside the relation store, not in a flat `ComponentStorage` — so
+there is nothing to flatten on the payload side. Same scheduler,
+same `@ForEachPair` dispatch, same tier-1 generator, same grid
+parameters as the stock benchmark.
+
+| predators × prey | Stock JDK 26 | Valhalla EA (value records, ref arrays) | Valhalla EA (value records, **flat arrays**) |
+|---|---:|---:|---:|
+| 100 × 500  |  **6.3 µs** |   6.7 µs (+6 %)  |  18.6 µs (+195 %) |
+| 100 × 2000 | **14.0 µs** |  14.3 µs (+2 %)  |  25.8 µs ( +85 %) |
+| 100 × 5000 | **26.4 µs** |  26.7 µs (+1 %)  |  37.7 µs ( +43 %) |
+| 500 × 500  | **22.1 µs** |  25.0 µs (+13 %) |  80.9 µs (+266 %) |
+| 500 × 2000 | **32.0 µs** |  33.9 µs (+6 %)  |  90.0 µs (+181 %) |
+| 500 × 5000 | **55.9 µs** |  57.9 µs (+4 %)  | 108.8 µs ( +95 %) |
+| 1000 × 500 | **43.1 µs** |  48.9 µs (+13 %) | 161.0 µs (+274 %) |
+| 1000 × 2000| **55.3 µs** |  61.1 µs (+10 %) | 169.3 µs (+206 %) |
+| 1000 × 5000| **88.4 µs** |  93.1 µs (+5 %)  | 195.7 µs (+121 %) |
+
+Two things jump out.
+
+**Value-record + reference-array storage is essentially a tie with
+stock.** Declaring `Position` / `Velocity` as `value record` with
+`@LooselyConsistentValue` while keeping the backing storage a
+plain reference array costs between 0 and 13 % across every cell —
+well inside the JMH error bars at most cells. For this workload
+the value-record declaration alone gives no measurable win:
+pursuit's inner body is so tight (two component reads, one write,
+one payload read, one `invokevirtual`) that the tier-1 generator
+already lets the JIT scalar-replace short-lived `Position` /
+`Velocity` instances on both JVMs. Nothing left for value semantics
+to recover.
+
+**Flat-array storage is a 1.4×–3.7× regression** at every grid
+cell, matching the same warning already documented on the
+iteration micro-benchmarks. The absolute overhead scales with
+predator count, not with prey count:
+
+| predators | 500 prey Δ | 2000 prey Δ | 5000 prey Δ |
+|---:|---:|---:|---:|
+|  100 | +12.3 µs | +11.8 µs | +11.3 µs |
+|  500 | +58.8 µs | +58.0 µs | +52.9 µs |
+| 1000 |+117.9 µs |+114.0 µs |+107.3 µs |
+
+That shape fingerprints the overhead as per-pair component access:
+`~predators × 3 pairs × (2 reads + 1 write)` of flat-array I/O per
+tick, roughly **+13 ns per access** above the reference-array
+fast path. The unoptimised EA JIT code for flat get/set dominates
+everything the tier-1 pair runner was built to eliminate.
+
+The upshot is the same conclusion the earlier sections reach:
+value records themselves cost nothing, the value-record layout
+hasn't yet unlocked a new win on top of the existing tier-1
+generator for short-lived component shapes, and flat-array
+storage remains gated behind `-Dzzuegg.ecs.useFlatStorage=true`
+until the Valhalla JIT matures. Filed as a re-benchmark target
+for every future EA drop.
+
 ## The "write-path tax" — why japes looks slow on naked writes
 
 The `iterateWithWrite`, `NBody` and sparse-delta rows all show japes paying a
