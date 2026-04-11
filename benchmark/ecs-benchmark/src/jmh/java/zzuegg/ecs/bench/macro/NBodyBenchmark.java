@@ -9,7 +9,17 @@ import zzuegg.ecs.world.World;
 
 import java.util.concurrent.TimeUnit;
 
-@BenchmarkMode(Mode.AverageTime)
+/**
+ * Integration benchmark: each tick applies first-order Euler integration
+ * ({@code position += velocity * dt}) to every body.
+ *
+ * <b>Naming note:</b> The class is named "NBody" for historical consistency with
+ * the Artemis/Dominion/ZayES counterparts and the bevy-benchmark "nbody" group,
+ * but this is <em>not</em> a pairwise gravitational N-body simulation. A true
+ * N-body simulation would scale O(N²) with force calculations between every pair
+ * of bodies; this benchmark is a pure iteration + write workload that scales
+ * O(N). Direct comparisons with external N-body benchmarks are not meaningful.
+ */
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
 @Warmup(iterations = 3, time = 2)
@@ -51,6 +61,11 @@ public class NBodyBenchmark {
                 new Mass(1.0f)
             );
         }
+    }
+
+    @TearDown
+    public void tearDown() {
+        if (world != null) world.close();
     }
 
     @Benchmark

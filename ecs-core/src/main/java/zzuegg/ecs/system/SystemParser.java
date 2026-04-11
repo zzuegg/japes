@@ -153,7 +153,6 @@ public final class SystemParser {
 
             // Parse @Where filters on component parameters (supports multiple per param)
             var whereFilters = new java.util.HashMap<Integer, zzuegg.ecs.query.FieldFilter>();
-            int compParamIdx = 0;
             for (int i = 0; i < method.getParameters().length; i++) {
                 var p = method.getParameters()[i];
                 if (p.isAnnotationPresent(Read.class) || p.isAnnotationPresent(Write.class)) {
@@ -179,7 +178,6 @@ public final class SystemParser {
                             whereFilters.put(i, zzuegg.ecs.query.FieldFilter.and(filters));
                         }
                     }
-                    compParamIdx++;
                 }
             }
 

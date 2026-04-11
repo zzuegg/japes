@@ -90,20 +90,31 @@ public class ChangeDetectionBenchmark {
     World removedWorld;
     Entity[] victims;
 
-    @Setup(Level.Iteration)
-    public void seedRemoved() {
-        // Fresh world per iteration so the invocation body stays amortisable —
-        // we measure the RemoveAll→tick→drain cycle end-to-end, not just the
-        // observer pass.
+    @Setup(Level.Trial)
+    public void createRemovedWorld() {
+        // World is created once per trial; entities are re-seeded per-invocation
+        // (matching the ZayEsChangeDetectionBenchmark.seedRemoved shape) so the
+        // measured body contains only the despawn + drain pass.
         removedWorld = World.builder()
             .addSystem(RemovedSink.class)
             .build();
         victims = new Entity[entityCount];
+    }
+
+    @TearDown(Level.Trial)
+    public void closeRemovedWorld() {
+        if (removedWorld != null) removedWorld.close();
+    }
+
+    @Setup(Level.Invocation)
+    public void seedRemoved() {
+        // Spawn N fresh entities and advance the observer watermark past the
+        // spawn tick so the @Benchmark body observes exactly N removals each
+        // invocation — not N removals + N re-spawns like the old design did.
         for (int i = 0; i < entityCount; i++) {
             victims[i] = removedWorld.spawn(new Position(i, i, i));
         }
-        // Prime the observer past the spawn tick.
-        removedWorld.tick();
+        removedWorld.tick(); // prime the observer watermark past the adds
     }
 
     @Benchmark
@@ -113,11 +124,7 @@ public class ChangeDetectionBenchmark {
         for (var e : victims) {
             removedWorld.despawn(e);
         }
-        removedWorld.tick();
-        // Re-seed so the next invocation has something to despawn.
-        for (int i = 0; i < entityCount; i++) {
-            victims[i] = removedWorld.spawn(new Position(i, i, i));
-        }
+        // Tick: runs RemovedSink which drains the removal log.
         removedWorld.tick();
     }
 }

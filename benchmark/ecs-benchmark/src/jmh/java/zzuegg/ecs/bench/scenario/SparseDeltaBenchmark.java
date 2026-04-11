@@ -24,6 +24,17 @@ import java.util.concurrent.TimeUnit;
  *   1. Driver damages 100 entities (rotating window) via World.setComponent
  *   2. ChangedObserver (@Filter(Changed, Health)) counts the dirty entities
  *
+ * <b>Benchmark fairness note:</b> The japes benchmark body calls
+ * {@code world.tick()}, which includes full-tick overhead (event-buffer swap,
+ * stage-graph traversal, dirty-list pruning, removal-log GC). The Artemis and
+ * Dominion counterparts ({@code ArtemisSparseDeltaBenchmark},
+ * {@code DominionSparseDeltaBenchmark}) run a hand-rolled mutation + dirty-bag
+ * drain loop with none of that overhead. With a workload of only 100 entities
+ * the fixed tick cost is not amortised, so japes numbers are systematically
+ * higher than a raw component-read comparison would suggest. The numbers
+ * measure the realistic library API cost (full tick), not raw component
+ * iteration speed.
+ *
  * Compared idiomatically against ZayEsSparseDeltaBenchmark and the
  * bevy-benchmark "sparse_delta" group.
  */

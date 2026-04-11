@@ -17,7 +17,7 @@ public record Stage(String name, int order) implements Comparable<Stage> {
             case "Last" -> 400;
             default -> 500;
         };
-        return new Stage("custom", refOrder + 50);
+        return new Stage("after:" + referenceStageName, refOrder + 50);
     }
 
     @Override

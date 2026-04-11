@@ -36,17 +36,30 @@ public final class ChangeTracker {
      * were written before tracking was turned on remain visible to the first
      * filter run — otherwise a system registered mid-world would miss any
      * pre-existing state.
+     *
+     * @param tracked      whether dirty-list tracking should be active
+     * @param occupiedCount number of currently occupied slots; the seed
+     *                      loop is bounded to this count so stale data
+     *                      beyond the live population is never included
      */
-    public void setDirtyTracked(boolean tracked) {
+    public void setDirtyTracked(boolean tracked, int occupiedCount) {
         if (this.dirtyTracked == tracked) return;
         this.dirtyTracked = tracked;
         if (tracked) {
-            for (int slot = 0; slot < addedTicks.length; slot++) {
+            for (int slot = 0; slot < occupiedCount; slot++) {
                 if (addedTicks[slot] != 0L || changedTicks[slot] != 0L) {
                     appendDirtyUnchecked(slot);
                 }
             }
         }
+    }
+
+    /**
+     * Convenience overload for new (empty) chunks where {@code occupiedCount}
+     * is always 0 — no seed loop body executes.
+     */
+    public void setDirtyTracked(boolean tracked) {
+        setDirtyTracked(tracked, 0);
     }
 
     public boolean isDirtyTracked() {
@@ -138,6 +151,16 @@ public final class ChangeTracker {
         if (slot < last) {
             addedTicks[slot] = addedTicks[last];
             changedTicks[slot] = changedTicks[last];
+            // If the moved entity (last) was in the dirty list, propagate its
+            // dirty-bit to its new position (slot) so @Filter(Changed/Added)
+            // systems don't silently miss it after the despawn.
+            long lastMask = 1L << (last & 63);
+            if ((dirtyBits[last >>> 6] & lastMask) != 0) {
+                long slotMask = 1L << (slot & 63);
+                if ((dirtyBits[slot >>> 6] & slotMask) == 0) {
+                    appendDirtyUnchecked(slot);
+                }
+            }
         }
         addedTicks[last] = 0;
         changedTicks[last] = 0;

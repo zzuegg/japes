@@ -16,6 +16,11 @@ public final class Archetype {
     private final ComponentStorage.Factory storageFactory;
     private final java.util.Set<ComponentId> dirtyTrackedComponents;
     private final List<Chunk> chunks = new ArrayList<>();
+    // Index of the chunk that currently has open slots, or -1 when all
+    // chunks are full and the next add must create a new one. Maintained
+    // lazily so the common steady-state (one open chunk) costs a single
+    // integer check instead of a linear scan over all chunks.
+    private int openChunkIndex = -1;
 
     public Archetype(ArchetypeId id, ComponentRegistry registry, int chunkCapacity,
                      ComponentStorage.Factory storageFactory,
@@ -57,6 +62,10 @@ public final class Archetype {
         }
 
         chunk.remove(slot);
+        // The chunk just lost one entity, so it always has at least one free
+        // slot now. Update openChunkIndex so the next add doesn't fall back
+        // to a linear scan or allocate an unnecessary new chunk.
+        openChunkIndex = loc.chunkIndex();
 
         return Optional.ofNullable(swapped);
     }
@@ -86,12 +95,11 @@ public final class Archetype {
     }
 
     private int findOrCreateChunkIndex() {
-        for (int i = 0; i < chunks.size(); i++) {
-            if (!chunks.get(i).isFull()) {
-                return i;
-            }
+        if (openChunkIndex >= 0 && !chunks.get(openChunkIndex).isFull()) {
+            return openChunkIndex;
         }
         chunks.add(new Chunk(chunkCapacity, componentTypes, storageFactory, dirtyTrackedComponents));
-        return chunks.size() - 1;
+        openChunkIndex = chunks.size() - 1;
+        return openChunkIndex;
     }
 }

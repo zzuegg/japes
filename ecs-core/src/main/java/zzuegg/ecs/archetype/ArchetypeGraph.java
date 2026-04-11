@@ -5,6 +5,7 @@ import zzuegg.ecs.component.ComponentRegistry;
 import zzuegg.ecs.storage.ComponentStorage;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class ArchetypeGraph {
 
@@ -17,7 +18,9 @@ public final class ArchetypeGraph {
     // Memoized results of findMatching(required). Invalidated whenever a new
     // archetype is created; mutations of existing archetypes' entity contents
     // don't affect which archetypes match a given required set.
-    private final Map<Set<ComponentId>, List<Archetype>> findMatchingCache = new HashMap<>();
+    // ConcurrentHashMap: multiple system threads may call findMatching() for
+    // different required sets in the same tick, producing concurrent puts.
+    private final Map<Set<ComponentId>, List<Archetype>> findMatchingCache = new ConcurrentHashMap<>();
     // Components for which ChangeTracker dirty-list bookkeeping is enabled
     // on every chunk. Mutated by World when @Filter(Added/Changed) consumers
     // register/unregister at plan build time. The set is shared by reference
@@ -65,7 +68,7 @@ public final class ArchetypeGraph {
             if (!archetype.id().contains(compId)) continue;
             for (var chunk : archetype.chunks()) {
                 var tracker = chunk.changeTracker(compId);
-                if (tracker != null) tracker.setDirtyTracked(true);
+                if (tracker != null) tracker.setDirtyTracked(true, chunk.count());
             }
         }
     }
@@ -96,20 +99,17 @@ public final class ArchetypeGraph {
 
     public List<Archetype> findMatching(Set<ComponentId> required) {
         // Cache the result keyed by the required set — most systems query the
-        // same set every tick. Copying the set for the key keeps the map safe
-        // against later mutation of the caller's argument.
-        var cached = findMatchingCache.get(required);
-        if (cached != null) return cached;
-
-        var result = new ArrayList<Archetype>();
-        for (var entry : archetypes.entrySet()) {
-            if (entry.getKey().components().containsAll(required)) {
-                result.add(entry.getValue());
+        // same set every tick. computeIfAbsent is atomic so concurrent threads
+        // querying different required sets don't corrupt the map.
+        return findMatchingCache.computeIfAbsent(Set.copyOf(required), key -> {
+            var result = new ArrayList<Archetype>();
+            for (var entry : archetypes.entrySet()) {
+                if (entry.getKey().components().containsAll(key)) {
+                    result.add(entry.getValue());
+                }
             }
-        }
-        var immutable = List.copyOf(result);
-        findMatchingCache.put(Set.copyOf(required), immutable);
-        return immutable;
+            return List.copyOf(result);
+        });
     }
 
     public Archetype get(ArchetypeId id) {

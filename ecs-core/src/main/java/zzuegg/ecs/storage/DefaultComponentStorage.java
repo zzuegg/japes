@@ -50,7 +50,7 @@ public final class DefaultComponentStorage<T extends Record> implements Componen
                     MethodType.methodType(Object[].class, Class.class, int.class, Object.class));
                 isCompat = lookup.findStatic(cls, "isValueObjectCompatible",
                     MethodType.methodType(boolean.class, Class.class));
-            } catch (Throwable ignored) {
+            } catch (Exception ignored) {
                 // Stock JDK, or jdk.internal.value not exported. That's fine —
                 // the storage falls back to Array.newInstance below.
             }
@@ -88,7 +88,11 @@ public final class DefaultComponentStorage<T extends Record> implements Componen
                 }
             } catch (Throwable ignored) {
                 // Flat allocation failed (e.g. non-primitive record fields
-                // whose defaults we can't synthesise). Fall back.
+                // whose defaults we can't synthesise). MethodHandle.invoke()
+                // is declared throws Throwable so we must catch Throwable here;
+                // this code path is only reached on Valhalla EA JVMs when
+                // -Dzzuegg.ecs.useFlatStorage=true is set, so fatal JVM errors
+                // are not a realistic concern. Fall back to reference array.
             }
         }
         if (arr == null) {

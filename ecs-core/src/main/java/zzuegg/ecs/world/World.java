@@ -223,7 +223,9 @@ public final class World {
                     ctor.setAccessible(true);
                     instance = ctor.newInstance();
                 } catch (Exception e) {
-                    continue;
+                    throw new IllegalStateException(
+                        "Cannot instantiate @RunCondition class " + clazz.getName()
+                            + "; ensure it has a no-arg constructor", e);
                 }
             }
             final Object inst = instance;
@@ -772,15 +774,6 @@ public final class World {
         }
     }
 
-    private Object[] buildServiceArgs(SystemDescriptor desc) {
-        var params = desc.method().getParameters();
-        var args = new Object[params.length];
-        for (int i = 0; i < params.length; i++) {
-            args[i] = resolveServiceParam(desc, params[i], i);
-        }
-        return args;
-    }
-
     @SuppressWarnings("unchecked")
     private Object resolveServiceParam(SystemDescriptor desc, Parameter param, int paramIndex) {
         var paramType = param.getType();
@@ -802,7 +795,11 @@ public final class World {
             var key = desc.name() + ":" + paramIndex;
             return locals.computeIfAbsent(key, k -> new Local<>());
         }
-        return null;
+        throw new IllegalArgumentException(
+            "System '" + desc.name() + "': unrecognised service parameter type '"
+                + paramType.getName() + "' at index " + paramIndex
+                + ". Annotate with @Read/@Write for components, or use a supported"
+                + " service type (Commands, Res, ResMut, EventReader, EventWriter, Local).");
     }
 
     private Class<?> extractTypeArg(Parameter param) {

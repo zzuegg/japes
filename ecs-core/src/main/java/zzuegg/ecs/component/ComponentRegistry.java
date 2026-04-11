@@ -1,13 +1,14 @@
 package zzuegg.ecs.component;
 
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Map;
 
 public final class ComponentRegistry {
 
-    private final Map<Class<?>, ComponentInfo> byType = new HashMap<>();
-    private final Map<ComponentId, ComponentInfo> byId = new HashMap<>();
-    private int nextId = 0;
+    private final Map<Class<?>, ComponentInfo> byType = new ConcurrentHashMap<>();
+    private final Map<ComponentId, ComponentInfo> byId = new ConcurrentHashMap<>();
+    private final AtomicInteger nextId = new AtomicInteger(0);
     // Per-class cache that HotSpot special-cases: ClassValue.get has a JIT
     // intrinsic that lets the JIT fold the lookup to a direct field read on
     // the Class object when the call site is monomorphic. Previously the
@@ -49,11 +50,19 @@ public final class ComponentRegistry {
         }
         boolean valueTracked = type.isAnnotationPresent(ValueTracked.class);
 
-        var id = new ComponentId(nextId++);
-        var info = new ComponentInfo(id, recordType, true, false, valueTracked);
-        byType.put(type, info);
-        byId.put(id, info);
-        return id;
+        // Use compute to atomically assign an id and populate both maps so
+        // concurrent first-registrations of different component types don't
+        // produce duplicate ids or leave byId inconsistent with byType.
+        ComponentInfo[] result = new ComponentInfo[1];
+        byType.compute(type, (k, prev) -> {
+            if (prev != null) { result[0] = prev; return prev; }
+            var id = new ComponentId(nextId.getAndIncrement());
+            var info = new ComponentInfo(id, recordType, true, false, valueTracked);
+            byId.put(id, info);
+            result[0] = info;
+            return info;
+        });
+        return result[0].id();
     }
 
     public ComponentId getOrRegister(Class<?> type) {
