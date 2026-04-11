@@ -38,6 +38,13 @@ public final class World {
     private final Map<String, java.util.function.BooleanSupplier> runConditions = new HashMap<>();
     private final Map<String, SystemExecutionPlan> systemPlans = new HashMap<>();
     private final Map<String, ChunkProcessor> chunkProcessors = new HashMap<>();
+    // Separate map for @ForEachPair systems. They don't go through
+    // the chunk-iteration path; instead, the processor walks the
+    // relation store's forward index once per tick.
+    private final Map<String, zzuegg.ecs.system.PairIterationProcessor> pairIterationProcessors = new HashMap<>();
+    // Tier-1 bytecode-generated runner per @ForEachPair system.
+    // When present, preferred over the reflective processor above.
+    private final Map<String, zzuegg.ecs.system.PairIterationRunner> pairIterationRunners = new HashMap<>();
     private final Set<String> disabledSystems = new HashSet<>();
     private final List<Commands> allCommandBuffers = new ArrayList<>();
     private final RemovalLog removalLog = new RemovalLog();
@@ -81,6 +88,8 @@ public final class World {
     private void rebuildSchedule() {
         systemPlans.clear();
         chunkProcessors.clear();
+        pairIterationProcessors.clear();
+        pairIterationRunners.clear();
         // Every rebuild re-resolves service args, which allocates fresh Commands
         // buffers. Drop the old ones so the list doesn't grow unbounded.
         allCommandBuffers.clear();
@@ -95,6 +104,35 @@ public final class World {
             for (var node : entry.getValue().nodes()) {
                 buildExecutionPlan(node.descriptor());
             }
+        }
+
+        // After every system has been processed we know the complete
+        // set of "observed" components — those with an @Filter consumer
+        // (trackedChangeFilterComponents). Any component outside that
+        // set can have its ChangeTracker bookkeeping fully disabled,
+        // skipping per-slot tick array writes entirely on every
+        // markAdded / markChanged call. Computing this at plan build
+        // time means the fast path is active before the first tick.
+        var untracked = new HashSet<ComponentId>();
+        for (int i = 0; i < componentRegistry.count(); i++) {
+            var id = new ComponentId(i);
+            if (!trackedChangeFilterComponents.contains(id)) {
+                untracked.add(id);
+            }
+        }
+        archetypeGraph.setFullyUntrackedComponents(untracked);
+
+        // Same logic for pair change trackers: if no system declares
+        // a change filter on a relation type's marker component, the
+        // per-relation PairChangeTracker is completely unused —
+        // every markAdded/markChanged/remove on it is wasted
+        // bookkeeping. Flag those trackers as fully untracked.
+        // Note: this is independent of RemovedRelations<T>, which
+        // uses the separate PairRemovalLog, not the PairChangeTracker.
+        for (var store : componentRegistry.allRelationStores()) {
+            boolean observed = store.sourceMarkerId() != null
+                    && trackedChangeFilterComponents.contains(store.sourceMarkerId());
+            store.tracker().setFullyUntracked(!observed);
         }
     }
 
@@ -118,6 +156,11 @@ public final class World {
                 // Entity parameters are filled per-iteration from chunk.entity(slot);
                 // they are NOT service args (one-shot resolution) and NOT component
                 // accesses (no tracker, no storage).
+            } else if (desc.targetEntityParamSlots().contains(i)) {
+                // @FromTarget Entity — bound per-pair by the pair-
+                // iteration processor, not a service arg.
+            } else if (desc.pairValueParamSlot() == i) {
+                // @ForEachPair payload — bound per-pair, not a service arg.
             } else {
                 serviceArgIndices.add(i);
             }
@@ -142,12 +185,44 @@ public final class World {
 
         // Pre-compute the query sets once; executeSystem used to rebuild them
         // on every tick per system.
+        //
+        // For @ForEachPair systems the iteration is driven directly by
+        // the relation store, not by archetype matching — adding the
+        // component ids to `required` would narrow the filter to
+        // entities that carry *every* declared component, including
+        // target-side ones, which makes no sense for a per-pair driver.
+        // Skip the required set entirely in that case.
         var required = new HashSet<ComponentId>();
-        for (var access : desc.componentAccesses()) {
-            required.add(access.componentId());
+        boolean isPairIteration = desc.pairIterationType() != null;
+        if (!isPairIteration) {
+            for (var access : desc.componentAccesses()) {
+                required.add(access.componentId());
+            }
         }
         for (var withType : desc.withFilters()) {
             required.add(componentRegistry.getOrRegister(withType));
+        }
+        // @Pair(T.class, role = ...) adds the relation's marker
+        // ComponentId to the required-set so the archetype filter
+        // narrows to entities that carry at least one pair of type T
+        // on the requested side. The role decides which marker:
+        //   SOURCE → source-side marker (outgoing pairs)
+        //   TARGET → target-side marker (incoming pairs)
+        //   EITHER → no marker added; annotation is informational.
+        // The stores are allocated eagerly during SystemParser, so
+        // they are guaranteed to exist here.
+        for (var pairRead : desc.pairReads()) {
+            var store = componentRegistry.relationStore(pairRead.type());
+            if (store == null) continue;
+            switch (pairRead.role()) {
+                case SOURCE -> {
+                    if (store.sourceMarkerId() != null) required.add(store.sourceMarkerId());
+                }
+                case TARGET -> {
+                    if (store.targetMarkerId() != null) required.add(store.targetMarkerId());
+                }
+                case EITHER -> { /* no narrowing */ }
+            }
         }
         var without = new HashSet<ComponentId>();
         for (var withoutType : desc.withoutFilters()) {
@@ -155,6 +230,7 @@ public final class World {
         }
         plan.setQuerySets(Set.copyOf(required), Set.copyOf(without));
         plan.setConsumedRemovedComponents(Set.copyOf(desc.removedReads()));
+        plan.setConsumedRemovedRelations(Set.copyOf(desc.removedRelationReads()));
 
         // Entity injection: flatten the descriptor's entity param slots into
         // an int[] the plan can loop over per iteration.
@@ -182,6 +258,15 @@ public final class World {
                 removalLog.registerConsumer(compId);
                 trackedRemovedComponents.add(compId);
                 arg = RemovedComponents.bind(removalLog, compId, plan);
+            } else if (p.getType() == zzuegg.ecs.relation.RemovedRelations.class) {
+                // Parallel to RemovedComponents — bind to the store's
+                // PairRemovalLog and register as a consumer so the log
+                // starts retaining entries.
+                @SuppressWarnings("unchecked")
+                var recType = (Class<? extends Record>) extractTypeArg(p);
+                var store = componentRegistry.registerRelation(recType);
+                store.removalLog().registerConsumer();
+                arg = zzuegg.ecs.relation.RemovedRelations.bind(store.removalLog(), plan);
             } else {
                 arg = resolveServiceParam(desc, p, idx);
             }
@@ -190,6 +275,26 @@ public final class World {
         }
 
         systemPlans.put(desc.name(), plan);
+
+        // @ForEachPair systems bypass chunk-processor generation and
+        // use a dedicated pair-iteration processor that walks the
+        // relation store's forward index directly. Prefer the
+        // tier-1 bytecode-generated runner when the generator
+        // supports the system shape; fall back to the reflective
+        // tier-2 processor otherwise.
+        if (isPairIteration) {
+            if (useGeneratedProcessors) {
+                var tier1 = zzuegg.ecs.system.GeneratedPairIterationProcessor
+                    .tryGenerate(desc, this, resolvedServiceArgs);
+                if (tier1 != null) {
+                    pairIterationRunners.put(desc.name(), tier1);
+                    return;
+                }
+            }
+            pairIterationProcessors.put(desc.name(),
+                new zzuegg.ecs.system.PairIterationProcessor(desc, this, resolvedServiceArgs));
+            return;
+        }
 
         // Build generated processor if enabled. Systems with change filters
         // still need the SystemExecutionPlan path — the generated processors
@@ -279,7 +384,7 @@ public final class World {
         if (!entityAllocator.isAlive(entity)) {
             throw new IllegalArgumentException("Entity is not alive: " + entity);
         }
-        despawnInternal(entity);
+        despawnWithCascade(entity);
     }
 
     /**
@@ -289,7 +394,90 @@ public final class World {
      */
     public void despawnIfAlive(zzuegg.ecs.entity.Entity entity) {
         if (!entityAllocator.isAlive(entity)) return;
-        despawnInternal(entity);
+        despawnWithCascade(entity);
+    }
+
+    /**
+     * Drive the CleanupPolicy state machine. For each relation store:
+     * drop every outgoing pair from the despawning entity, then apply
+     * the store's {@code onTargetDespawn} policy to every incoming
+     * pair pointing at it. {@code CASCADE_SOURCE} enqueues additional
+     * entities to despawn; we drain the queue in FIFO order so every
+     * transitive source eventually reaches this method.
+     *
+     * <p>Entities are de-duplicated by the {@code isAlive} check —
+     * an entity already despawned in an earlier iteration silently
+     * skips.
+     */
+    private void despawnWithCascade(zzuegg.ecs.entity.Entity root) {
+        // Fast path: worlds with no relations registered (the common
+        // benchmark case) skip both the cascade machinery and the
+        // allocations it carries.
+        if (!componentRegistry.hasAnyRelations()) {
+            despawnInternal(root);
+            return;
+        }
+        var queue = new ArrayDeque<zzuegg.ecs.entity.Entity>();
+        queue.add(root);
+        while (!queue.isEmpty()) {
+            var next = queue.poll();
+            if (!entityAllocator.isAlive(next)) continue;
+            applyRelationCleanup(next, queue);
+            despawnInternal(next);
+        }
+    }
+
+    private void applyRelationCleanup(
+            zzuegg.ecs.entity.Entity entity,
+            ArrayDeque<zzuegg.ecs.entity.Entity> cascadeQueue) {
+        var tickNow = tick.current();
+        for (var store : componentRegistry.allRelationStores()) {
+            // Outgoing pairs: the entity IS the source. Drop each
+            // forward entry so reverse cleanup + tracker + removal-log
+            // updates happen inside store.remove. No source-marker
+            // fix needed on `entity` itself — the despawn is about to
+            // free its entire archetype row — but each former target
+            // may have just lost its last incoming pair of this type,
+            // in which case it loses its target marker.
+            if (store.hasSource(entity)) {
+                var targets = new java.util.ArrayList<zzuegg.ecs.entity.Entity>();
+                for (var e : store.targetsFor(entity)) targets.add(e.getKey());
+                for (var t : targets) {
+                    store.remove(entity, t, tickNow);
+                    if (store.targetMarkerId() != null
+                            && entityAllocator.isAlive(t)
+                            && !store.hasTarget(t)) {
+                        removeMarkerComponent(t, store.targetMarkerId());
+                    }
+                }
+            }
+            // Incoming pairs: something points AT entity. Walk a snapshot
+            // of sources — the body below mutates the store.
+            var sources = new java.util.ArrayList<zzuegg.ecs.entity.Entity>();
+            for (var s : store.sourcesFor(entity)) sources.add(s);
+            if (sources.isEmpty()) continue;
+            var policy = store.onTargetDespawn();
+            if (policy == zzuegg.ecs.relation.CleanupPolicy.IGNORE) continue;
+
+            for (var source : sources) {
+                // Drop the pair regardless of RELEASE_TARGET vs CASCADE —
+                // in both cases the pair is dead. The difference is
+                // whether the source entity survives.
+                store.remove(source, entity, tickNow);
+                if (policy == zzuegg.ecs.relation.CleanupPolicy.CASCADE_SOURCE) {
+                    cascadeQueue.add(source);
+                } else {
+                    // RELEASE_TARGET: source survives. If it lost its
+                    // last pair of this type, the source marker goes
+                    // too. The target marker on `entity` is freed with
+                    // its archetype row by despawnInternal, so no
+                    // explicit target-marker removal is needed here.
+                    if (entityAllocator.isAlive(source) && !store.hasSource(source)) {
+                        removeMarkerComponent(source, store.sourceMarkerId());
+                    }
+                }
+            }
+        }
     }
 
     private void despawnInternal(zzuegg.ecs.entity.Entity entity) {
@@ -377,6 +565,262 @@ public final class World {
         if (fireChanged) {
             chunk.changeTracker(compId).markChanged(slot, tick.current());
         }
+    }
+
+    /**
+     * Package-private accessor for the underlying {@link ComponentRegistry}.
+     * Used by tests and by the relation-layer wiring (archetype marker
+     * id allocation). Not part of the public surface — the registry is
+     * a world-lifetime detail that production code should reach
+     * through {@code setRelation} / {@code getRelation} etc.
+     */
+    public ComponentRegistry componentRegistry() {
+        return componentRegistry;
+    }
+
+    /**
+     * Current tick counter. Exposed for pair-iteration processors
+     * and other framework-internal consumers that need to stamp
+     * per-entity state (Mut writes, change-tracker updates) at the
+     * correct tick.
+     */
+    public long currentTick() {
+        return tick.current();
+    }
+
+    /**
+     * Package-of-framework accessor returning the
+     * {@link zzuegg.ecs.archetype.EntityLocation} for an entity by
+     * its index, or {@code null} if no live location exists. Used
+     * by {@link zzuegg.ecs.system.PairIterationProcessor} to walk
+     * the relation store's forward index and resolve source/target
+     * components without going through the slower
+     * {@link #getComponent} chain.
+     */
+    public zzuegg.ecs.archetype.EntityLocation entityLocationFor(zzuegg.ecs.entity.Entity entity) {
+        int idx = entity.index();
+        if (idx < 0 || idx >= entityLocations.size()) return null;
+        return entityLocations.get(idx);
+    }
+
+    /**
+     * Raw view of the world's entity-location list. Framework-
+     * internal — exposed for tier-1 generated
+     * {@code @ForEachPair} processors to look up entity locations
+     * by index without going through the slower
+     * {@link #entityLocationFor} wrapper. Do not mutate. The
+     * returned reference remains stable across
+     * {@code spawn}/{@code despawn} because the {@link ArrayList}
+     * grows in place.
+     */
+    public java.util.List<zzuegg.ecs.archetype.EntityLocation> entityLocationsView() {
+        return entityLocations;
+    }
+
+    /**
+     * Return the archetype an entity currently lives in. Used by tests
+     * and diagnostic tools; production code should not need this. An
+     * alive entity is always in exactly one archetype.
+     */
+    public zzuegg.ecs.archetype.Archetype archetypeOf(zzuegg.ecs.entity.Entity entity) {
+        if (!entityAllocator.isAlive(entity)) {
+            throw new IllegalArgumentException("Entity not alive: " + entity);
+        }
+        return getLocation(entity.index()).archetype();
+    }
+
+    /**
+     * Add a marker component (a {@link ComponentId} that carries no
+     * per-entity data) to an entity. Walks the archetype graph exactly
+     * like {@link #addComponent} but skips the value-write step — the
+     * storage slot stays {@code null}. Used by the relation layer to
+     * maintain the "has >= 1 pair of type T" archetype flag.
+     *
+     * <p>Idempotent: adding a marker the entity already carries is a
+     * no-op, matching the usual "first pair transition" contract.
+     */
+    public void addMarkerComponent(zzuegg.ecs.entity.Entity entity, ComponentId markerId) {
+        if (!entityAllocator.isAlive(entity)) {
+            throw new IllegalArgumentException("Entity not alive: " + entity);
+        }
+        var oldLocation = getLocation(entity.index());
+        var oldArchetype = oldLocation.archetype();
+        if (oldArchetype.id().components().contains(markerId)) return;
+
+        var newArchetypeId = archetypeGraph.addEdge(oldArchetype.id(), markerId);
+        var newArchetype = archetypeGraph.getOrCreate(newArchetypeId);
+        var newLocation = newArchetype.add(entity);
+
+        var oldChunk = oldArchetype.chunks().get(oldLocation.chunkIndex());
+        var newChunk = newArchetype.chunks().get(newLocation.chunkIndex());
+        int oldSlot = oldLocation.slotIndex();
+        int newSlot = newLocation.slotIndex();
+
+        for (var existingCompId : oldArchetype.id().components()) {
+            var value = oldArchetype.get(existingCompId, oldLocation);
+            newArchetype.set(existingCompId, newLocation, value);
+            var src = oldChunk.changeTracker(existingCompId);
+            var dst = newChunk.changeTracker(existingCompId);
+            dst.markAdded(newSlot, src.addedTick(oldSlot));
+            dst.markChanged(newSlot, src.changedTick(oldSlot));
+        }
+        // Marker slot stays null — it's the archetype membership that
+        // matters, not the per-entity value. Mark it added so
+        // @Filter(Added) systems that target the marker fire.
+        newChunk.changeTracker(markerId).markAdded(newSlot, tick.current());
+
+        var swapped = oldArchetype.remove(oldLocation);
+        swapped.ifPresent(swappedEntity ->
+            setLocation(swappedEntity.index(), oldLocation)
+        );
+        setLocation(entity.index(), newLocation);
+    }
+
+    /**
+     * Remove a marker component from an entity. Mirror of
+     * {@link #addMarkerComponent} — walks the archetype graph without
+     * touching per-entity storage. A no-op when the marker isn't
+     * present on the entity's current archetype.
+     */
+    public void removeMarkerComponent(zzuegg.ecs.entity.Entity entity, ComponentId markerId) {
+        if (!entityAllocator.isAlive(entity)) {
+            throw new IllegalArgumentException("Entity not alive: " + entity);
+        }
+        var oldLocation = getLocation(entity.index());
+        var oldArchetype = oldLocation.archetype();
+        if (!oldArchetype.id().components().contains(markerId)) return;
+
+        var newArchetypeId = archetypeGraph.removeEdge(oldArchetype.id(), markerId);
+        var newArchetype = archetypeGraph.getOrCreate(newArchetypeId);
+        var newLocation = newArchetype.add(entity);
+
+        var oldChunk = oldArchetype.chunks().get(oldLocation.chunkIndex());
+        var newChunk = newArchetype.chunks().get(newLocation.chunkIndex());
+        int oldSlot = oldLocation.slotIndex();
+        int newSlot = newLocation.slotIndex();
+
+        for (var existingCompId : newArchetypeId.components()) {
+            var value = oldArchetype.get(existingCompId, oldLocation);
+            newArchetype.set(existingCompId, newLocation, value);
+            var src = oldChunk.changeTracker(existingCompId);
+            var dst = newChunk.changeTracker(existingCompId);
+            dst.markAdded(newSlot, src.addedTick(oldSlot));
+            dst.markChanged(newSlot, src.changedTick(oldSlot));
+        }
+
+        var swapped = oldArchetype.remove(oldLocation);
+        swapped.ifPresent(swappedEntity ->
+            setLocation(swappedEntity.index(), oldLocation)
+        );
+        setLocation(entity.index(), newLocation);
+    }
+
+    // ---------------------------------------------------------------
+    // Relation CRUD
+    // ---------------------------------------------------------------
+
+    /**
+     * Insert or overwrite the pair payload for
+     * {@code (source, target)} under the given relation type. Auto-
+     * registers the relation if this is the first time it's seen.
+     *
+     * <p>On the first pair for {@code source} of this relation type,
+     * the source's archetype gains the relation marker — systems
+     * filtered on {@code @Pair(T.class)} will start seeing the entity.
+     */
+    @SuppressWarnings("unchecked")
+    public <T extends Record> void setRelation(
+            zzuegg.ecs.entity.Entity source,
+            zzuegg.ecs.entity.Entity target,
+            T value) {
+        if (!entityAllocator.isAlive(source)) {
+            throw new IllegalArgumentException("Source entity not alive: " + source);
+        }
+        if (!entityAllocator.isAlive(target)) {
+            throw new IllegalArgumentException("Target entity not alive: " + target);
+        }
+        var store = (zzuegg.ecs.relation.RelationStore<T>)
+            componentRegistry.registerRelation((Class<? extends Record>) value.getClass());
+        boolean firstPairForSource = !store.hasSource(source);
+        boolean firstPairForTarget = !store.hasTarget(target);
+        store.set(source, target, value, tick.current());
+        if (firstPairForSource) {
+            addMarkerComponent(source, store.sourceMarkerId());
+        }
+        if (firstPairForTarget && store.targetMarkerId() != null) {
+            addMarkerComponent(target, store.targetMarkerId());
+        }
+    }
+
+    /**
+     * Look up the pair payload for {@code (source, target)} under the
+     * given relation type, or {@link Optional#empty()} if no such
+     * pair exists. Returns {@code empty} when the relation type has
+     * never been registered.
+     */
+    public <T extends Record> Optional<T> getRelation(
+            zzuegg.ecs.entity.Entity source,
+            zzuegg.ecs.entity.Entity target,
+            Class<T> type) {
+        var store = componentRegistry.relationStore(type);
+        if (store == null) return Optional.empty();
+        return Optional.ofNullable(store.get(source, target));
+    }
+
+    /**
+     * Drop the pair for {@code (source, target)} under the given
+     * relation type. A no-op if the relation was never registered or
+     * the pair does not exist. When this is the source's last pair of
+     * this type, the source's archetype also loses the marker.
+     */
+    public <T extends Record> void removeRelation(
+            zzuegg.ecs.entity.Entity source,
+            zzuegg.ecs.entity.Entity target,
+            Class<T> type) {
+        if (!entityAllocator.isAlive(source)) {
+            throw new IllegalArgumentException("Source entity not alive: " + source);
+        }
+        var store = componentRegistry.relationStore(type);
+        if (store == null) return;
+        var removed = store.remove(source, target, tick.current());
+        if (removed == null) return;
+        if (!store.hasSource(source)) {
+            removeMarkerComponent(source, store.sourceMarkerId());
+        }
+        if (store.targetMarkerId() != null
+                && entityAllocator.isAlive(target)
+                && !store.hasTarget(target)) {
+            removeMarkerComponent(target, store.targetMarkerId());
+        }
+    }
+
+    /**
+     * Drop every pair of the given relation type whose source is
+     * {@code source}. Cheaper than looping {@link #removeRelation} on
+     * the caller's side because the marker is removed exactly once.
+     */
+    public <T extends Record> void removeAllRelations(
+            zzuegg.ecs.entity.Entity source,
+            Class<T> type) {
+        if (!entityAllocator.isAlive(source)) {
+            throw new IllegalArgumentException("Source entity not alive: " + source);
+        }
+        var store = componentRegistry.relationStore(type);
+        if (store == null || !store.hasSource(source)) return;
+        // Snapshot targets so we can iterate + mutate safely.
+        var targets = new ArrayList<zzuegg.ecs.entity.Entity>();
+        for (var e : store.targetsFor(source)) targets.add(e.getKey());
+        for (var tgt : targets) {
+            store.remove(source, tgt, tick.current());
+            // Each target may have just lost its last incoming pair
+            // of this type — clear its target marker if so.
+            if (store.targetMarkerId() != null
+                    && entityAllocator.isAlive(tgt)
+                    && !store.hasTarget(tgt)) {
+                removeMarkerComponent(tgt, store.targetMarkerId());
+            }
+        }
+        removeMarkerComponent(source, store.sourceMarkerId());
     }
 
     public void addComponent(zzuegg.ecs.entity.Entity entity, Record component) {
@@ -496,6 +940,29 @@ public final class World {
                 }
                 if (minWatermark != Long.MAX_VALUE) {
                     removalLog.collectGarbage(compId, minWatermark);
+                }
+            }
+        }
+
+        // End-of-tick GC for per-relation-type removal logs. Parallels the
+        // component RemovalLog pass above but reads watermarks from each
+        // plan's consumedRemovedRelations set. A relation type with no
+        // RemovedRelations<T> consumer is silently skipped because its log
+        // never retained entries in the first place (registerConsumer
+        // short-circuits the append path). Fast-path out for worlds with
+        // no relations at all so we don't walk an empty collection every
+        // tick in the common benchmark case.
+        if (componentRegistry.hasAnyRelations()) {
+            for (var store : componentRegistry.allRelationStores()) {
+                long minWatermark = Long.MAX_VALUE;
+                for (var p : systemPlans.values()) {
+                    if (p.consumedRemovedRelations().contains(store.type())
+                            && p.lastSeenTick() < minWatermark) {
+                        minWatermark = p.lastSeenTick();
+                    }
+                }
+                if (minWatermark != Long.MAX_VALUE) {
+                    store.removalLog().collectGarbage(minWatermark);
                 }
             }
         }
@@ -698,10 +1165,42 @@ public final class World {
         }
 
         if (desc.isExclusive()) {
+            // Exclusive systems get their full service-arg array from
+            // the plan, same as non-exclusive zero-component systems.
+            // The World slot was already resolved to `this` by
+            // resolveServiceParam during plan build, and any extra
+            // service params (Res, ResMut, Commands, ...) are also
+            // pre-filled. Previously this branch always passed
+            // {this}, which limited exclusive systems to a single
+            // World-only parameter.
+            var plan = systemPlans.get(desc.name());
             try {
-                invoker.invoke(new Object[]{ this });
+                invoker.invoke(plan.args());
             } catch (Throwable e) {
                 throw new RuntimeException("Exclusive system failed: " + desc.name(), e);
+            }
+            return;
+        }
+
+        // @ForEachPair systems skip the archetype-matching path and
+        // walk the relation store directly. Prefer the tier-1
+        // generated runner when available; fall back to the tier-2
+        // reflective processor.
+        var pairRunner = pairIterationRunners.get(desc.name());
+        if (pairRunner != null) {
+            try {
+                pairRunner.run(tick.current());
+            } catch (Throwable e) {
+                throw new RuntimeException("@ForEachPair tier-1 failed: " + desc.name(), e);
+            }
+            return;
+        }
+        var pairProc = pairIterationProcessors.get(desc.name());
+        if (pairProc != null) {
+            try {
+                pairProc.run();
+            } catch (Throwable e) {
+                throw new RuntimeException("@ForEachPair system failed: " + desc.name(), e);
             }
             return;
         }
@@ -720,7 +1219,7 @@ public final class World {
             }
             // Even zero-component systems need their watermark advanced for
             // RemovedComponents/@Filter consumers.
-            if (plan.hasChangeFilters() || !desc.removedReads().isEmpty()) {
+            if (plan.hasChangeFilters() || !desc.removedReads().isEmpty() || !desc.removedRelationReads().isEmpty()) {
                 plan.markExecuted(tick.current());
             }
             return;
@@ -769,7 +1268,7 @@ public final class World {
         // RemovedComponents readers on the next tick compare against this
         // tick's boundary.
         var plan = systemPlans.get(desc.name());
-        if (plan != null && (plan.hasChangeFilters() || !desc.removedReads().isEmpty())) {
+        if (plan != null && (plan.hasChangeFilters() || !desc.removedReads().isEmpty() || !desc.removedRelationReads().isEmpty())) {
             plan.markExecuted(currentTick);
         }
     }
@@ -803,6 +1302,17 @@ public final class World {
         } else if (paramType == Local.class) {
             var key = desc.name() + ":" + paramIndex;
             return locals.computeIfAbsent(key, k -> new Local<>());
+        } else if (paramType == zzuegg.ecs.relation.PairReader.class) {
+            var recType = (Class<? extends Record>) extractTypeArg(param);
+            var store = componentRegistry.registerRelation(recType);
+            return new zzuegg.ecs.relation.StorePairReader<>(store);
+        } else if (paramType == zzuegg.ecs.component.ComponentReader.class) {
+            // Fast cached cross-entity component reader. Direct
+            // reference to this.entityLocations avoids the lambda
+            // indirection an IntFunction closure would require.
+            var recType = (Class<? extends Record>) extractTypeArg(param);
+            var compId = componentRegistry.getOrRegister(recType);
+            return new zzuegg.ecs.component.ComponentReader<>(compId, entityLocations);
         }
         throw new IllegalArgumentException(
             "System '" + desc.name() + "': unrecognised service parameter type '"

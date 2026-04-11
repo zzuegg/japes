@@ -29,6 +29,12 @@ public final class Chunk {
 
     public Chunk(int capacity, Map<ComponentId, Class<? extends Record>> componentTypes,
                  ComponentStorage.Factory factory, Set<ComponentId> dirtyTrackedComponents) {
+        this(capacity, componentTypes, factory, dirtyTrackedComponents, Set.of());
+    }
+
+    public Chunk(int capacity, Map<ComponentId, Class<? extends Record>> componentTypes,
+                 ComponentStorage.Factory factory, Set<ComponentId> dirtyTrackedComponents,
+                 Set<ComponentId> fullyUntrackedComponents) {
         this.capacity = capacity;
         this.entities = new Entity[capacity];
         // Find the max id so we can size the flat lookup arrays.
@@ -51,6 +57,11 @@ public final class Chunk {
             // nothing on markChanged.
             if (dirtyTrackedComponents.contains(entry.getKey())) {
                 tracker.setDirtyTracked(true);
+            }
+            // Zero-observer fast path: mark the tracker fully
+            // untracked so markChanged/markAdded are cheap no-ops.
+            if (fullyUntrackedComponents.contains(entry.getKey())) {
+                tracker.setFullyUntracked(true);
             }
             changeTrackersById[entry.getKey().id()] = tracker;
             trackerList[listIdx] = tracker;

@@ -300,6 +300,10 @@ public final class GeneratedChunkProcessor {
                 //   6+2*paramCount+3                 : dirtyCount (int, only if hasFilters)
                 //   6+2*paramCount+4..+3+filterCount : filter trackers (ChangeTracker, only if hasFilters)
                 //   +(4+filterCount)                 : lastSeen (long, 2 slots, only if hasFilters)
+                //   next                             : hoisted `this.inst` (instance ref, only if !isStatic)
+                //   next+1..                         : hoisted service[i] per SERVICE param
+                //   next                             : hoisted mut[i] per WRITE param
+                //   next                             : hoisted entities[] array (only if any ENTITY param)
                 int countVar = 4;
                 int slotVar = 5;
                 int firstStorageVar = 6;
@@ -310,6 +314,33 @@ public final class GeneratedChunkProcessor {
                 int dirtyCountVar = dirtyListVar + 1;
                 int firstFilterTrackerVar = dirtyCountVar + 1;
                 int lastSeenVar = firstFilterTrackerVar + resolvedFilters.length;
+                // lastSeen is a long → consumes 2 slots. Next free slot is
+                // lastSeenVar + 2 if hasFilters, else lastSeenVar (== lastSeenVar
+                // was never written). Keep it simple: reserve 2 slots always.
+                int firstHoistVar = lastSeenVar + (hasFilters ? 2 : 0);
+                int instLocal = !isStatic ? firstHoistVar++ : -1;
+                // One local per parameter slot that we want to hoist. We only
+                // hoist the SERVICE and WRITE-mut refs — storages and trackers
+                // are already per-chunk locals, and READ params re-load per
+                // slot intentionally (they're the values the user reads).
+                int[] serviceLocal = new int[paramCount];
+                int[] mutLocal = new int[paramCount];
+                for (int i = 0; i < paramCount; i++) {
+                    serviceLocal[i] = -1;
+                    mutLocal[i] = -1;
+                    if (kinds[i] == ParamKind.SERVICE) {
+                        serviceLocal[i] = firstHoistVar++;
+                    } else if (kinds[i] == ParamKind.WRITE) {
+                        mutLocal[i] = firstHoistVar++;
+                    }
+                }
+                // If the system takes an Entity parameter, hoist the
+                // chunk's raw entityArray() reference to a local so
+                // per-slot access becomes an aaload instead of an
+                // invokevirtual through Chunk.entity(int).
+                boolean anyEntity = false;
+                for (var k : kinds) if (k == ParamKind.ENTITY) { anyEntity = true; break; }
+                int entityArrayLocal = anyEntity ? firstHoistVar++ : -1;
 
                 cb.aload(1); // chunk
                 cb.invokevirtual(chunkDesc, "count", MethodTypeDesc.of(ConstantDescs.CD_int));
@@ -407,6 +438,49 @@ public final class GeneratedChunkProcessor {
                     cb.istore(slotVar);
                 }
 
+                // Hoist per-instance field loads out of the loop. Without
+                // this, every iteration does:
+                //   aload0; getfield inst; checkcast systemClass
+                //   aload0; getfield services; ldc i; aaload; checkcast P
+                //   aload0; getfield muts; ldc i; aaload
+                // The JIT's loop-invariant code motion can't hoist these
+                // because the fields are `public` non-final and the
+                // invokevirtual to the user body is treated as a potential
+                // side effect. Hoisting them here in bytecode makes the hot
+                // loop load from locals only.
+                if (instLocal >= 0) {
+                    cb.aload(0);
+                    cb.getfield(genDesc, "inst", objDesc);
+                    cb.checkcast(systemClassDesc);
+                    cb.astore(instLocal);
+                }
+                for (int i = 0; i < paramCount; i++) {
+                    if (serviceLocal[i] < 0) continue;
+                    cb.aload(0);
+                    cb.getfield(genDesc, "services", objArrayDesc);
+                    cb.ldc(i);
+                    cb.aaload();
+                    cb.checkcast(params[i].getType().describeConstable().orElseThrow());
+                    cb.astore(serviceLocal[i]);
+                }
+                for (int i = 0; i < paramCount; i++) {
+                    if (mutLocal[i] < 0) continue;
+                    cb.aload(0);
+                    cb.getfield(genDesc, "muts", mutArrayDesc);
+                    cb.ldc(i);
+                    cb.aaload();
+                    cb.astore(mutLocal[i]);
+                }
+                // Hoist chunk.entityArray() so per-slot Entity access
+                // is a plain aaload on a local Entity[] rather than an
+                // invokevirtual through Chunk.entity(int).
+                if (entityArrayLocal >= 0) {
+                    cb.aload(1); // chunk
+                    cb.invokevirtual(chunkDesc, "entityArray",
+                        MethodTypeDesc.of(entityDesc.arrayType()));
+                    cb.astore(entityArrayLocal);
+                }
+
                 var loopStart = cb.newLabel();
                 var loopEnd = cb.newLabel();
                 var loopContinue = cb.newLabel();
@@ -446,11 +520,10 @@ public final class GeneratedChunkProcessor {
                     cb.if_icmpge(loopEnd);
                 }
 
-                // Load instance for invokevirtual (non-static only)
+                // Load instance for invokevirtual (non-static only) —
+                // hoisted to `instLocal` in the preamble.
                 if (!isStatic) {
-                    cb.aload(0);
-                    cb.getfield(genDesc, "inst", objDesc);
-                    cb.checkcast(systemClassDesc);
+                    cb.aload(instLocal);
                 }
 
                 // Build the arg list
@@ -471,14 +544,14 @@ public final class GeneratedChunkProcessor {
                             cb.checkcast(componentTypes[i].describeConstable().orElseThrow());
                         }
                         case WRITE -> {
-                            // push muts[i], dup, call resetValue(value, slot);
-                            // tracker+tick were already set per-chunk via
-                            // setContext, so the per-entity path only pushes
-                            // the two variables that actually change per slot.
-                            cb.aload(0);
-                            cb.getfield(genDesc, "muts", mutArrayDesc);
-                            cb.ldc(i);
-                            cb.aaload();
+                            // Push the hoisted Mut ref, dup (once for
+                            // resetValue, once to remain on the stack for
+                            // the method argument), call resetValue(value,
+                            // slot). tracker+tick were already set per-chunk
+                            // via setContext, so the per-entity path only
+                            // pushes the two variables that actually change
+                            // per slot.
+                            cb.aload(mutLocal[i]);
                             cb.dup();
                             if (useDefaultStorageFactory) {
                                 cb.aload(firstStorageVar + i);
@@ -493,18 +566,16 @@ public final class GeneratedChunkProcessor {
                             cb.invokevirtual(mutDesc, "resetValue", mutResetValueDesc);
                         }
                         case ENTITY -> {
-                            // chunk.entity(slot) — returns Entity directly, no cast needed
-                            cb.aload(1);
+                            // entities[slot] via the hoisted raw Entity[]
+                            // local — one aaload, no virtual dispatch.
+                            cb.aload(entityArrayLocal);
                             cb.iload(slotVar);
-                            cb.invokevirtual(chunkDesc, "entity", chunkEntityDesc);
+                            cb.aaload();
                         }
                         case SERVICE -> {
-                            // (ParamType) services[i]
-                            cb.aload(0);
-                            cb.getfield(genDesc, "services", objArrayDesc);
-                            cb.ldc(i);
-                            cb.aaload();
-                            cb.checkcast(params[i].getType().describeConstable().orElseThrow());
+                            // Hoisted in the preamble — just reload the
+                            // cast reference from the local.
+                            cb.aload(serviceLocal[i]);
                         }
                     }
                 }
@@ -519,13 +590,11 @@ public final class GeneratedChunkProcessor {
                 // Post-call: for each write param, flush the Mut and write the
                 // result back to storage. Mut.flush() itself calls
                 // ChangeTracker.markChanged (honouring @ValueTracked), so we
-                // only need to do the storage write here.
+                // only need to do the storage write here. Uses the hoisted
+                // Mut local from the preamble.
                 for (int i = 0; i < paramCount; i++) {
                     if (kinds[i] != ParamKind.WRITE) continue;
-                    cb.aload(0);
-                    cb.getfield(genDesc, "muts", mutArrayDesc);
-                    cb.ldc(i);
-                    cb.aaload();
+                    cb.aload(mutLocal[i]);
                     cb.invokevirtual(mutDesc, "flush", mutFlushDesc);
                     cb.astore(tempValueVar);
 
@@ -555,6 +624,19 @@ public final class GeneratedChunkProcessor {
                 cb.return_();
             });
         });
+
+        // Optional dump of generated bytecode for inspection. Set
+        // -Dzzuegg.ecs.dumpGenerated=/path/to/dir to write every
+        // hidden class to disk as <descName>.class. Used to audit
+        // the tier-1 hot path with javap -c.
+        var dumpDir = java.lang.System.getProperty("zzuegg.ecs.dumpGenerated");
+        if (dumpDir != null) {
+            try {
+                var path = java.nio.file.Path.of(dumpDir, genName.replace('.', '_') + ".class");
+                java.nio.file.Files.createDirectories(path.getParent());
+                java.nio.file.Files.write(path, bytes);
+            } catch (Exception ignored) { /* best-effort */ }
+        }
 
         var hiddenLookup = systemLookup.defineHiddenClass(bytes, true);
         var clazz = hiddenLookup.lookupClass();

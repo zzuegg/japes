@@ -1,5 +1,9 @@
 package zzuegg.ecs.component;
 
+import zzuegg.ecs.relation.CleanupPolicy;
+import zzuegg.ecs.relation.Relation;
+import zzuegg.ecs.relation.RelationStore;
+
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Map;
@@ -8,6 +12,10 @@ public final class ComponentRegistry {
 
     private final Map<Class<?>, ComponentInfo> byType = new ConcurrentHashMap<>();
     private final Map<ComponentId, ComponentInfo> byId = new ConcurrentHashMap<>();
+    // Per-relation-type storage. Kept on a separate map so relation types
+    // (first-class (source, target) pairs) can never collide with regular
+    // component ids, and so the hot component-lookup path stays untouched.
+    private final Map<Class<? extends Record>, RelationStore<?>> relationStores = new ConcurrentHashMap<>();
     private final AtomicInteger nextId = new AtomicInteger(0);
     // Per-class cache that HotSpot special-cases: ClassValue.get has a JIT
     // intrinsic that lets the JIT fold the lookup to a direct field read on
@@ -99,5 +107,106 @@ public final class ComponentRegistry {
 
     public int count() {
         return byType.size();
+    }
+
+    // ---------------------------------------------------------------
+    // Relation-store side table
+    // ---------------------------------------------------------------
+
+    /**
+     * Register (or fetch) the {@link RelationStore} for a relation
+     * record type. Idempotent: repeat calls return the live store.
+     *
+     * <p>Relation types live on a separate map from component types —
+     * a relation record is not assigned a {@link ComponentId} here.
+     * The archetype marker that tracks "has ≥1 pair of type T" is
+     * allocated later (in PR 2), also as a separate component id
+     * derived from the relation type.
+     */
+    public <T extends Record> RelationStore<T> registerRelation(Class<T> type) {
+        @SuppressWarnings("unchecked")
+        var store = (RelationStore<T>) relationStores.computeIfAbsent(type, k -> {
+            // Two distinct ComponentIds per relation type:
+            //
+            //   sourceMarkerId — reuses the relation's own class id; set
+            //                    on any entity that has >= 1 outgoing
+            //                    pair of this relation type. Existing
+            //                    behaviour.
+            //
+            //   targetMarkerId — freshly allocated id backed by the same
+            //                    Class for archetype/chunk purposes (one
+            //                    wasted reference slot per entity that
+            //                    carries it — same deal as the source
+            //                    marker). Set on any entity that has
+            //                    >= 1 incoming pair of this relation
+            //                    type. Enables @Pair(role = TARGET) to
+            //                    narrow the archetype filter to "prey
+            //                    that are being hunted" without the
+            //                    user writing a reverse-index-backed
+            //                    With<...> condition by hand.
+            var sourceId = register(type);
+            var targetId = allocateInternalMarker(type);
+            var annotation = type.getAnnotation(Relation.class);
+            var policy = annotation != null ? annotation.onTargetDespawn() : CleanupPolicy.RELEASE_TARGET;
+            return new RelationStore<>(type, sourceId, targetId, policy);
+        });
+        return store;
+    }
+
+    /**
+     * Allocate a fresh {@link ComponentId} that shares a display class
+     * with an existing component type. Used by the relation-store
+     * target marker: every relation type needs a second marker id
+     * distinct from its source id but pointing at the same underlying
+     * record class, so the existing archetype/chunk machinery can
+     * carry it without a second per-type record declaration.
+     *
+     * <p>The allocation is recorded only in {@code byId}, never in
+     * {@code byType}. {@code register(Class)} and {@code info(Class)}
+     * still resolve to the public id for the class. Only lookups via
+     * the returned {@code ComponentId} (or through
+     * {@code RelationStore.targetMarkerId()}) reach the marker.
+     */
+    private ComponentId allocateInternalMarker(Class<? extends Record> displayType) {
+        var id = new ComponentId(nextId.getAndIncrement());
+        // isValueTracked=false, isTableStorage=true — archetype builds a
+        // regular storage slice for the marker class. The slice holds
+        // null for every entity carrying the marker.
+        var info = new ComponentInfo(id, displayType, true, false, false);
+        byId.put(id, info);
+        return id;
+    }
+
+    /**
+     * Look up the live {@link RelationStore} for a relation type, or
+     * {@code null} if the type has never been registered. Unlike
+     * {@link #info(Class)}, missing relations do not throw — callers
+     * are expected to branch on presence.
+     */
+    public <T extends Record> RelationStore<T> relationStore(Class<T> type) {
+        @SuppressWarnings("unchecked")
+        var store = (RelationStore<T>) relationStores.get(type);
+        return store;
+    }
+
+    /**
+     * Every relation store currently registered. Returns a direct
+     * view over the registry's live values — callers must not mutate
+     * the registry itself during iteration, though mutating the
+     * individual stores' internal indices is always safe. Used on
+     * hot paths (despawn cleanup, end-of-tick GC) so we avoid the
+     * per-call snapshot allocation.
+     */
+    public java.util.Collection<RelationStore<?>> allRelationStores() {
+        return relationStores.values();
+    }
+
+    /**
+     * {@code true} when at least one relation type has been registered.
+     * Lets hot paths skip the relation-stores iteration entirely in
+     * the common case where a world uses no relations.
+     */
+    public boolean hasAnyRelations() {
+        return !relationStores.isEmpty();
     }
 }

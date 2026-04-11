@@ -33,6 +33,18 @@ public final class CommandProcessor {
                     }
                 }
                 case Commands.InsertResourceCommand res -> world.setResource(res.resource());
+                case Commands.SetRelationCommand rel -> {
+                    // Skip if either endpoint died between enqueue and flush —
+                    // matches the AddCommand / SetCommand handling above.
+                    if (world.isAlive(rel.source()) && world.isAlive(rel.target())) {
+                        world.setRelation(rel.source(), rel.target(), rel.value());
+                    }
+                }
+                case Commands.RemoveRelationCommand rel -> {
+                    if (world.isAlive(rel.source())) {
+                        world.removeRelation(rel.source(), rel.target(), rel.type());
+                    }
+                }
             }
         }
     }

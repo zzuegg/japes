@@ -7,13 +7,15 @@ import java.util.List;
 
 public final class Commands {
 
-    public sealed interface Command permits SpawnCommand, DespawnCommand, AddCommand, RemoveCommand, SetCommand, InsertResourceCommand {}
+    public sealed interface Command permits SpawnCommand, DespawnCommand, AddCommand, RemoveCommand, SetCommand, InsertResourceCommand, SetRelationCommand, RemoveRelationCommand {}
     public record SpawnCommand(Record... components) implements Command {}
     public record DespawnCommand(Entity entity) implements Command {}
     public record AddCommand(Entity entity, Record component) implements Command {}
     public record RemoveCommand(Entity entity, Class<? extends Record> type) implements Command {}
     public record SetCommand(Entity entity, Record component) implements Command {}
     public record InsertResourceCommand(Object resource) implements Command {}
+    public record SetRelationCommand(Entity source, Entity target, Record value) implements Command {}
+    public record RemoveRelationCommand(Entity source, Entity target, Class<? extends Record> type) implements Command {}
 
     private List<Command> buffer = new ArrayList<>();
 
@@ -39,6 +41,14 @@ public final class Commands {
 
     public <T> void insertResource(T resource) {
         buffer.add(new InsertResourceCommand(resource));
+    }
+
+    public <T extends Record> void setRelation(Entity source, Entity target, T value) {
+        buffer.add(new SetRelationCommand(source, target, value));
+    }
+
+    public <T extends Record> void removeRelation(Entity source, Entity target, Class<T> type) {
+        buffer.add(new RemoveRelationCommand(source, target, type));
     }
 
     public List<Command> drain() {

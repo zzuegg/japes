@@ -16,7 +16,7 @@ class SingleThreadedExecutorTest {
         return new SystemDescriptor(
             name, "Update", after, before, false,
             List.of(), java.util.Map.of(), Set.of(), Set.of(), Set.of(), Set.of(),
-            Set.of(), Set.of(), List.of(), Set.of(), Set.of(), false, false, null, null, null
+            Set.of(), Set.of(), List.of(), Set.of(), List.of(), Set.of(), null, -1, Set.of(), Set.of(), false, false, null, null, null
         );
     }
 

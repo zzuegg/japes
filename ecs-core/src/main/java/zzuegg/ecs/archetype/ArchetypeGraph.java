@@ -27,6 +27,13 @@ public final class ArchetypeGraph {
     // with every Archetype created here so new chunks pick up the current
     // state at construction time without an explicit callback.
     private final Set<ComponentId> dirtyTrackedComponents = new HashSet<>();
+    // Components for which ChangeTracker bookkeeping is completely
+    // disabled — markAdded / markChanged become no-ops. Populated by
+    // World at plan-build time: any component with zero
+    // @Filter(Added/Changed) observers is fully untracked, skipping
+    // the per-slot tick array writes entirely. Shared by reference
+    // with Archetype/Chunk so new chunks inherit the state.
+    private final Set<ComponentId> fullyUntrackedComponents = new HashSet<>();
     // Bumped every time getOrCreate actually materialises a new archetype.
     // Callers that memoise findMatching() results can compare this against
     // a stored snapshot to decide whether their cache is still valid —
@@ -47,7 +54,8 @@ public final class ArchetypeGraph {
     public Archetype getOrCreate(ArchetypeId id) {
         var existing = archetypes.get(id);
         if (existing != null) return existing;
-        var created = new Archetype(id, registry, chunkCapacity, storageFactory, dirtyTrackedComponents);
+        var created = new Archetype(id, registry, chunkCapacity, storageFactory,
+            dirtyTrackedComponents, fullyUntrackedComponents);
         archetypes.put(id, created);
         // New archetype invalidates every cached query — any previously-cached
         // match set could now be missing this archetype.
@@ -75,6 +83,34 @@ public final class ArchetypeGraph {
 
     public Set<ComponentId> dirtyTrackedComponents() {
         return dirtyTrackedComponents;
+    }
+
+    /**
+     * Set the complete "fully untracked" component set. Any tracker
+     * for a component in this set becomes a no-op on
+     * {@code markAdded}/{@code markChanged} — the per-slot tick
+     * array writes are skipped entirely. World calls this once at
+     * plan-build time after it has computed the union of all
+     * observed components (filter targets + RemovedComponents
+     * consumers); everything else is eligible for untracking.
+     *
+     * <p>Walks every existing chunk and flips the flag on every
+     * matching tracker. New archetypes created after this call pick
+     * up the state via the shared set reference.
+     */
+    public void setFullyUntrackedComponents(Set<ComponentId> untracked) {
+        fullyUntrackedComponents.clear();
+        fullyUntrackedComponents.addAll(untracked);
+        for (var archetype : archetypes.values()) {
+            for (var compId : archetype.id().components()) {
+                for (var chunk : archetype.chunks()) {
+                    var tracker = chunk.changeTracker(compId);
+                    if (tracker != null) {
+                        tracker.setFullyUntracked(untracked.contains(compId));
+                    }
+                }
+            }
+        }
     }
 
     public ArchetypeId addEdge(ArchetypeId source, ComponentId added) {

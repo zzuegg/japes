@@ -89,6 +89,16 @@ public final class SystemExecutionPlan {
         this.consumedRemovedComponents = types;
     }
 
+    // Relation types consumed via RemovedRelations<T> parameters. Parallels
+    // consumedRemovedComponents — drives end-of-tick GC of each store's
+    // PairRemovalLog using the minimum watermark across all plans that
+    // consume the type.
+    private Set<Class<? extends Record>> consumedRemovedRelations = Set.of();
+    public Set<Class<? extends Record>> consumedRemovedRelations() { return consumedRemovedRelations; }
+    public void setConsumedRemovedRelations(Set<Class<? extends Record>> types) {
+        this.consumedRemovedRelations = types;
+    }
+
     // Parameter indices that receive the current iteration entity handle
     // (Entity-typed method parameters). Filled per-slot inside processChunk.
     private int[] entitySlotIndices = new int[0];

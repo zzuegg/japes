@@ -20,6 +20,7 @@ parallelises disjoint systems automatically.
 | [Quick start](#quick-start) | Minimum world + system in a dozen lines |
 | [Change detection](#change-detection) | `@Filter(Changed)` + `RemovedComponents<T>` |
 | [Deferred structural edits](#deferred-structural-edits) | `Commands` buffers for spawn/despawn/insert/remove |
+| [Relations](#relations) | First-class `@Pair(T)` / `@ForEachPair(T)` entity relationships with forward + reverse indices and tier-1 bytecode-gen dispatch |
 | [Headline benchmark](#headline-benchmark) | One-line cross-library comparison |
 | [Build](#build) | JDK 26, Gradle wrapper, running benchmarks |
 | [Project layout](#project-layout) | What's in each module |
@@ -93,6 +94,82 @@ class Reaper {
 `Commands` buffers spawn/despawn/insert/remove calls so a parallel
 stage can issue them without racing on the archetype graph. Buffers
 flush at the stage boundary.
+
+## Relations
+
+Flecs-style first-class entity relationships. Annotate a record with
+`@Relation`, set pairs via `world.setRelation` or `cmds.setRelation`,
+query them with either dispatch shape. The library maintains
+forward + reverse indices automatically, so a prey can ask "who is
+hunting me?" in one primitive-keyed map probe instead of scanning
+every predator — and despawn cleanup drops pairs on both sides with a
+configurable `CleanupPolicy`.
+
+Two dispatch shapes, both first-class:
+
+**`@Pair(T.class)`** — *set-oriented*. Called once per entity that
+carries ≥ 1 pair. The body walks the entity's pairs with
+`PairReader.fromSource(self)` / `withTarget(self)`. Right default
+when the system wants the *whole set* of pairs on one entity.
+
+```java
+@Relation
+record Hunting(int focus) {}
+
+@System @Pair(Hunting.class)
+void steer(@Read Position p, Entity self, PairReader<Hunting> r, @Write Mut<Velocity> v) {
+    for (var pair : r.fromSource(self)) { /* steer toward pair.target() */ }
+}
+```
+
+**`@ForEachPair(T.class)`** — *tuple-oriented*. Called once per live
+pair. Parameters bind directly to source-side components, target-side
+components (opt-in with `@FromTarget`), and the relation payload. The
+scheduler generates a tier-1 hidden class that walks the
+`RelationStore` forward index directly and calls the user method via
+`invokevirtual` — no walker, no per-pair allocation, no
+`world.getComponent` probe.
+
+```java
+@System @ForEachPair(Hunting.class)
+void pursuit(
+        @Read Position sourcePos,
+        @Write Mut<Velocity> sourceVel,
+        @FromTarget @Read Position targetPos,
+        Hunting hunting
+) { /* ...steer sourceVel toward targetPos... */ }
+```
+
+Benchmarked against Bevy 0.15 on a 500-predator / 2000-prey
+steady-state tick. Bevy has no generic relations primitive, so the
+comparison is against two hand-written Bevy implementations: the naive
+`Component<Entity>` pattern most first-pass code uses, and a
+hand-rolled `HuntedBy(Vec<Entity>)` reverse index — the exact
+maintenance the relation API does for you.
+
+| implementation                                  | 500 × 2000 tick µs/op |
+|-------------------------------------------------|----------------------:|
+| bevy 0.15 — hand-rolled reverse index           |             **11.2** |
+| **japes** — `@ForEachPair` (tier-1 bytecode-gen)|              **33.0** |
+| japes — `@Pair` + `PairReader` (tier-1)         |                  43.8 |
+| bevy 0.15 — naive `Component<Entity>`           |                 261.9 |
+
+japes now **beats the naive Bevy pattern at every grid cell** — up
+to 12.9× faster at 1000 × 5000 — because the forward / reverse
+indices are built in, so the `O(predators × prey)` awareness scan
+that sinks the naive approach never happens. A determined Bevy user
+willing to hand-maintain `HuntedBy(Vec<Entity>)` on every prey still
+wins by ~3×, but the gap is no longer about wasted work: it's about
+features the library does that the hand-rolled code skips (per-pair
+change tracking, deferred `Commands`, archetype marker maintenance,
+`RemovedRelations<T>` log drain).
+
+The optimization journey: the 500 × 2000 cell has gone from **167 µs
+at PR landing → 33.0 µs today**, a 5.06× speedup with the API surface
+staying stable. See
+[DEEP_DIVE § Predator / prey — the relations scenario](DEEP_DIVE.md#predator--prey--the-relations-scenario)
+for the full 9-cell 4-way grid, the decision table for
+`@Pair` vs `@ForEachPair`, and the tier-1 bytecode generator write-up.
 
 ## Headline benchmark
 

@@ -15,6 +15,7 @@ public final class Archetype {
     private final int chunkCapacity;
     private final ComponentStorage.Factory storageFactory;
     private final java.util.Set<ComponentId> dirtyTrackedComponents;
+    private final java.util.Set<ComponentId> fullyUntrackedComponents;
     private final List<Chunk> chunks = new ArrayList<>();
     // Index of the chunk that currently has open slots, or -1 when all
     // chunks are full and the next add must create a new one. Maintained
@@ -25,10 +26,18 @@ public final class Archetype {
     public Archetype(ArchetypeId id, ComponentRegistry registry, int chunkCapacity,
                      ComponentStorage.Factory storageFactory,
                      java.util.Set<ComponentId> dirtyTrackedComponents) {
+        this(id, registry, chunkCapacity, storageFactory, dirtyTrackedComponents, java.util.Set.of());
+    }
+
+    public Archetype(ArchetypeId id, ComponentRegistry registry, int chunkCapacity,
+                     ComponentStorage.Factory storageFactory,
+                     java.util.Set<ComponentId> dirtyTrackedComponents,
+                     java.util.Set<ComponentId> fullyUntrackedComponents) {
         this.id = id;
         this.chunkCapacity = chunkCapacity;
         this.storageFactory = storageFactory;
         this.dirtyTrackedComponents = dirtyTrackedComponents;
+        this.fullyUntrackedComponents = fullyUntrackedComponents;
         this.componentTypes = new LinkedHashMap<>();
         for (var compId : id.components()) {
             componentTypes.put(compId, registry.info(compId).type());
@@ -98,7 +107,8 @@ public final class Archetype {
         if (openChunkIndex >= 0 && !chunks.get(openChunkIndex).isFull()) {
             return openChunkIndex;
         }
-        chunks.add(new Chunk(chunkCapacity, componentTypes, storageFactory, dirtyTrackedComponents));
+        chunks.add(new Chunk(chunkCapacity, componentTypes, storageFactory,
+            dirtyTrackedComponents, fullyUntrackedComponents));
         openChunkIndex = chunks.size() - 1;
         return openChunkIndex;
     }

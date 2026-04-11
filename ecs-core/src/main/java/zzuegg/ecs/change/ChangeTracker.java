@@ -23,6 +23,15 @@ public final class ChangeTracker {
     // so pure-write workloads don't pay ~3ns per mark. World flips this when
     // a plan registers a filter targeting the component.
     private boolean dirtyTracked = false;
+    // Even stronger short-circuit than dirtyTracked: when no system
+    // observes this component via a change filter AND no system reads
+    // its RemovedComponents<T> log, every markAdded/markChanged call
+    // becomes a full no-op — we don't even write the per-slot tick
+    // array. The tick arrays exist only for consumers that query
+    // isChangedSince/isAddedSince, which only happens via the tier-1
+    // filter loop; if there are no such consumers the writes are pure
+    // waste. World sets this at plan build time.
+    private boolean fullyUntracked = false;
 
     public ChangeTracker(int capacity) {
         this.addedTicks = new long[capacity];
@@ -66,7 +75,25 @@ public final class ChangeTracker {
         return dirtyTracked;
     }
 
+    /**
+     * Flip the "no observers at all" flag. When true, every
+     * subsequent {@link #markAdded} / {@link #markChanged} call
+     * becomes a no-op: nothing updates the per-slot tick arrays or
+     * the dirty list. Used by World's plan-build scan to eliminate
+     * change-tracking bookkeeping for components that have no
+     * {@code @Filter(Added/Changed)} observer and no
+     * {@code RemovedComponents<T>} reader.
+     */
+    public void setFullyUntracked(boolean untracked) {
+        this.fullyUntracked = untracked;
+    }
+
+    public boolean isFullyUntracked() {
+        return fullyUntracked;
+    }
+
     public void markAdded(int slot, long tick) {
+        if (fullyUntracked) return;
         addedTicks[slot] = tick;
         // Intentionally not updating changedTicks: 'added' and 'changed' are
         // independent in Bevy-style change detection. Newly spawned entities
@@ -76,6 +103,7 @@ public final class ChangeTracker {
     }
 
     public void markChanged(int slot, long tick) {
+        if (fullyUntracked) return;
         changedTicks[slot] = tick;
         appendDirty(slot);
     }

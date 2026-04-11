@@ -5,6 +5,8 @@ import zzuegg.ecs.component.ComponentRegistry;
 import zzuegg.ecs.component.Mut;
 import zzuegg.ecs.event.EventReader;
 import zzuegg.ecs.event.EventWriter;
+import zzuegg.ecs.relation.PairReader;
+import zzuegg.ecs.relation.RemovedRelations;
 import zzuegg.ecs.query.AccessType;
 import zzuegg.ecs.query.ComponentAccess;
 import zzuegg.ecs.resource.Res;
@@ -80,9 +82,25 @@ public final class SystemParser {
             var eventReads = new HashSet<Class<?>>();
             var eventWrites = new HashSet<Class<?>>();
             var removedReads = new HashSet<Class<? extends Record>>();
+            var removedRelationReads = new HashSet<Class<? extends Record>>();
             var entityParamSlots = new HashSet<Integer>();
+            // Parallel to entityParamSlots but only populated for
+            // @ForEachPair systems. Source-side Entity params go in
+            // entityParamSlots (the default); @FromTarget Entity
+            // params go here so the pair-iteration dispatch knows
+            // which param to fill with target.
+            var targetEntityParamSlots = new HashSet<Integer>();
+            // Slot index for the relation payload parameter. Stays
+            // -1 for non-@ForEachPair systems.
+            int pairValueParamSlot = -1;
             boolean usesCommands = false;
             boolean usesLocal = false;
+
+            // Read @ForEachPair up front so the parameter loop below
+            // can match the payload parameter by type and route
+            // @FromTarget Entity params to the target slot set.
+            var forEachPair = method.getAnnotation(ForEachPair.class);
+            final Class<? extends Record> forEachPairType = forEachPair != null ? forEachPair.value() : null;
 
             var methodParams = method.getParameters();
             for (int pIdx = 0; pIdx < methodParams.length; pIdx++) {
@@ -93,7 +111,28 @@ public final class SystemParser {
                 if (paramType == zzuegg.ecs.entity.Entity.class) {
                     // Per-iteration current-entity handle. Filled by
                     // SystemExecutionPlan.processChunk from chunk.entity(slot).
-                    entityParamSlots.add(pIdx);
+                    // For @ForEachPair systems, @FromTarget Entity goes
+                    // into a separate slot set — the source side is the
+                    // default.
+                    if (forEachPairType != null && param.isAnnotationPresent(FromTarget.class)) {
+                        targetEntityParamSlots.add(pIdx);
+                    } else {
+                        entityParamSlots.add(pIdx);
+                    }
+                    continue;
+                }
+                // For @ForEachPair systems, a parameter whose type
+                // equals the driving relation type IS the payload —
+                // bound per-pair from {@code slice.values[i]} by the
+                // dispatch path, not resolved as a service.
+                if (forEachPairType != null && paramType == forEachPairType) {
+                    if (pairValueParamSlot != -1) {
+                        throw new IllegalArgumentException(
+                            "System '" + clazz.getSimpleName() + "." + method.getName()
+                                + "' declares multiple " + forEachPairType.getSimpleName()
+                                + " parameters — only one pair payload slot is allowed.");
+                    }
+                    pairValueParamSlot = pIdx;
                     continue;
                 }
                 if (paramType == Commands.class) { usesCommands = true; continue; }
@@ -122,18 +161,50 @@ public final class SystemParser {
                     registry.getOrRegister(recType);
                     continue;
                 }
+                if (paramType == PairReader.class) {
+                    // PairReader<T> is a world-scoped service; the system
+                    // body invokes .fromSource(self)/.withTarget(self). We
+                    // register the store here so World.resolveServiceParam
+                    // can look it up without a null check. @Pair on the
+                    // same method is what narrows the archetype filter —
+                    // PairReader alone does not imply a marker requirement.
+                    @SuppressWarnings("unchecked")
+                    var recType = (Class<? extends Record>) extractTypeArg(param);
+                    registry.registerRelation(recType);
+                    continue;
+                }
+                if (paramType == zzuegg.ecs.component.ComponentReader.class) {
+                    // ComponentReader<T> is a pre-resolved fast
+                    // cross-entity lookup. Register the target type as
+                    // a regular component so the World resolver can
+                    // look up its ComponentId without an extra hash
+                    // lookup on the hot path.
+                    @SuppressWarnings("unchecked")
+                    var recType = (Class<? extends Record>) extractTypeArg(param);
+                    registry.getOrRegister(recType);
+                    continue;
+                }
+                if (paramType == RemovedRelations.class) {
+                    @SuppressWarnings("unchecked")
+                    var recType = (Class<? extends Record>) extractTypeArg(param);
+                    removedRelationReads.add(recType);
+                    registry.registerRelation(recType);
+                    continue;
+                }
 
                 if (param.isAnnotationPresent(Read.class)) {
                     var compId = registry.getOrRegister(paramType);
                     @SuppressWarnings("unchecked")
                     var recType = (Class<? extends Record>) paramType;
-                    componentAccesses.add(new ComponentAccess(compId, recType, AccessType.READ));
+                    boolean fromTarget = param.isAnnotationPresent(FromTarget.class);
+                    componentAccesses.add(new ComponentAccess(compId, recType, AccessType.READ, fromTarget));
                 } else if (param.isAnnotationPresent(Write.class)) {
                     var typeArg = extractTypeArg(param);
                     var compId = registry.getOrRegister(typeArg);
                     @SuppressWarnings("unchecked")
                     var recType = (Class<? extends Record>) typeArg;
-                    componentAccesses.add(new ComponentAccess(compId, recType, AccessType.WRITE));
+                    boolean fromTarget = param.isAnnotationPresent(FromTarget.class);
+                    componentAccesses.add(new ComponentAccess(compId, recType, AccessType.WRITE, fromTarget));
                 }
             }
 
@@ -149,6 +220,43 @@ public final class SystemParser {
             }
             for (var f : method.getAnnotationsByType(Filter.class)) {
                 changeFilters.add(new SystemDescriptor.FilterDescriptor(f.value(), f.target()));
+            }
+
+            var pairReads = new ArrayList<SystemDescriptor.PairRead>();
+            for (var p : method.getAnnotationsByType(Pair.class)) {
+                pairReads.add(new SystemDescriptor.PairRead(p.value(), p.role()));
+                // Ensure the relation type has a store — registering here means
+                // the plan-build step can safely look up the marker id.
+                registry.registerRelation(p.value());
+            }
+
+            // @ForEachPair validation: reject conflict with @Pair and
+            // @FromTarget @Write. The annotation type itself was
+            // already read into forEachPairType above so the
+            // parameter loop could classify payload slots.
+            Class<? extends Record> pairIterationType = null;
+            if (forEachPairType != null) {
+                if (!pairReads.isEmpty()) {
+                    throw new IllegalArgumentException(
+                        "System '" + clazz.getSimpleName() + "." + method.getName()
+                            + "' has both @Pair and @ForEachPair — pick one. "
+                            + "@Pair drives per-entity iteration, @ForEachPair "
+                            + "drives per-pair iteration; mixing them is ambiguous.");
+                }
+                pairIterationType = forEachPairType;
+                registry.registerRelation(forEachPairType);
+                // Per-pair target-side writes are forbidden in v1.
+                for (var p : methodParams) {
+                    if (p.isAnnotationPresent(FromTarget.class)
+                            && p.isAnnotationPresent(Write.class)) {
+                        throw new IllegalArgumentException(
+                            "System '" + clazz.getSimpleName() + "." + method.getName()
+                                + "' uses @FromTarget @Write which is forbidden "
+                                + "in v1 @ForEachPair systems — target-side write "
+                                + "conflicts have ambiguous semantics. Use @Read "
+                                + "on target components, or mutate via Commands.");
+                    }
+                }
             }
 
             // Parse @Where filters on component parameters (supports multiple per param)
@@ -191,7 +299,9 @@ public final class SystemParser {
                 componentAccesses, whereFilters,
                 resourceReads, resourceWrites,
                 eventReads, eventWrites, withFilters, withoutFilters,
-                changeFilters, removedReads, entityParamSlots,
+                changeFilters, removedReads, pairReads, removedRelationReads,
+                pairIterationType, pairValueParamSlot, targetEntityParamSlots,
+                entityParamSlots,
                 usesCommands, usesLocal, runIf,
                 method, Modifier.isStatic(method.getModifiers()) ? null : instance
             ));

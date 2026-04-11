@@ -628,5 +628,463 @@ fn realistic_tick_benchmarks(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, iteration_benchmarks, nbody_benchmarks, entity_benchmarks, change_detection_benchmarks, scenario_benchmarks, sparse_delta_benchmarks, realistic_tick_benchmarks);
+// === Predator / Prey scenario — Bevy reference for the japes relations benchmark ===
+//
+// Matches PredatorPreyBenchmark (ecs-benchmark). The japes version uses the
+// first-class relation API (`@Pair(Hunting.class)` + `PairReader`). Bevy 0.15
+// has no generic relations primitive — the idiomatic equivalent is to store
+// the target entity in a component field (`Hunting { target }`) and query
+// for it directly. That loses the reverse-index that japes gets for free:
+// a prey asking "who is hunting me?" has to scan every predator's Hunting
+// component, which is O(predators) per prey = O(predators × prey) per tick.
+//
+// This is *exactly* the workload the relation system is designed to obsolete,
+// so the comparison is the one that matters.
+//
+// Systems (chained):
+//   1. pp_movement       — integrate Position += Velocity
+//   2. pp_acquire_hunt   — idle predators pick a random prey; predators
+//                          whose Hunting target has died drop the component
+//   3. pp_pursuit        — hunters steer toward their target's position
+//   4. pp_awareness      — O(pred × prey) reverse scan counting attackers
+//   5. pp_resolve_catches— despawn prey within catch distance
+//   6. pp_respawn_prey   — top up to the baseline count
+//   7. pp_observe_catches— drain RemovedComponents<PreyMarker>
+
+#[derive(Component, Clone, Copy)]
+struct PpPosition { x: f32, y: f32 }
+
+#[derive(Component, Clone, Copy)]
+struct PpVelocity { dx: f32, dy: f32 }
+
+#[derive(Component)]
+struct PpPredator;
+
+#[derive(Component)]
+struct PpPrey;
+
+/// The "relation" expressed the only way Bevy 0.15 offers out of the box —
+/// an entity reference stored in a component. A predator either has this
+/// component (active hunt) or doesn't (idle).
+#[derive(Component, Clone, Copy)]
+struct PpHunting {
+    target: Entity,
+}
+
+#[derive(Resource, Default)]
+struct PpPreyRoster { alive: Vec<Entity> }
+
+#[derive(Resource)]
+struct PpConfig {
+    catch_distance_sq: f32,
+    arena_size: f32,
+    rng_state: u64,
+    baseline_prey: usize,
+}
+
+impl PpConfig {
+    /// PCG-style 64-bit LCG. Deterministic and dependency-free — same
+    /// shape as the `Random(1234)` seed in the japes Java benchmark.
+    fn next_u32(&mut self) -> u32 {
+        self.rng_state = self
+            .rng_state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        (self.rng_state >> 33) as u32
+    }
+    fn next_f32(&mut self) -> f32 {
+        (self.next_u32() as f32) / (u32::MAX as f32)
+    }
+    fn next_range(&mut self, bound: usize) -> usize {
+        (self.next_u32() as usize) % bound.max(1)
+    }
+}
+
+#[derive(Resource, Default)]
+struct PpCounters {
+    pursuit_walks: u64,
+    with_target_walks: u64,
+    catches: u64,
+}
+
+fn pp_movement(mut q: Query<(&PpVelocity, &mut PpPosition)>) {
+    for (v, mut p) in &mut q {
+        p.x += v.dx;
+        p.y += v.dy;
+    }
+}
+
+/// Idle predators acquire a target; predators whose target has died drop
+/// their Hunting component. The "dead target" case is the manual equivalent
+/// of the japes `RELEASE_TARGET` cleanup policy — Bevy doesn't do this
+/// automatically on component-stored entity references, so it's on the user.
+fn pp_acquire_hunt(
+    mut commands: Commands,
+    idle: Query<Entity, (With<PpPredator>, Without<PpHunting>)>,
+    hunting: Query<(Entity, &PpHunting), With<PpPredator>>,
+    prey_check: Query<(), With<PpPrey>>,
+    roster: Res<PpPreyRoster>,
+    mut config: ResMut<PpConfig>,
+) {
+    // Drop stale Hunting components whose target died last tick (or earlier).
+    for (predator, hunt) in &hunting {
+        if prey_check.get(hunt.target).is_err() {
+            commands.entity(predator).remove::<PpHunting>();
+        }
+    }
+
+    let alive = &roster.alive;
+    if alive.is_empty() {
+        return;
+    }
+    for predator in &idle {
+        let idx = config.next_range(alive.len());
+        let target = alive[idx];
+        commands.entity(predator).insert(PpHunting { target });
+    }
+}
+
+/// Forward walk equivalent: `reader.fromSource(self)` collapsed into a
+/// direct `Hunting` component read. One pair per predator, no reverse
+/// index. Reads the target's Position via a secondary query.
+fn pp_pursuit(
+    mut hunters: Query<(&PpPosition, &mut PpVelocity, &PpHunting), With<PpPredator>>,
+    positions: Query<&PpPosition, Without<PpPredator>>,
+    mut counters: ResMut<PpCounters>,
+) {
+    let mut walks: u64 = 0;
+    for (self_pos, mut self_vel, hunt) in &mut hunters {
+        if let Ok(target_pos) = positions.get(hunt.target) {
+            let dx = target_pos.x - self_pos.x;
+            let dy = target_pos.y - self_pos.y;
+            let mag = (dx * dx + dy * dy).sqrt();
+            if mag > 1e-4 {
+                self_vel.dx = dx / mag * 0.1;
+                self_vel.dy = dy / mag * 0.1;
+            }
+            walks += 1;
+        }
+    }
+    counters.pursuit_walks += walks;
+    std::hint::black_box(&counters.pursuit_walks);
+}
+
+/// Reverse walk equivalent: "who is hunting me?" implemented naively by
+/// scanning every predator's Hunting component for each prey. This is
+/// O(predators × prey) per tick — the cost the japes reverse index is
+/// designed to eliminate.
+fn pp_awareness(
+    prey_q: Query<Entity, With<PpPrey>>,
+    hunters: Query<&PpHunting, With<PpPredator>>,
+    mut counters: ResMut<PpCounters>,
+) {
+    let mut total: u64 = 0;
+    for prey_entity in &prey_q {
+        let mut incoming = 0u64;
+        for hunt in &hunters {
+            if hunt.target == prey_entity {
+                incoming += 1;
+            }
+        }
+        total += incoming;
+    }
+    counters.with_target_walks += total;
+    std::hint::black_box(&counters.with_target_walks);
+}
+
+/// Check distances and despawn prey. The japes version does the same via
+/// `resolveCatches`; the cleanup semantics differ — here the predator's
+/// stale `PpHunting` is fixed up next tick by `pp_acquire_hunt`, because
+/// Bevy has no automatic reverse-index cleanup.
+fn pp_resolve_catches(
+    mut commands: Commands,
+    predators: Query<(&PpPosition, &PpHunting), With<PpPredator>>,
+    prey: Query<&PpPosition, With<PpPrey>>,
+    mut roster: ResMut<PpPreyRoster>,
+    config: Res<PpConfig>,
+) {
+    let mut caught: Vec<Entity> = Vec::new();
+    for (pred_pos, hunt) in &predators {
+        if let Ok(prey_pos) = prey.get(hunt.target) {
+            let dx = pred_pos.x - prey_pos.x;
+            let dy = pred_pos.y - prey_pos.y;
+            if dx * dx + dy * dy <= config.catch_distance_sq {
+                caught.push(hunt.target);
+            }
+        }
+    }
+    // De-dup: two predators can both catch the same prey in one tick.
+    caught.sort_unstable();
+    caught.dedup();
+    for prey_entity in &caught {
+        commands.entity(*prey_entity).despawn();
+    }
+    roster.alive.retain(|e| !caught.contains(e));
+}
+
+/// Steady-state top-up: spawn fresh prey to replace every catch so entity
+/// counts stay stable across iterations.
+fn pp_respawn_prey(
+    mut commands: Commands,
+    mut roster: ResMut<PpPreyRoster>,
+    mut config: ResMut<PpConfig>,
+) {
+    while roster.alive.len() < config.baseline_prey {
+        let x = config.next_f32() * config.arena_size;
+        let y = config.next_f32() * config.arena_size;
+        let e = commands
+            .spawn((
+                PpPosition { x, y },
+                PpVelocity { dx: 0.0, dy: 0.0 },
+                PpPrey,
+            ))
+            .id();
+        roster.alive.push(e);
+    }
+}
+
+/// Drain `RemovedComponents<PpPrey>` — Bevy's closest equivalent to
+/// japes's `RemovedRelations<Hunting>`. Fires once per caught prey.
+fn pp_observe_catches(
+    mut removed: RemovedComponents<PpPrey>,
+    mut counters: ResMut<PpCounters>,
+) {
+    for _ in removed.read() {
+        counters.catches += 1;
+    }
+    std::hint::black_box(counters.catches);
+}
+
+// --- Optimized variant: manually maintained reverse index ---
+//
+// Same simulation shape as the naive version above, but with a
+// `PpHuntedBy(Vec<Entity>)` component on every prey that predators
+// push into when they acquire a hunt. `pp_opt_awareness` then reads
+// `hunted_by.0.len()` — O(prey), with an O(1) probe per prey —
+// instead of scanning every predator.
+//
+// This is *exactly* the hand-roll the japes relation feature
+// replaces. Measuring it isolates "what does the library buy you?"
+// from "how fast can a determined user write the same thing?".
+// The answer turns out to be: most of the high-N asymptotic win
+// comes from the reverse index, not from any magic in japes —
+// which is the whole point of the design.
+
+#[derive(Component, Default)]
+struct PpHuntedBy(Vec<Entity>);
+
+fn pp_opt_acquire_hunt(
+    mut commands: Commands,
+    idle: Query<Entity, (With<PpPredator>, Without<PpHunting>)>,
+    hunting: Query<(Entity, &PpHunting), With<PpPredator>>,
+    mut prey: Query<&mut PpHuntedBy, With<PpPrey>>,
+    roster: Res<PpPreyRoster>,
+    mut config: ResMut<PpConfig>,
+) {
+    // Drop stale Hunting whose target died last tick. The dead prey's
+    // HuntedBy component went away with the prey, so no reverse-index
+    // fixup is needed — that's the cleanup asymmetry of this
+    // workload.
+    for (predator, hunt) in &hunting {
+        if prey.get(hunt.target).is_err() {
+            commands.entity(predator).remove::<PpHunting>();
+        }
+    }
+
+    let alive = &roster.alive;
+    if alive.is_empty() {
+        return;
+    }
+    for predator in &idle {
+        let idx = config.next_range(alive.len());
+        let target = alive[idx];
+        // Two writes per acquire: the forward Hunting component and a
+        // push into the target's HuntedBy vec. The japes equivalent
+        // of this maintenance lives inside `RelationStore.set`.
+        if let Ok(mut hunted_by) = prey.get_mut(target) {
+            hunted_by.0.push(predator);
+            commands.entity(predator).insert(PpHunting { target });
+        }
+    }
+}
+
+fn pp_opt_awareness(
+    prey_q: Query<&PpHuntedBy, With<PpPrey>>,
+    mut counters: ResMut<PpCounters>,
+) {
+    let mut total: u64 = 0;
+    for hunted_by in &prey_q {
+        total += hunted_by.0.len() as u64;
+    }
+    counters.with_target_walks += total;
+    std::hint::black_box(&counters.with_target_walks);
+}
+
+fn pp_opt_respawn_prey(
+    mut commands: Commands,
+    mut roster: ResMut<PpPreyRoster>,
+    mut config: ResMut<PpConfig>,
+) {
+    while roster.alive.len() < config.baseline_prey {
+        let x = config.next_f32() * config.arena_size;
+        let y = config.next_f32() * config.arena_size;
+        let e = commands
+            .spawn((
+                PpPosition { x, y },
+                PpVelocity { dx: 0.0, dy: 0.0 },
+                PpPrey,
+                PpHuntedBy(Vec::new()),
+            ))
+            .id();
+        roster.alive.push(e);
+    }
+}
+
+/// Spawn predators + prey into a fresh world, return the seeded world
+/// plus arena size for respawn bookkeeping. Used by both the naive and
+/// the optimized benchmark setup.
+fn seed_pp_world(pc: usize, nc: usize, spawn_hunted_by: bool) -> World {
+    let mut world = World::new();
+    world.insert_resource(PpPreyRoster::default());
+    world.insert_resource(PpCounters::default());
+    world.insert_resource(PpConfig {
+        catch_distance_sq: 0.5 * 0.5,
+        arena_size: 20.0,
+        rng_state: 1234,
+        baseline_prey: nc,
+    });
+
+    // Predators cluster near the origin.
+    for _ in 0..pc {
+        let (jx, jy) = {
+            let mut cfg = world.resource_mut::<PpConfig>();
+            (cfg.next_f32() * 2.0, cfg.next_f32() * 2.0)
+        };
+        world.spawn((
+            PpPosition { x: jx, y: jy },
+            PpVelocity { dx: 0.05, dy: 0.05 },
+            PpPredator,
+        ));
+    }
+    let arena = {
+        let cfg = world.resource::<PpConfig>();
+        cfg.arena_size
+    };
+    // Prey scattered across the arena. The optimized variant also
+    // attaches a HuntedBy reverse-index component per prey.
+    for _ in 0..nc {
+        let (px, py) = {
+            let mut cfg = world.resource_mut::<PpConfig>();
+            (cfg.next_f32() * arena, cfg.next_f32() * arena)
+        };
+        let e = if spawn_hunted_by {
+            world
+                .spawn((
+                    PpPosition { x: px, y: py },
+                    PpVelocity { dx: 0.0, dy: 0.0 },
+                    PpPrey,
+                    PpHuntedBy(Vec::new()),
+                ))
+                .id()
+        } else {
+            world
+                .spawn((
+                    PpPosition { x: px, y: py },
+                    PpVelocity { dx: 0.0, dy: 0.0 },
+                    PpPrey,
+                ))
+                .id()
+        };
+        world.resource_mut::<PpPreyRoster>().alive.push(e);
+    }
+    world
+}
+
+fn predator_prey_benchmarks(c: &mut Criterion) {
+    let mut group = c.benchmark_group("predator_prey");
+
+    // Matches the japes PredatorPreyBenchmark parameter grid so the
+    // numbers line up cell-by-cell.
+    let param_grid: &[(usize, usize)] = &[
+        (100, 500),
+        (100, 2000),
+        (100, 5000),
+        (500, 500),
+        (500, 2000),
+        (500, 5000),
+        (1000, 500),
+        (1000, 2000),
+        (1000, 5000),
+    ];
+
+    // --- Naive: Component<Entity>, O(pred × prey) awareness scan ---
+    for &(predator_count, prey_count) in param_grid {
+        let id = format!("pred_{}_prey_{}", predator_count, prey_count);
+        group.bench_with_input(
+            BenchmarkId::new("naive_tick", &id),
+            &(predator_count, prey_count),
+            |b, &(pc, nc)| {
+                let mut world = seed_pp_world(pc, nc, false);
+                let mut schedule = Schedule::default();
+                schedule.add_systems(
+                    (
+                        pp_movement,
+                        pp_acquire_hunt,
+                        pp_pursuit,
+                        pp_awareness,
+                        pp_resolve_catches,
+                        pp_respawn_prey,
+                        pp_observe_catches,
+                    )
+                        .chain(),
+                );
+                for _ in 0..5 { schedule.run(&mut world); }
+                b.iter(|| {
+                    schedule.run(&mut world);
+                    let counters = world.resource::<PpCounters>();
+                    std::hint::black_box(counters.pursuit_walks);
+                    std::hint::black_box(counters.with_target_walks);
+                    std::hint::black_box(counters.catches);
+                });
+            },
+        );
+    }
+
+    // --- Optimized: manually maintained HuntedBy reverse index ---
+    for &(predator_count, prey_count) in param_grid {
+        let id = format!("pred_{}_prey_{}", predator_count, prey_count);
+        group.bench_with_input(
+            BenchmarkId::new("optimized_tick", &id),
+            &(predator_count, prey_count),
+            |b, &(pc, nc)| {
+                let mut world = seed_pp_world(pc, nc, true);
+                let mut schedule = Schedule::default();
+                schedule.add_systems(
+                    (
+                        pp_movement,
+                        pp_opt_acquire_hunt,
+                        pp_pursuit,
+                        pp_opt_awareness,
+                        pp_resolve_catches,
+                        pp_opt_respawn_prey,
+                        pp_observe_catches,
+                    )
+                        .chain(),
+                );
+                for _ in 0..5 { schedule.run(&mut world); }
+                b.iter(|| {
+                    schedule.run(&mut world);
+                    let counters = world.resource::<PpCounters>();
+                    std::hint::black_box(counters.pursuit_walks);
+                    std::hint::black_box(counters.with_target_walks);
+                    std::hint::black_box(counters.catches);
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
+criterion_group!(benches, iteration_benchmarks, nbody_benchmarks, entity_benchmarks, change_detection_benchmarks, scenario_benchmarks, sparse_delta_benchmarks, realistic_tick_benchmarks, predator_prey_benchmarks);
 criterion_main!(benches);
