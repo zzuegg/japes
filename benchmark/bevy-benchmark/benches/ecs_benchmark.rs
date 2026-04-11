@@ -548,64 +548,82 @@ fn realistic_tick_benchmarks(c: &mut Criterion) {
 
     const BATCH: usize = 100;
 
-    group.bench_with_input(
-        BenchmarkId::new("tick", 10000),
-        &10000usize,
-        |b, &n| {
-            let mut world = World::new();
-            world.insert_resource(RtStats::default());
-            let handles: Vec<Entity> = (0..n)
-                .map(|i| {
-                    let f = i as f32;
-                    world.spawn((
-                        Position { x: f, y: f, z: f },
-                        Velocity { dx: 1.0, dy: 1.0, dz: 1.0 },
-                        RtHealth { hp: 1_000_000 },
-                        RtMana { points: 0 },
-                    )).id()
-                })
-                .collect();
+    // Two entity counts so the scaling story is measurable: 10k is the
+    // same knob japes/Dominion/Artemis/Zay-ES use, 100k pressure-tests
+    // whether the cost of the Changed<T> observer scales with total
+    // entity count (Bevy's archetype-scan model) or with the dirty
+    // count (japes's dirty-slot-list model).
+    for &n in &[10000usize, 100000usize] {
+        group.bench_with_input(
+            BenchmarkId::new("tick", n),
+            &n,
+            |b, &n| {
+                let mut world = World::new();
+                world.insert_resource(RtStats::default());
+                let handles: Vec<Entity> = (0..n)
+                    .map(|i| {
+                        let f = i as f32;
+                        world.spawn((
+                            Position { x: f, y: f, z: f },
+                            Velocity { dx: 1.0, dy: 1.0, dz: 1.0 },
+                            RtHealth { hp: 1_000_000 },
+                            RtMana { points: 0 },
+                        )).id()
+                    })
+                    .collect();
 
-            let mut schedule = Schedule::default();
-            schedule.add_systems((rt_observe_position, rt_observe_health, rt_observe_mana));
-            // Prime once so the Changed<T> trackers have a baseline.
-            schedule.run(&mut world);
-
-            // Three rotating cursors offset so the Position / Health / Mana
-            // slices don't overlap each tick — same shape as the japes
-            // RealisticTickBenchmark driver.
-            let mut pos_cursor: usize = 0;
-            let mut hp_cursor: usize = BATCH;
-            let mut mana_cursor: usize = 2 * BATCH;
-
-            b.iter(|| {
-                // Driver: 300 sparse mutations, rotating cursors.
-                for _ in 0..BATCH {
-                    let e = handles[pos_cursor];
-                    pos_cursor = (pos_cursor + 1) % handles.len();
-                    if let Some(mut p) = world.get_mut::<Position>(e) {
-                        p.x += 1.0;
-                    }
-                }
-                for _ in 0..BATCH {
-                    let e = handles[hp_cursor];
-                    hp_cursor = (hp_cursor + 1) % handles.len();
-                    if let Some(mut h) = world.get_mut::<RtHealth>(e) {
-                        h.hp -= 1;
-                    }
-                }
-                for _ in 0..BATCH {
-                    let e = handles[mana_cursor];
-                    mana_cursor = (mana_cursor + 1) % handles.len();
-                    if let Some(mut m) = world.get_mut::<RtMana>(e) {
-                        m.points += 1;
-                    }
-                }
-                // Observer tick — runs the three Changed<T> observers in parallel.
+                let mut schedule = Schedule::default();
+                schedule.add_systems((rt_observe_position, rt_observe_health, rt_observe_mana));
+                // Prime once so the Changed<T> trackers have a baseline.
                 schedule.run(&mut world);
-            });
-        },
-    );
+
+                // Three rotating cursors offset so the Position / Health / Mana
+                // slices don't overlap each tick — same shape as the japes
+                // RealisticTickBenchmark driver.
+                let mut pos_cursor: usize = 0;
+                let mut hp_cursor: usize = BATCH;
+                let mut mana_cursor: usize = 2 * BATCH;
+
+                b.iter(|| {
+                    // Driver: 300 sparse mutations, rotating cursors.
+                    for _ in 0..BATCH {
+                        let e = handles[pos_cursor];
+                        pos_cursor = (pos_cursor + 1) % handles.len();
+                        if let Some(mut p) = world.get_mut::<Position>(e) {
+                            p.x += 1.0;
+                        }
+                    }
+                    for _ in 0..BATCH {
+                        let e = handles[hp_cursor];
+                        hp_cursor = (hp_cursor + 1) % handles.len();
+                        if let Some(mut h) = world.get_mut::<RtHealth>(e) {
+                            h.hp -= 1;
+                        }
+                    }
+                    for _ in 0..BATCH {
+                        let e = handles[mana_cursor];
+                        mana_cursor = (mana_cursor + 1) % handles.len();
+                        if let Some(mut m) = world.get_mut::<RtMana>(e) {
+                            m.points += 1;
+                        }
+                    }
+                    // Observer tick — runs the three Changed<T> observers.
+                    schedule.run(&mut world);
+                    // DCE safety net: force the compiler to treat the
+                    // RtStats accumulator fields as observed outside the
+                    // closure body. Without this, there's nothing stopping
+                    // rustc / llvm from deleting the observer bodies if it
+                    // can prove no one ever reads sum_x / sum_hp / sum_mana.
+                    // The japes benchmark does the equivalent via
+                    // bh.consume(stats.sumX) at the end of tick().
+                    let stats = world.resource::<RtStats>();
+                    std::hint::black_box(stats.sum_x);
+                    std::hint::black_box(stats.sum_hp);
+                    std::hint::black_box(stats.sum_mana);
+                });
+            },
+        );
+    }
 
     group.finish();
 }

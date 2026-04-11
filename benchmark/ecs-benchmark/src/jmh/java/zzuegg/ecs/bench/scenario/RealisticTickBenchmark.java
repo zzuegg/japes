@@ -49,10 +49,10 @@ public class RealisticTickBenchmark {
     public record Health(int hp) {}
     public record Mana(int points) {}
 
-    @Param({"10000"})
+    @Param({"10000", "100000"})
     int entityCount;
 
-    @Param({"st", "mt"})
+    @Param({"st"})
     String executor;
 
     static final int BATCH = 100;

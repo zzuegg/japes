@@ -50,10 +50,10 @@ public class ArtemisRealisticTickBenchmark {
         public int points;
     }
 
-    @Param({"10000"})
+    @Param({"10000", "100000"})
     int entityCount;
 
-    @Param({"st", "mt"})
+    @Param({"st"})
     String executor;
 
     static final int BATCH = 100;

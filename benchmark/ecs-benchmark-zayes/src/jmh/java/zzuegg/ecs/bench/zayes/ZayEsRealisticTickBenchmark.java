@@ -38,7 +38,7 @@ public class ZayEsRealisticTickBenchmark {
     public record Health(int hp) implements EntityComponent {}
     public record Mana(int points) implements EntityComponent {}
 
-    @Param({"10000"})
+    @Param({"10000", "100000"})
     int entityCount;
 
     static final int BATCH = 100;

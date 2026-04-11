@@ -287,70 +287,139 @@ three observer passes to a fixed `ExecutorService`, exactly what japes
 does for you from the declared system access metadata, except you have
 to wire it up by hand.
 
-**Results (10 000 entities, 100 dirty per component, µs/op — lower is better):**
+**Results (100 dirty per component per tick, µs/op — lower is better):**
 
-| library              | `st` µs/op | `mt` µs/op |     core·µs `st` | core·µs `mt` |
-|----------------------|-----------:|-----------:|-----------------:|-------------:|
-| **japes**            |   **5.76** |       10.3 |         **5.76** |        ~31   |
-| bevy (Rust, native)  |       8.41 |          — |             8.41 |          —   |
-| zay-es               |       15.6 |          — |             15.6 |          —   |
-| artemis              |       24.4 |   **12.7** |             24.4 |        ~38   |
-| dominion             |       45.2 |       19.3 |             45.2 |        ~58   |
+| library              | 10k µs/op | 100k µs/op | scaling |  cost model                       |
+|----------------------|----------:|-----------:|--------:|-----------------------------------|
+| **japes** st         |  **5.82** |   **7.76** |   1.33× | dirty-list skip (scales with K)   |
+| zay-es               |      15.7 |       19.6 |   1.25× | dirty-list skip (scales with K)   |
+| bevy (native Rust)   |      8.42 |       73.4 |   8.72× | full archetype scan (scales w/ N) |
+| artemis st           |      24.8 |        282 |  11.4×  | full archetype scan (no CD)       |
+| dominion st          |      45.1 |        392 |   8.70× | full archetype scan (no CD)       |
 
-*`core·µs` is the rough total-CPU cost — `st` uses 1 core, `mt` runs
-three observer passes concurrently on ~3 cores. It's a back-of-envelope
-number but it captures "how much CPU did the whole machine spend to
-serve one tick" which is the number that matters on a shared box.
-Bevy uses its default single-threaded schedule for this benchmark;
-running under the parallel executor would shave microseconds off but
-add scheduling overhead similar to japes's `mt`.*
+The libraries split into two cost-model camps, empirically:
 
-**Four things this table shows:**
+- **Dirty-list skip** (japes, Zay-ES) — a per-archetype list of slot
+  indices that were mutated since the last prune. `@Filter(Changed)` /
+  `EntitySet.getChangedEntities()` walks only that list. Per-tick cost
+  is O(K) where K is the dirty count, not O(N) where N is total
+  entities. Scaling from 10k→100k costs ~33% more on japes (larger
+  handle array for the driver's `getComponent` lookups) and ~25% more
+  on Zay-ES.
+- **Full-archetype scan** (Bevy, Dominion, Artemis) — observers
+  iterate the full archetype and either tick-compare every entity
+  (Bevy's `Changed<T>`) or walk every component regardless (Dominion
+  `findEntitiesWith`, Artemis `IteratingSystem` with no filter).
+  Per-tick cost is O(N) because that's the algorithmic shape.
+  Scaling from 10k→100k costs ~8–11× more.
 
-**1. Single-threaded, japes beats every other library including Bevy.**
-At 5.76 µs, japes is **1.46× faster than Bevy** (8.41) on the same
-workload and measurably faster than Zay-ES (15.6). Against the
-change-detection-capable libraries — the fair peer group for this
-workload — japes is the fastest. `@Filter(Changed, C)` walks the
-100 dirty entities per observer; the other libraries walk their own
-dirty views but each pays more per entity (Bevy's tick-counter
-comparison, Zay-ES's `applyChanges` per `EntitySet`).
+**At 10k entities japes beats Bevy by 1.45×.** The gap looks modest
+because 10k is small enough that Bevy's tight cache-friendly tick
+scan is only paying ~2 µs of pure scan cost. **At 100k entities the
+same workload is a 9.45× gap** — Bevy pays ~65 µs extra to scan
+90 000 more tick words that japes never touches. The cost model
+predicted this exactly (see the
+[scaling analysis](#how-the-two-cost-models-separate) below).
 
-**2. Dominion/Artemis pay a ~4–8× tax for not having change detection.**
-At 300 observed entities japes scales with the dirty count; at 30 000
-entities Dominion and Artemis scale with the whole world because
-neither library knows what's dirty. Their `mt` speedup just
-parallelises the waste.
+Worth calling out: **Zay-ES beats Bevy at 100k** (19.6 vs 73.4). Zay-ES
+has higher per-mutation overhead than japes (more allocations in the
+driver side, per-set `applyChanges()` calls) but its
+`EntitySet.getChangedEntities()` is a dirty-list skip, so it scales the
+same shape as japes. The two dirty-list libraries stay in the same
+cost bucket at any entity count; the three scan libraries scale out
+of it past ~50k.
 
-**3. Multi-threaded `japes mt` is a modest regression vs `st` on this
-workload** because at 300 entity reads the ForkJoinPool dispatch
-overhead (~microseconds per system) exceeds the parallelism benefit.
-japes's core competency — skipping the work in the first place —
-shrinks the work per tick below the threshold where parallelism
-earns back its overhead. Dominion/Artemis `mt` speedup comes from
-*having 30 000 reads worth of waste to parallelise*, not from being
-structurally better at concurrency.
+### How the two cost models separate
 
-**4. By total CPU cost, japes `st` is the cheapest configuration in the
-table by a wide margin.** ~5.76 µs of single-core work beats Artemis's
-fastest `mt` configuration (~38 core·µs) by a factor of **6.6**,
-Dominion's fastest by **10×**, and Bevy's single-threaded Rust
-configuration by **1.46×**. "Library does less work" wins "other
-libraries do more work on more cores." In a real game loop the cores
-you don't burn on this tick are the cores that are free to do AI,
-physics, rendering, audio, or literally anything else — that is the
-actual win.
+The per-additional-entity cost at the 10k → 100k step tells the whole
+story:
 
-**So why run `mt` at all?** Because a game loop has *other* systems
-beyond the three observers in this benchmark. Under the japes scheduler,
-independent systems anywhere in the graph run concurrently for free from
-their declared component access, with no user code required. This
-benchmark isolates the observer-only part of the tick — the full-game
-story is "japes `mt` is a Pareto improvement over japes `st` when the
-tick has enough non-observer work to parallelise."
+| library | Δ µs for Δ 90k entities | per-entity overhead |
+|---|---:|---:|
+| **japes st**        |   +1.94 |   22 ns / entity |
+| zay-es              |   +3.89 |   43 ns / entity |
+| bevy                |  +65.0  |  722 ns / entity |
+| artemis st          |  +257   | 2 860 ns / entity |
+| dominion st         |  +347   | 3 860 ns / entity |
 
-**Code comparison.** Here's what japes looks like (complete — no other
-plumbing):
+japes's ~22 ns/entity is driver-side cost (the handle list grows, the
+archetype's chunk list grows, `getComponent` walks slightly further).
+The observer side is ~flat because the dirty list is still 300 slots.
+
+Bevy's ~722 ns/entity breaks down as 3 observers × ~240 ns = each
+observer does roughly one tick-word load + compare + branch per entity,
+which at ~0.24 ns/check × 100k entities × 3 observers ≈ 72 µs. Matches.
+
+Dominion/Artemis pay more per entity because their full scans happen
+in the user-facing benchmark driver too (each observer calls
+`findEntitiesWith` / `IteratingSystem.process` which rebuilds its
+iterator state), not just inside a tight Bevy-style Changed<T> filter.
+
+**Why Bevy doesn't ship a dirty-slot list for Changed<T>** (since the
+question inevitably comes up): it's a deliberate API trade-off, not a
+missed optimisation. Tick-per-slot is cheaper *per mutation* (one
+store, no dedup, no append), which matters for Bevy's target
+workload — dense simulation where most components get touched every
+tick and the dirty list would contain most of the world. The catch
+with the dirty-list is opposite: it wins on sparse delta, loses on
+dense. japes pays ~5-10 ns extra per mutation for the dirty-list
+maintenance, which is invisible at 300 mutations/tick (total ~3 µs)
+but would start to hurt at millions of mutations/tick. Run japes on
+`iterateWithWrite` (every entity touched every tick, K = N) and Bevy
+wins by ~9× — the opposite direction, same cost model.
+
+### DCE safety
+
+Before trusting these numbers, the obvious question is "are we hitting
+a dead-code-elimination trap anywhere?" The Bevy observer body writes
+into `ResMut<RtStats>` which is never read outside the benchmark
+closure — if the compiler can prove the writes have no observable
+effect, it's allowed to delete the observer bodies entirely.
+
+Explicitly checked:
+
+- **japes**: the `@Benchmark` body calls `bh.consume(stats.sumX)` /
+  `sumHp` / `sumMana` at the end of every tick. JMH's `Blackhole.consume`
+  is opaque to the JIT, so the accumulation chain is preserved.
+- **Bevy**: the `b.iter(||)` closure now calls
+  `world.resource::<RtStats>()` + `std::hint::black_box(stats.sum_x)` /
+  `sum_hp` / `sum_mana` after `schedule.run`. `black_box` is rustc's
+  equivalent of `Blackhole.consume` — the compiler must materialise
+  the read.
+
+Re-ran Bevy after adding the `black_box` guards: result 8.42 µs at
+10 k (was 8.41 µs without the guard). Delta is pure measurement noise,
+which means **DCE wasn't happening even without the guard** — the
+cross-crate call chain `schedule.run → system fn pointer → observer
+body` already defeats rustc's DCE at the default `cargo bench` opt
+level (`opt-level = 3`, no LTO). The guard is there as insurance
+for future readers, not because it was needed to get the number.
+
+### Same-work audit — driver parity
+
+Each library's driver does 300 sparse mutations per tick via three
+rotating cursors. The operation shapes differ slightly:
+
+| library    | operation per mutation                                  | per-mutation alloc |
+|------------|---------------------------------------------------------|---------------------|
+| japes      | `world.setComponent(e, new Position(...))` (new record) | **allocates**       |
+| zay-es     | `data.setComponent(id, new Position(...))`              | **allocates**       |
+| bevy       | `world.get_mut::<Position>(e).x += 1.0`                 | in-place            |
+| dominion   | `e.get(Position.class).x += 1` (mutable POJO)           | in-place            |
+| artemis    | `pm.get(e).x += 1` (mutable Component subclass)         | in-place            |
+
+This is an asymmetry on the driver side: japes and Zay-ES allocate
+300 record instances per tick that Bevy / Dominion / Artemis don't.
+Direction of the asymmetry: **favours Bevy / Dominion / Artemis**.
+japes is paying extra allocation cost its comparison-peers aren't —
+and **still winning**. If we fixed the asymmetry (either by making
+japes's driver mutate in place somehow, or by making Bevy's driver
+allocate new records), the 9.45× gap at 100 k would widen further,
+not shrink.
+
+### Code comparison (single-threaded path)
+
+The japes observer is **11 lines** including the class declaration:
 
 ```java
 public static final class HealthObserver {

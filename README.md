@@ -101,21 +101,23 @@ Velocity, Health, Mana}`, 1 % turnover per tick, three `@Filter(Changed)`
 observers. This is the shape change detection is actually designed
 for.
 
-| library          |  µs/op | vs japes |
-|------------------|-------:|---------:|
-| **japes** (this) |**5.76**|    1.00× |
-| bevy (Rust)      |   8.41 |   1.46× slower |
-| zay-es           |   15.6 |   2.71× slower |
-| artemis-odb      |   24.4 |   4.24× slower |
-| dominion-ecs     |   45.2 |   7.85× slower |
+| library          | 10k µs/op | 100k µs/op |
+|------------------|----------:|-----------:|
+| **japes** (this) |  **5.82** |   **7.76** |
+| zay-es           |      15.7 |       19.6 |
+| bevy (Rust)      |      8.42 |       73.4 |
+| artemis-odb      |      24.8 |        282 |
+| dominion-ecs     |      45.1 |        392 |
 
-Single-threaded numbers. `japes` beats every library in the
-comparison, including Bevy's Rust reference on the same workload.
-The gap is the library's core competency: `@Filter(Changed)`
-observers walk the 100 dirty entities per component instead of
-scanning the whole 10 000-entity world, and japes's change-tracker
-bookkeeping is cheaper per mutation than Bevy's tick-counter
-comparison at this workload size.
+Single-threaded numbers. **japes beats every library in the
+comparison at both entity counts**, including Bevy's Rust reference
+on the same workload — by 1.45× at 10 k and **9.45× at 100 k**. The
+gap widens because japes (and Zay-ES) walk a dirty-slot list that
+scales with the ~300 dirty entities per tick, while Bevy, Dominion
+and Artemis scan the full archetype per observer and scale linearly
+with total entity count. Neither approach dominates universally —
+see [DEEP_DIVE.md](DEEP_DIVE.md#realistic-multi-observer-tick) for
+the write-path trade-off in the opposite direction.
 
 Full cross-library tables (iteration, N-body, sparse-delta, the
 Valhalla investigation, benchmark-fairness audit) are in
