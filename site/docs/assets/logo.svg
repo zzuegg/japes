@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 96" role="img" aria-label="japes — Java Archetype-based Parallel Entity System">
+  <title>japes</title>
+  <defs>
+    <linearGradient id="apeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7e57c2"/>
+      <stop offset="100%" stop-color="#4527a0"/>
+    </linearGradient>
+    <linearGradient id="textGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#5e35b1"/>
+      <stop offset="100%" stop-color="#311b92"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Stylized ape silhouette inside the acronym placeholder.
+       Head + shoulders, two highlight eyes, brow ridge. -->
+  <g transform="translate(14, 14)">
+    <!-- Shoulders / body base -->
+    <path
+      d="M12 58 Q34 38 34 30 Q34 18 28 12 Q38 2 48 2 Q58 2 68 12 Q62 18 62 30 Q62 38 84 58 Z"
+      fill="url(#apeGradient)" />
+    <!-- Brow ridge -->
+    <ellipse cx="48" cy="22" rx="20" ry="4" fill="#1a0f4a" opacity="0.55"/>
+    <!-- Left eye -->
+    <circle cx="40" cy="24" r="2.8" fill="#ffd54f"/>
+    <!-- Right eye -->
+    <circle cx="56" cy="24" r="2.8" fill="#ffd54f"/>
+    <!-- Muzzle highlight -->
+    <ellipse cx="48" cy="36" rx="11" ry="6" fill="#ede7f6" opacity="0.18"/>
+  </g>
+
+  <!-- Wordmark: "j" + [APE inside tinted box] + "s" -->
+  <g font-family="'JetBrains Mono','SFMono-Regular','Menlo',monospace" font-weight="700">
+    <text x="108" y="62" font-size="48" fill="url(#textGradient)">j</text>
+    <text x="130" y="62" font-size="48" fill="#7e57c2">APE</text>
+    <text x="224" y="62" font-size="48" fill="url(#textGradient)">s</text>
+  </g>
+</svg>

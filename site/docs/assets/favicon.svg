@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="japes">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7e57c2"/>
+      <stop offset="100%" stop-color="#311b92"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="12" fill="url(#bg)"/>
+  <path d="M14 50 Q28 34 28 26 Q28 16 24 12 Q30 6 32 6 Q34 6 40 12 Q36 16 36 26 Q36 34 50 50 Z" fill="#ede7f6"/>
+  <ellipse cx="32" cy="20" rx="13" ry="3" fill="#311b92" opacity="0.55"/>
+  <circle cx="26" cy="22" r="2" fill="#ffd54f"/>
+  <circle cx="38" cy="22" r="2" fill="#ffd54f"/>
+</svg>

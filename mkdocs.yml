@@ -1,0 +1,154 @@
+site_name: japes
+site_description: Java Archetype-based Parallel Entity System — a high-throughput ECS library for the JVM with first-class change detection and tier-1 bytecode generation.
+site_url: https://zzuegg.github.io/japes/
+repo_url: https://github.com/zzuegg/japes
+repo_name: zzuegg/japes
+edit_uri: edit/main/site/docs/
+copyright: MIT-licensed. Built with MkDocs Material.
+
+docs_dir: site/docs
+site_dir: site/build
+
+theme:
+  name: material
+  logo: assets/logo.svg
+  favicon: assets/favicon.svg
+  font:
+    text: Inter
+    code: JetBrains Mono
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.instant
+    - navigation.tracking
+    - navigation.indexes
+    - navigation.footer
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - search.suggest
+    - search.highlight
+    - search.share
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - pymdownx.keys
+  - pymdownx.caret
+  - pymdownx.mark
+  - pymdownx.tilde
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+plugins:
+  - search
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  generator: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/zzuegg/japes
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - getting-started/index.md
+      - Installation: getting-started/installation.md
+      - Quick start: getting-started/quick-start.md
+      - Project layout: getting-started/project-layout.md
+  - Tutorials:
+      - tutorials/index.md
+      - Basics:
+          - tutorials/basics/index.md
+          - Components: tutorials/basics/01-components.md
+          - Entities: tutorials/basics/02-entities.md
+          - Systems: tutorials/basics/03-systems.md
+          - Queries — @Read and @Write: tutorials/basics/04-queries.md
+          - Resources: tutorials/basics/05-resources.md
+          - Change detection: tutorials/basics/06-change-detection.md
+          - RemovedComponents: tutorials/basics/07-removed-components.md
+          - Commands — deferred edits: tutorials/basics/08-commands.md
+      - Advanced:
+          - tutorials/advanced/index.md
+          - Events: tutorials/advanced/09-events.md
+          - Local state: tutorials/advanced/10-local-state.md
+          - Stages and ordering: tutorials/advanced/11-stages-and-ordering.md
+          - Multi-threading: tutorials/advanced/12-multi-threading.md
+          - 'Query filters — @With / @Without': tutorials/advanced/13-query-filters.md
+          - 'Field filters — @Where': tutorials/advanced/14-where-filters.md
+          - '@Exclusive systems': tutorials/advanced/15-exclusive-systems.md
+          - Run conditions: tutorials/advanced/16-run-conditions.md
+      - Relations:
+          - tutorials/relations/index.md
+          - Overview: tutorials/relations/17-overview.md
+          - '@Pair and PairReader': tutorials/relations/18-pair-and-pair-reader.md
+          - '@ForEachPair and @FromTarget': tutorials/relations/19-for-each-pair.md
+          - Cleanup policies: tutorials/relations/20-cleanup-policies.md
+          - 'RemovedRelations': tutorials/relations/21-removed-relations.md
+          - Predator / prey example: tutorials/relations/22-predator-prey.md
+  - Deep dive:
+      - deep-dive/index.md
+      - Architecture: deep-dive/architecture.md
+      - Tier-1 bytecode generation: deep-dive/tier-1-generation.md
+      - Change tracking: deep-dive/change-tracking.md
+      - Relations: deep-dive/relations.md
+      - Write-path tax: deep-dive/write-path-tax.md
+      - Valhalla investigation: deep-dive/valhalla-investigation.md
+      - Optimisation journey: deep-dive/optimization-journey.md
+  - Benchmarks:
+      - benchmarks/index.md
+      - Methodology: benchmarks/methodology.md
+      - Iteration micros: benchmarks/iteration-micros.md
+      - N-Body: benchmarks/nbody.md
+      - Particle scenario: benchmarks/particle-scenario.md
+      - Sparse delta: benchmarks/sparse-delta.md
+      - Realistic tick: benchmarks/realistic-tick.md
+      - Predator / prey relations: benchmarks/predator-prey.md
+      - Valhalla EA: benchmarks/valhalla.md
+  - Reference:
+      - reference/index.md
+      - System parameters cheat sheet: reference/cheat-sheet.md
+      - Tier-1 vs tier-2 dispatch: reference/tier-fallbacks.md
+      - FAQ: reference/faq.md

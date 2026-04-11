@@ -1,0 +1,99 @@
+/* japes custom styling */
+
+:root {
+  --md-primary-fg-color: #5e35b1;
+  --md-primary-fg-color--light: #9575cd;
+  --md-primary-fg-color--dark: #311b92;
+  --md-accent-fg-color: #ffab00;
+}
+
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 2.2rem;
+  width: auto;
+}
+
+/* Hero block on the landing page */
+.japes-hero {
+  padding: 2.5rem 1rem 2rem;
+  text-align: center;
+  background: linear-gradient(145deg, rgba(94, 53, 177, 0.08), rgba(126, 87, 194, 0.04));
+  border-radius: 12px;
+  margin: 1rem 0 2rem;
+}
+
+.japes-hero h1 {
+  font-size: 3rem;
+  font-weight: 800;
+  margin: 0;
+  background: linear-gradient(135deg, #5e35b1, #9575cd);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.japes-hero .tagline {
+  font-size: 1.2rem;
+  color: var(--md-default-fg-color--light);
+  max-width: 42rem;
+  margin: 0.5rem auto 1.5rem;
+}
+
+.japes-hero .cta {
+  display: inline-flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.japes-hero .cta a {
+  text-decoration: none;
+}
+
+.japes-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.japes-card {
+  padding: 1.25rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 10px;
+  background: var(--md-default-bg-color);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.japes-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(94, 53, 177, 0.12);
+}
+
+.japes-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.japes-card p {
+  margin: 0;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.9rem;
+}
+
+.japes-perf-callout {
+  background: linear-gradient(145deg, rgba(255, 171, 0, 0.08), rgba(94, 53, 177, 0.04));
+  border-left: 4px solid var(--md-accent-fg-color);
+  padding: 1rem 1.25rem;
+  border-radius: 0 10px 10px 0;
+  margin: 1.5rem 0;
+}
+
+.japes-perf-callout strong {
+  color: var(--md-primary-fg-color);
+}
+
+/* Tighten up code block top margin inside admonitions */
+.md-typeset .admonition > .highlight {
+  margin-top: 0.4rem;
+}

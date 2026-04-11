@@ -6,5 +6,17 @@ benchmark/bevy-benchmark/target/
 
 # Local session artefacts — working notes, skill-framework output,
 # design scratch. Kept off the remote; upstream documentation lives in
-# README.md / TUTORIAL.md / DEEP_DIVE.md at the project root.
-docs/
+# README.md / TUTORIAL.md / DEEP_DIVE.md at the project root. Anchored
+# with a leading slash so it only matches the root-level docs/ folder
+# and does NOT catch site/docs/ (the MkDocs sources).
+/docs/
+
+# MkDocs local build output (deployed via .github/workflows/docs.yml).
+site/build/
+
+# JMH per-benchmark result directories — left behind by -prof jfr.
+zzuegg.ecs.bench.scenario.*/
+
+# Python venv some contributors use for local mkdocs builds.
+.venv/
+venv/

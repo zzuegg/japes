@@ -13,6 +13,8 @@ parallelises disjoint systems automatically.
 > Pre-release. API is stable enough to benchmark but reserves the
 > right to change before 1.0.
 
+**📖 [Full documentation site](https://zzuegg.github.io/japes/)** — 22-chapter tutorial, per-benchmark deep dive, design notes, and `@Pair` / `@ForEachPair` relations walkthrough.
+
 ## Contents
 
 | Section | Description |
