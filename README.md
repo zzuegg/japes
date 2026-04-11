@@ -30,6 +30,7 @@ parallelises disjoint systems automatically.
 |---|---|
 | [TUTORIAL.md](TUTORIAL.md) | Step-by-step walkthrough: components, systems, queries, filters, resources, events, commands, scheduling, multi-threading |
 | [DEEP_DIVE.md](DEEP_DIVE.md) | Full benchmark tables, per-benchmark analysis, Valhalla investigation, API design rationale |
+| [TIER_FALLBACKS.md](TIER_FALLBACKS.md) | When the tier-1 bytecode generators bail to the reflective fallback — per-generator `skipReason` catalog with one-line fixes |
 
 ## Quick start
 
