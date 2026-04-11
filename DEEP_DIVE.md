@@ -17,8 +17,9 @@ quick-start + headline numbers, see the [README](README.md).
 | 7 | [Does Valhalla help?](#does-valhalla-help-jdk-27-ea-jep-401-value-records) | JEP 401 EA sweep, flat-array opt-in A/B, the DCE caveat |
 | 8 | [The "write-path tax"](#the-write-path-tax--why-japes-looks-slow-on-naked-writes) | Why Dominion/Artemis win the naked-write micros |
 | 9 | [Speed-up matrix vs. Bevy](#speed-up-matrix-vs-bevy-lower-is-better-10-matches-bevy) | One-line relative perf summary across every benchmark |
-| 10 | [Why so many ceremony-like params?](#why-so-many-ceremony-like-params) | Design rationale for `@Read C` / `@Write Mut<C>` / `Res<R>` |
-| 11 | [Raw benchmark logs](#raw-benchmark-logs) | Commands to reproduce every number above |
+| 10 | [Benchmark fairness audit](#benchmark-fairness-audit) | Cross-library check that every benchmark measures the same work, plus the one fix that came out of it |
+| 11 | [Why so many ceremony-like params?](#why-so-many-ceremony-like-params) | Design rationale for `@Read C` / `@Write Mut<C>` / `Res<R>` |
+| 12 | [Raw benchmark logs](#raw-benchmark-logs) | Commands to reproduce every number above |
 
 See [README](README.md) for the quick-start and [TUTORIAL.md](TUTORIAL.md)
 for a step-by-step walkthrough of the API.
@@ -147,7 +148,14 @@ looks like.
 
 | benchmark | entityCount | bevy | **japes** | zayes | dominion | artemis |
 |-----------|------------:|-----:|----------:|------:|---------:|--------:|
-| tick      |       10000 | 22.4 |   **149** |  1859 |     68.3 |    98.2 |
+| tick      |       10000 | 22.4 |   **161** |  1859 |     68.3 |    98.2 |
+
+> A [cross-library audit](#benchmark-fairness-audit) caught that japes's
+> `StatsSystem` was reusing the previous-tick `alive` count instead of
+> re-computing it — every other library scans 10 000 Lifetime entities
+> per tick to count alive, japes was skipping the scan. Fixed in the
+> current numbers above; japes now does the same work the others do
+> (about +8% tick time vs the buggy version).
 
 ## Sparse delta (change-detection workload)
 
@@ -414,7 +422,7 @@ differ.
 | NBody simulateOneTick         |            1k |      6.23 |        5.84 | **1.07×** real  |
 | NBody simulateOneTick         |           10k |      62.5 |        57.3 | **1.09×** real  |
 | NBody simulateTenTicks        |           10k |       625 |         577 | **1.08×** real  |
-| ParticleScenario tick         |           10k |       149 |         169 | 0.88× slower    |
+| ParticleScenario tick         |           10k |       161 |         180 | 0.89× slower    |
 | SparseDelta tick              |           10k |      1.85 |        1.96 | 0.94× slower    |
 | RealisticTick tick            |     10k / st  |      5.76 |        11.9 | 0.48× slower    |
 | RealisticTick tick            |     10k / mt  |      10.3 |        17.8 | 0.58× slower    |
@@ -533,7 +541,7 @@ japes is the cheapest configuration in absolute CPU cost.
 | iterateTwoComponents        |          10k |   **1.3×** |  **0.55×**  | 10.9× |     3.7×  |   3.5×  |
 | iterateWithWrite            |          10k |   **9.3×** |    **8.6×** |  277× |     3.7×  |   3.0×  |
 | NBody simulateOneTick       |          10k |   **7.1×** |    **6.5×** |   50× |     2.7×  |   2.2×  |
-| ParticleScenario tick       |          10k |   **6.7×** |        7.6× |   83× |     3.0×  |   4.4×  |
+| ParticleScenario tick       |          10k |   **7.2×** |        8.0× |   83× |     3.0×  |   4.4×  |
 | SparseDelta tick            |          10k |  **0.46×** |   **0.49×** |  1.2× |  **0.09×**| **0.06×**|
 
 > In rows where the number is below 1.0×, japes is *faster* than Bevy
@@ -544,6 +552,79 @@ japes is the cheapest configuration in absolute CPU cost.
 > on `SparseDelta` because they use manually-maintained dirty lists
 > (one field write, one array append, no tick counter, no scheduler) —
 > faster on the micro, but the correctness burden is on the user.
+
+## Benchmark fairness audit
+
+I manually cross-referenced every cross-library benchmark against
+every other library's implementation to check that all of them are
+actually doing the same work. Results:
+
+**What's identical across all five libraries ✓**
+
+- **Iteration reads** (`iterateSingleComponent`, `iterateTwoComponents`):
+  Bevy's `black_box(pos)`, japes/Dominion/Zay-ES's `bh.consume(pos)`,
+  Artemis's static-field Blackhole pattern all prevent JIT
+  dead-code-elimination of the loaded component. Every library
+  iterates every matching entity and hands the value to an opaque
+  sink. ✓
+- **NBody body generation** (angles around a circle, unit velocities,
+  same start state). ✓
+- **`ChangeDetectionBenchmark.removedComponentsDrainAfterBulkDespawn`**
+  after PR #1's fairness restructure — `@Setup(Trial)` world creation,
+  `@Setup(Invocation)` entity re-seeding, `@Benchmark` body only
+  despawns + ticks. Matches the Zay-ES counterpart exactly. ✓
+
+**What differs by *design* (and is documented elsewhere)**
+
+- **`iterateWithWrite` / `NBody` / `SparseDelta` driver writes**:
+  Bevy/Dominion/Artemis do in-place primitive field writes
+  (`pos.x += vel.dx`) while japes/Zay-ES allocate a new component
+  record per mutation (`pos.set(new Position(...))`). The two-camp
+  split reflects the libraries' API philosophies — immutable records
+  + change tracking vs mutable POJOs. This is the
+  ["write-path tax"](#the-write-path-tax--why-japes-looks-slow-on-naked-writes)
+  already documented in the section of that name. Direction: favours
+  Bevy/Dominion/Artemis; japes and Zay-ES numbers are inflated by
+  the allocation cost on these benchmarks. Keeping it, because it
+  measures the real user-visible cost.
+
+**What was a bug (now fixed)**
+
+- **`ParticleScenarioBenchmark.StatsSystem` alive count**: japes was
+  the *only* library not computing `alive` per tick — it reused the
+  previous tick's value via `stats.set(new Stats(..., cur.alive()))`.
+  Bevy iterates `Query<&Lifetime>`, Dominion does
+  `findEntitiesWith(Lifetime.class).forEach`, Artemis uses a
+  `StatsSystem extends IteratingSystem` with `Aspect.all(Lifetime)`,
+  Zay-ES drains an `aliveSet` of Lifetime entities — all four other
+  libraries run a full 10 k-entity scan per tick that japes was
+  skipping. Fixed by splitting `StatsSystem` into `countAlive(@Read
+  Lifetime l)` for the per-entity accumulation and `drain(
+  RemovedComponents<Health>, ResMut<Stats>)` in the `PostUpdate`
+  stage for the write-and-reset. Instance-field accumulator shared
+  across both methods; reset-at-end-of-tick pattern.
+  - **Impact**: japes ParticleScenario went from 149 → **161 µs/op**
+    (+8 %). japes-v went from 169 → **180 µs/op** (+6.5 %). Both
+    still dominate Zay-ES and still lose to Dominion/Artemis on this
+    benchmark — the ordering is stable, the magnitude is now honest.
+  - **Why japes still loses to Dominion/Artemis on this one**:
+    MoveSystem, DamageSystem and StatsSystem all iterate every
+    entity, and japes's immutable-record writes allocate per entity.
+    Five-system full-scan scenarios are exactly where the
+    write-path tax bites hardest; the Dominion/Artemis mutable-POJO
+    path has no equivalent cost. DEEP_DIVE's "write-path tax"
+    section already owns this.
+
+**What I didn't find any asymmetry in**
+
+- `RealisticTickBenchmark` (only exists in japes/japes-v/Dominion/
+  Artemis; all four do the same 3-mutator + 3-observer shape).
+- `SparseDeltaBenchmark` observer behaviour (all four change-detection
+  libraries use their native `Changed` filter; Dominion/Artemis use
+  hand-rolled dirty lists documented in their own benchmark files).
+- `NBodyBenchmark` setup and integrator body (same angle-distributed
+  start state, same `pos += vel * dt` formula).
+- Entity micros (`bulkSpawn1k`, `bulkSpawn100k`, `bulkDespawn1k`).
 
 ## Why so many ceremony-like params?
 

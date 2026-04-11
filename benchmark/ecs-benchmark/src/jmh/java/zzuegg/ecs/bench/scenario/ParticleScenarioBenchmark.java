@@ -80,13 +80,42 @@ public class ParticleScenarioBenchmark {
         }
     }
 
+    /**
+     * Combined stats + alive counter. Bevy, Dominion, Artemis and Zay-ES all
+     * run a full 10k-entity Lifetime scan each tick to compute the alive
+     * count; an earlier revision of this class only drained the removal log
+     * and reused the previous tick's alive value, which made japes do strictly
+     * less work than the other libraries on the same benchmark (a fairness
+     * bug caught by a manual cross-library audit). The fix:
+     *
+     *   - {@code countAlive} is a per-entity @Read Lifetime system in the
+     *     {@code Update} stage that accumulates into the instance field
+     *     {@code aliveThisTick}. It runs once per tick per entity, matching
+     *     the other libraries' scan.
+     *   - {@code drain} is a {@code PostUpdate} system that reads the
+     *     accumulator, drains {@code RemovedComponents<Health>} for the
+     *     death count, writes both into {@link Stats}, and resets the
+     *     accumulator to 0 for the next tick.
+     *
+     * Instance fields are shared across every @System method on the class
+     * because SystemParser constructs exactly one instance per class and
+     * reuses it for every method registration.
+     */
     public static class StatsSystem {
+        long aliveThisTick;
+
         @System
-        void stats(RemovedComponents<Health> dead, ResMut<Stats> stats) {
+        void countAlive(@Read Lifetime l) {
+            if (l.ttl() > 0) aliveThisTick++;
+        }
+
+        @System(stage = "PostUpdate")
+        void drain(RemovedComponents<Health> dead, ResMut<Stats> stats) {
             long deathCount = 0;
             for (var r : dead) deathCount++;
             var cur = stats.get();
-            stats.set(new Stats(cur.deaths() + deathCount, cur.alive()));
+            stats.set(new Stats(cur.deaths() + deathCount, aliveThisTick));
+            aliveThisTick = 0;  // reset for next tick's countAlive run
         }
     }
 

@@ -61,13 +61,25 @@ public class ParticleScenarioBenchmarkValhalla {
         }
     }
 
+    // See ParticleScenarioBenchmark.StatsSystem for the fairness rationale:
+    // Bevy/Dominion/Artemis/Zay-ES all scan every Lifetime entity per tick
+    // to count alive; this system matches that shape so the Valhalla-side
+    // numbers measure the same work as the non-Valhalla sweep.
     public static class StatsSystem {
+        long aliveThisTick;
+
         @System
-        void stats(RemovedComponents<Health> dead, ResMut<Stats> stats) {
+        void countAlive(@Read Lifetime l) {
+            if (l.ttl() > 0) aliveThisTick++;
+        }
+
+        @System(stage = "PostUpdate")
+        void drain(RemovedComponents<Health> dead, ResMut<Stats> stats) {
             long deathCount = 0;
             for (var r : dead) deathCount++;
             var cur = stats.get();
-            stats.set(new Stats(cur.deaths() + deathCount, cur.alive()));
+            stats.set(new Stats(cur.deaths() + deathCount, aliveThisTick));
+            aliveThisTick = 0;
         }
     }
 
