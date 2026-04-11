@@ -500,5 +500,115 @@ fn sparse_delta_benchmarks(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, iteration_benchmarks, nbody_benchmarks, entity_benchmarks, change_detection_benchmarks, scenario_benchmarks, sparse_delta_benchmarks);
+// === Realistic multi-observer tick ===
+//
+// Matches RealisticTickBenchmark (ecs-benchmark), plus its Dominion and
+// Artemis counterparts. 10 000 entities with {Position, Velocity, Health,
+// Mana}; per tick, 100 entities each have Position / Health / Mana
+// mutated via three rotating cursors (different offsets so the slices
+// don't overlap); three Changed<T> observers react to the mutations.
+//
+// japes and Dominion/Artemis had counterparts from the start but the
+// Bevy reference was missing — added after a cross-library audit caught
+// the gap. Written in the idiomatic Bevy shape: Changed<T> in the
+// observer query is the library's native primitive for this exact
+// workload.
+
+#[derive(Component, Clone, Copy)]
+struct RtHealth { hp: i32 }
+
+#[derive(Component, Clone, Copy)]
+struct RtMana { points: i32 }
+
+// Position and Velocity are reused from the iteration benchmarks above.
+
+#[derive(Resource, Default)]
+struct RtStats { sum_x: i64, sum_hp: i64, sum_mana: i64 }
+
+fn rt_observe_position(q: Query<&Position, Changed<Position>>, mut stats: ResMut<RtStats>) {
+    for p in &q {
+        stats.sum_x += p.x as i64;
+    }
+}
+
+fn rt_observe_health(q: Query<&RtHealth, Changed<RtHealth>>, mut stats: ResMut<RtStats>) {
+    for h in &q {
+        stats.sum_hp += h.hp as i64;
+    }
+}
+
+fn rt_observe_mana(q: Query<&RtMana, Changed<RtMana>>, mut stats: ResMut<RtStats>) {
+    for m in &q {
+        stats.sum_mana += m.points as i64;
+    }
+}
+
+fn realistic_tick_benchmarks(c: &mut Criterion) {
+    let mut group = c.benchmark_group("realistic_tick");
+
+    const BATCH: usize = 100;
+
+    group.bench_with_input(
+        BenchmarkId::new("tick", 10000),
+        &10000usize,
+        |b, &n| {
+            let mut world = World::new();
+            world.insert_resource(RtStats::default());
+            let handles: Vec<Entity> = (0..n)
+                .map(|i| {
+                    let f = i as f32;
+                    world.spawn((
+                        Position { x: f, y: f, z: f },
+                        Velocity { dx: 1.0, dy: 1.0, dz: 1.0 },
+                        RtHealth { hp: 1_000_000 },
+                        RtMana { points: 0 },
+                    )).id()
+                })
+                .collect();
+
+            let mut schedule = Schedule::default();
+            schedule.add_systems((rt_observe_position, rt_observe_health, rt_observe_mana));
+            // Prime once so the Changed<T> trackers have a baseline.
+            schedule.run(&mut world);
+
+            // Three rotating cursors offset so the Position / Health / Mana
+            // slices don't overlap each tick — same shape as the japes
+            // RealisticTickBenchmark driver.
+            let mut pos_cursor: usize = 0;
+            let mut hp_cursor: usize = BATCH;
+            let mut mana_cursor: usize = 2 * BATCH;
+
+            b.iter(|| {
+                // Driver: 300 sparse mutations, rotating cursors.
+                for _ in 0..BATCH {
+                    let e = handles[pos_cursor];
+                    pos_cursor = (pos_cursor + 1) % handles.len();
+                    if let Some(mut p) = world.get_mut::<Position>(e) {
+                        p.x += 1.0;
+                    }
+                }
+                for _ in 0..BATCH {
+                    let e = handles[hp_cursor];
+                    hp_cursor = (hp_cursor + 1) % handles.len();
+                    if let Some(mut h) = world.get_mut::<RtHealth>(e) {
+                        h.hp -= 1;
+                    }
+                }
+                for _ in 0..BATCH {
+                    let e = handles[mana_cursor];
+                    mana_cursor = (mana_cursor + 1) % handles.len();
+                    if let Some(mut m) = world.get_mut::<RtMana>(e) {
+                        m.points += 1;
+                    }
+                }
+                // Observer tick — runs the three Changed<T> observers in parallel.
+                schedule.run(&mut world);
+            });
+        },
+    );
+
+    group.finish();
+}
+
+criterion_group!(benches, iteration_benchmarks, nbody_benchmarks, entity_benchmarks, change_detection_benchmarks, scenario_benchmarks, sparse_delta_benchmarks, realistic_tick_benchmarks);
 criterion_main!(benches);

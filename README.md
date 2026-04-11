@@ -101,25 +101,31 @@ Velocity, Health, Mana}`, 1 % turnover per tick, three `@Filter(Changed)`
 observers. This is the shape change detection is actually designed
 for.
 
-| library          |       µs/op | vs japes |
-|------------------|------------:|---------:|
-| **japes** (this) |    **5.76** |      1.0× |
-| artemis-odb      |        24.4 |     4.2× |
-| dominion-ecs     |        45.2 |     7.8× |
-| bevy (Rust)      | (see below) |        — |
+| library          |  µs/op | vs japes |
+|------------------|-------:|---------:|
+| **japes** (this) |**5.76**|    1.00× |
+| bevy (Rust)      |   8.41 |   1.46× slower |
+| zay-es           |   15.6 |   2.71× slower |
+| artemis-odb      |   24.4 |   4.24× slower |
+| dominion-ecs     |   45.2 |   7.85× slower |
 
-The benchmark, code, and Bevy/Zay-ES numbers for the same workload
-are in [`DEEP_DIVE.md`](DEEP_DIVE.md#realistic-multi-observer-tick),
-along with iteration, N-body, and sparse-delta micro-benchmarks.
+Single-threaded numbers. `japes` beats every library in the
+comparison, including Bevy's Rust reference on the same workload.
+The gap is the library's core competency: `@Filter(Changed)`
+observers walk the 100 dirty entities per component instead of
+scanning the whole 10 000-entity world, and japes's change-tracker
+bookkeeping is cheaper per mutation than Bevy's tick-counter
+comparison at this workload size.
+
+Full cross-library tables (iteration, N-body, sparse-delta, the
+Valhalla investigation, benchmark-fairness audit) are in
+[`DEEP_DIVE.md`](DEEP_DIVE.md#realistic-multi-observer-tick).
 Short version:
 
 - **`SparseDelta tick`** (10 k entities, 100 dirty per tick, 1 observer):
   japes **1.85 µs/op**, Bevy 4.01 µs/op, Zay-ES 4.68 µs/op —
   japes is **2.17× faster than Bevy** on the library change-detection
   path it's optimised for.
-- **`RealisticTick`** `st` single-threaded at 5.76 µs/op beats
-  Artemis's fastest multi-threaded configuration (12.7 µs/op) on the
-  same workload. Total CPU cost: 6.6× cheaper than Artemis `mt`.
 - **`iterateWithWrite`** (write-heavy micro): Dominion 22.6 µs,
   Artemis 18.6 µs, japes 57.4 µs. Mutable-POJO libraries win on
   naive per-entity writes because they skip change tracking entirely

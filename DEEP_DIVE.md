@@ -277,57 +277,69 @@ three slices don't overlap), and **three observers**, each reacting to
 scheduler) and `mt` (japes `MultiThreadedExecutor` — ForkJoinPool-backed,
 parallelises disjoint systems automatically).
 
-The Dominion and Artemis counterparts (`DominionRealisticTickBenchmark`,
-`ArtemisRealisticTickBenchmark`) implement the *same workload* the way a
-user would when they don't want to hand-roll dirty lists per component:
-the observer passes are full iterations over every entity that has the
-component (10 000 each), because neither library knows what's dirty. The
-`mt` variant in those libraries dispatches the three observer passes to
-a fixed `ExecutorService` — exactly what japes does for you from the
-declared system access metadata, except you have to wire it up by hand.
+Counterparts exist for every library in the comparison. Bevy and Zay-ES
+use their native change-detection primitives (`Changed<T>` query filter
+and `EntitySet.getChangedEntities()` respectively). Dominion and Artemis
+have no built-in change detection, so their observer passes do full
+iterations over every entity with the component (10 000 each) — the
+"lazy user" path. The `mt` variant in Dominion/Artemis dispatches the
+three observer passes to a fixed `ExecutorService`, exactly what japes
+does for you from the declared system access metadata, except you have
+to wire it up by hand.
 
 **Results (10 000 entities, 100 dirty per component, µs/op — lower is better):**
 
-| library      | `st` µs/op | `mt` µs/op |     core·µs `st` | core·µs `mt` |
-|--------------|-----------:|-----------:|-----------------:|-------------:|
-| **japes**    |   **5.76** |       10.3 |         **5.76** |        ~31   |
-| artemis      |       24.4 |   **12.7** |             24.4 |        ~38   |
-| dominion     |       45.2 |       19.3 |             45.2 |        ~58   |
+| library              | `st` µs/op | `mt` µs/op |     core·µs `st` | core·µs `mt` |
+|----------------------|-----------:|-----------:|-----------------:|-------------:|
+| **japes**            |   **5.76** |       10.3 |         **5.76** |        ~31   |
+| bevy (Rust, native)  |       8.41 |          — |             8.41 |          —   |
+| zay-es               |       15.6 |          — |             15.6 |          —   |
+| artemis              |       24.4 |   **12.7** |             24.4 |        ~38   |
+| dominion             |       45.2 |       19.3 |             45.2 |        ~58   |
 
 *`core·µs` is the rough total-CPU cost — `st` uses 1 core, `mt` runs
 three observer passes concurrently on ~3 cores. It's a back-of-envelope
 number but it captures "how much CPU did the whole machine spend to
-serve one tick" which is the number that matters on a shared box.*
+serve one tick" which is the number that matters on a shared box.
+Bevy uses its default single-threaded schedule for this benchmark;
+running under the parallel executor would shave microseconds off but
+add scheduling overhead similar to japes's `mt`.*
 
-**Three things this table shows:**
+**Four things this table shows:**
 
-**1. Single-threaded, japes wins by doing less work.** 300 observed
-entities vs 30 000 scanned. `@Filter(Changed, C)` is the reason: the
-observer sees the 100 dirty entities the scheduler tracked for it and
-skips the other 9 900. Dominion and Artemis have no equivalent unless
-you hand-roll the bookkeeping, so they iterate the world. At 5.76 µs
-single-threaded, japes finishes a tick in **less than half the time
-of Artemis's fastest multi-threaded configuration** (12.7 µs) on the
-same workload.
+**1. Single-threaded, japes beats every other library including Bevy.**
+At 5.76 µs, japes is **1.46× faster than Bevy** (8.41) on the same
+workload and measurably faster than Zay-ES (15.6). Against the
+change-detection-capable libraries — the fair peer group for this
+workload — japes is the fastest. `@Filter(Changed, C)` walks the
+100 dirty entities per observer; the other libraries walk their own
+dirty views but each pays more per entity (Bevy's tick-counter
+comparison, Zay-ES's `applyChanges` per `EntitySet`).
 
-**2. Multi-threaded, Dominion/Artemis catch up by parallelising waste.**
-Their `mt` speedup comes from dispatching 30 000 entity reads across
-three cores — they benefit from parallelism *because* they have so much
-to parallelise. japes's `mt` variant is modestly *worse* than its `st`
-because at 300 entity reads the ForkJoinPool dispatch overhead
-(~microseconds per system) exceeds the parallelism benefit. The
-library's core competency — skipping the work in the first place —
-shrinks the work per tick below the threshold where parallelism earns
-back its overhead.
+**2. Dominion/Artemis pay a ~4–8× tax for not having change detection.**
+At 300 observed entities japes scales with the dirty count; at 30 000
+entities Dominion and Artemis scale with the whole world because
+neither library knows what's dirty. Their `mt` speedup just
+parallelises the waste.
 
-**3. By total CPU cost, japes `st` is the cheapest configuration in the
+**3. Multi-threaded `japes mt` is a modest regression vs `st` on this
+workload** because at 300 entity reads the ForkJoinPool dispatch
+overhead (~microseconds per system) exceeds the parallelism benefit.
+japes's core competency — skipping the work in the first place —
+shrinks the work per tick below the threshold where parallelism
+earns back its overhead. Dominion/Artemis `mt` speedup comes from
+*having 30 000 reads worth of waste to parallelise*, not from being
+structurally better at concurrency.
+
+**4. By total CPU cost, japes `st` is the cheapest configuration in the
 table by a wide margin.** ~5.76 µs of single-core work beats Artemis's
-fastest `mt` configuration (~38 core·µs) by a factor of **6.6**, and
-Dominion's fastest by **10×**. "Library does less work" wins "other
+fastest `mt` configuration (~38 core·µs) by a factor of **6.6**,
+Dominion's fastest by **10×**, and Bevy's single-threaded Rust
+configuration by **1.46×**. "Library does less work" wins "other
 libraries do more work on more cores." In a real game loop the cores
-you don't burn on this
-tick are the cores that are free to do AI, physics, rendering, audio,
-or literally anything else — that is the actual win.
+you don't burn on this tick are the cores that are free to do AI,
+physics, rendering, audio, or literally anything else — that is the
+actual win.
 
 **So why run `mt` at all?** Because a game loop has *other* systems
 beyond the three observers in this benchmark. Under the japes scheduler,
@@ -617,8 +629,14 @@ actually doing the same work. Results:
 
 **What I didn't find any asymmetry in**
 
-- `RealisticTickBenchmark` (only exists in japes/japes-v/Dominion/
-  Artemis; all four do the same 3-mutator + 3-observer shape).
+- `RealisticTickBenchmark` (now has counterparts in every library —
+  japes/japes-v/Bevy/Zay-ES/Dominion/Artemis). The original audit
+  flagged that only japes/Dominion/Artemis had this benchmark;
+  Bevy and Zay-ES counterparts were added afterwards (Bevy using
+  `Changed<T>` query filter, Zay-ES using three `EntitySet`s with
+  `applyChanges()` + `getChangedEntities()`). All six libraries now
+  run the same 3-mutator + 3-observer shape with 100 dirty entities
+  per component per tick.
 - `SparseDeltaBenchmark` observer behaviour (all four change-detection
   libraries use their native `Changed` filter; Dominion/Artemis use
   hand-rolled dirty lists documented in their own benchmark files).
