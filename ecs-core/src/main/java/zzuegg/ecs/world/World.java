@@ -777,6 +777,15 @@ public final class World {
     @SuppressWarnings("unchecked")
     private Object resolveServiceParam(SystemDescriptor desc, Parameter param, int paramIndex) {
         var paramType = param.getType();
+        if (paramType == World.class) {
+            // @Exclusive systems can take the owning World directly; the
+            // tick-time executor path passes `this` for every exclusive
+            // system regardless of the declared param shape, but we still
+            // need to populate the plan's service-arg slot so the
+            // SystemExecutionPlan-based path (reflection fallback for
+            // non-generated systems) sees the same instance.
+            return this;
+        }
         if (paramType == Res.class) {
             return resourceStore.get(extractTypeArg(param));
         } else if (paramType == ResMut.class) {

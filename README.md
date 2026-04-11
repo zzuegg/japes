@@ -103,9 +103,9 @@ for.
 
 | library          |       µs/op | vs japes |
 |------------------|------------:|---------:|
-| **japes** (this) |    **5.79** |      1.0× |
-| artemis-odb      |        24.7 |     4.3× |
-| dominion-ecs     |        41.7 |     7.2× |
+| **japes** (this) |    **5.76** |      1.0× |
+| artemis-odb      |        24.4 |     4.2× |
+| dominion-ecs     |        45.2 |     7.8× |
 | bevy (Rust)      | (see below) |        — |
 
 The benchmark, code, and Bevy/Zay-ES numbers for the same workload
@@ -114,19 +114,19 @@ along with iteration, N-body, and sparse-delta micro-benchmarks.
 Short version:
 
 - **`SparseDelta tick`** (10 k entities, 100 dirty per tick, 1 observer):
-  japes **1.86 µs/op**, Bevy 4.01 µs/op, Zay-ES 4.60 µs/op —
-  japes is **2.16× faster than Bevy** on the library change-detection
+  japes **1.85 µs/op**, Bevy 4.01 µs/op, Zay-ES 4.68 µs/op —
+  japes is **2.17× faster than Bevy** on the library change-detection
   path it's optimised for.
-- **`RealisticTick`** `st` single-threaded at 5.79 µs/op beats
-  Artemis's fastest multi-threaded configuration (12.9 µs/op) on the
-  same workload. Total CPU cost: 6.7× cheaper than Artemis `mt`.
+- **`RealisticTick`** `st` single-threaded at 5.76 µs/op beats
+  Artemis's fastest multi-threaded configuration (12.7 µs/op) on the
+  same workload. Total CPU cost: 6.6× cheaper than Artemis `mt`.
 - **`iterateWithWrite`** (write-heavy micro): Dominion 22.6 µs,
-  Artemis 18.4 µs, japes 58.2 µs. Mutable-POJO libraries win on
+  Artemis 18.6 µs, japes 57.4 µs. Mutable-POJO libraries win on
   naive per-entity writes because they skip change tracking entirely
   — if you don't need observers or filters, use them.
 
 DEEP_DIVE.md has the full picture including the Valhalla investigation
-(real ~3× speedup on reads via flat value-record layout), the
+(real ~4× speedup on reads via flat value-record layout), the
 SoA-storage experiment, and the "write-path tax" trade-off discussion.
 
 ## Build
