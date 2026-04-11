@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
  * of bodies; this benchmark is a pure iteration + write workload that scales
  * O(N). Direct comparisons with external N-body benchmarks are not meaningful.
  */
+@BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
 @Warmup(iterations = 3, time = 2)

@@ -148,6 +148,9 @@ public final class ChangeTracker {
 
     public void swapRemove(int slot, int count) {
         int last = count - 1;
+        // Both `slot` and `last` are < count <= capacity, so the invariant
+        // dirtyBits.length == (capacity + 63) >>> 6 guarantees all bit-word
+        // accesses below are within bounds.
         if (slot < last) {
             addedTicks[slot] = addedTicks[last];
             changedTicks[slot] = changedTicks[last];
