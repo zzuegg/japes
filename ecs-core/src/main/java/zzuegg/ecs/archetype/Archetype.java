@@ -60,7 +60,12 @@ public final class Archetype {
         return (T) chunks.get(loc.chunkIndex()).get(compId, loc.slotIndex());
     }
 
-    public Optional<Entity> remove(EntityLocation loc) {
+    /**
+     * Remove the entity at the given location via swap-remove.
+     * Returns the entity that was swapped into the vacated slot,
+     * or null if the removed entity was already the last in the chunk.
+     */
+    public Entity remove(EntityLocation loc) {
         Chunk chunk = chunks.get(loc.chunkIndex());
         int slot = loc.slotIndex();
         int lastSlot = chunk.count() - 1;
@@ -71,12 +76,9 @@ public final class Archetype {
         }
 
         chunk.remove(slot);
-        // The chunk just lost one entity, so it always has at least one free
-        // slot now. Update openChunkIndex so the next add doesn't fall back
-        // to a linear scan or allocate an unnecessary new chunk.
         openChunkIndex = loc.chunkIndex();
 
-        return Optional.ofNullable(swapped);
+        return swapped;
     }
 
     public Entity entity(EntityLocation loc) {

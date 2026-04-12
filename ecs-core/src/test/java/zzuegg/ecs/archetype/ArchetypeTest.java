@@ -75,8 +75,8 @@ class ArchetypeTest {
         var swapped = arch.remove(new EntityLocation(arch, 0, 0));
 
         assertEquals(1, arch.entityCount());
-        assertTrue(swapped.isPresent());
-        assertEquals(Entity.of(1, 0), swapped.get());
+        assertNotNull(swapped);
+        assertEquals(Entity.of(1, 0), swapped);
     }
 
     @Test
@@ -88,7 +88,7 @@ class ArchetypeTest {
 
         arch.add(Entity.of(0, 0));
         var swapped = arch.remove(new EntityLocation(arch, 0, 0));
-        assertTrue(swapped.isEmpty());
+        assertNull(swapped);
     }
 
     @Test

@@ -104,6 +104,18 @@ public final class Chunk {
         ((ComponentStorage<T>) storagesById[id.id()]).set(slot, value);
     }
 
+    /**
+     * Copy a component value directly from this chunk's storage to another
+     * chunk's storage without reconstructing the record. For SoA storages
+     * this copies primitive array elements directly; for Object[] it copies
+     * the reference.
+     */
+    @SuppressWarnings("unchecked")
+    public void copyComponentTo(ComponentId id, int srcSlot, Chunk dst, int dstSlot) {
+        ((ComponentStorage) storagesById[id.id()]).copyInto(srcSlot,
+            (ComponentStorage) dst.storagesById[id.id()], dstSlot);
+    }
+
     public Entity entity(int slot) {
         return entities[slot];
     }

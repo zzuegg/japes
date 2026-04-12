@@ -603,9 +603,7 @@ public final class World {
         }
 
         var swapped = archetype.remove(location);
-        swapped.ifPresent(swappedEntity ->
-            setLocation(swappedEntity.index(), location)
-        );
+        if (swapped != null) setLocation(swapped.index(), location);
 
         entityAllocator.free(entity);
     }
@@ -776,9 +774,7 @@ public final class World {
         newChunk.changeTracker(markerId).markAdded(newSlot, tick.current());
 
         var swapped = oldArchetype.remove(oldLocation);
-        swapped.ifPresent(swappedEntity ->
-            setLocation(swappedEntity.index(), oldLocation)
-        );
+        if (swapped != null) setLocation(swapped.index(), oldLocation);
         setLocation(entity.index(), newLocation);
     }
 
@@ -815,9 +811,7 @@ public final class World {
         }
 
         var swapped = oldArchetype.remove(oldLocation);
-        swapped.ifPresent(swappedEntity ->
-            setLocation(swappedEntity.index(), oldLocation)
-        );
+        if (swapped != null) setLocation(swapped.index(), oldLocation);
         setLocation(entity.index(), newLocation);
     }
 
@@ -948,8 +942,8 @@ public final class World {
         int newSlot = newLocation.slotIndex();
 
         for (var existingCompId : oldArchetype.id().components()) {
-            var value = oldArchetype.get(existingCompId, oldLocation);
-            newArchetype.set(existingCompId, newLocation, value);
+            // Copy directly between storages — no record reconstruction.
+            oldChunk.copyComponentTo(existingCompId, oldSlot, newChunk, newSlot);
             // Preserve added/changed history across the archetype migration.
             var src = oldChunk.changeTracker(existingCompId);
             var dst = newChunk.changeTracker(existingCompId);
@@ -962,9 +956,7 @@ public final class World {
         newChunk.changeTracker(compId).markAdded(newSlot, tick.current());
 
         var swapped = oldArchetype.remove(oldLocation);
-        swapped.ifPresent(swappedEntity ->
-            setLocation(swappedEntity.index(), oldLocation)
-        );
+        if (swapped != null) setLocation(swapped.index(), oldLocation);
 
         setLocation(entity.index(), newLocation);
     }
@@ -996,8 +988,8 @@ public final class World {
         int newSlot = newLocation.slotIndex();
 
         for (var existingCompId : newArchetypeId.components()) {
-            var value = oldArchetype.get(existingCompId, oldLocation);
-            newArchetype.set(existingCompId, newLocation, value);
+            // Copy directly between storages — no record reconstruction.
+            oldChunk.copyComponentTo(existingCompId, oldSlot, newChunk, newSlot);
             // Preserve added/changed history for components that survive the move.
             var src = oldChunk.changeTracker(existingCompId);
             var dst = newChunk.changeTracker(existingCompId);
@@ -1006,9 +998,7 @@ public final class World {
         }
 
         var swapped = oldArchetype.remove(oldLocation);
-        swapped.ifPresent(swappedEntity ->
-            setLocation(swappedEntity.index(), oldLocation)
-        );
+        if (swapped != null) setLocation(swapped.index(), oldLocation);
 
         setLocation(entity.index(), newLocation);
     }
