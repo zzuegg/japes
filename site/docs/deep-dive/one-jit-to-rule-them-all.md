@@ -12,7 +12,7 @@ This page collects everything we learned about JVM performance during the japes 
 
 The JIT compiler is astonishingly good at optimizing code — **if you let it**. Most "Java is slow" benchmarks are actually measuring how badly the code's data structures prevent the JIT from doing its job. Remove the obstacles, and Java competes with hand-written Rust on the same workload.
 
-japes went from **9.3× slower than Bevy** on writes to **3.7× faster** — not by rewriting in native code, not by using `sun.misc.Unsafe`, not by waiting for Valhalla. Just by understanding three things:
+japes went from **9.3× slower than Bevy** on writes to **3.3× faster** — not by rewriting in native code, not by using `sun.misc.Unsafe`, not by waiting for Valhalla. Just by understanding three things:
 
 1. What prevents escape analysis
 2. What prevents scalar replacement
@@ -138,6 +138,28 @@ Counter-intuitively, **allocating a fresh object per iteration can be faster tha
 
 The multi-target `@Filter` helper originally used `BitSet` for deduplication (heap-allocated per chunk). Replaced with a reusable `long[]` bitmap field on the generated class. **Zero per-chunk allocation**.
 
+## Dispatch-level EA: the processAll discovery
+
+The tier-1 generators emit correct EA-friendly bytecode (fresh Mut, SoA inline), but **the JIT can't use it if it can't inline the method**. Two dispatch-level blockers had to be solved:
+
+### Megamorphic dispatch prevents inlining
+
+The system scheduler calls `processor.processAll(chunks, tick)` through a single `invokeinterface` call site. With N systems (6 in the unified-delta benchmark), the JIT sees N different hidden-class receivers → **megamorphic** → can't inline `processAll()` → EA can't see the Mut/record allocations inside.
+
+**Verified**: with 1 system (monomorphic dispatch), allocation drops from 838 KB/op to **48 bytes/op**. EA eliminates everything.
+
+**Partial fix**: inline the entity loop directly into `processAll()` instead of delegating to `process()`. C2 compiles each hidden class's `processAll` independently. Within each compilation, the user method call is monomorphic → inlined → EA can scalar-replace Mut. The entity-loop code is emitted by a shared emitter called from both `process()` and `processAll()`, avoiding duplication.
+
+### BCEA bytecode size limit (150 bytes)
+
+C2's bytecode-level escape analysis (BCEA) only analyzes methods below **150 bytes**. Observer systems with multi-target `@Filter` + 3 `@Read` params generate `processAll` methods of ~293 bytes → BCEA skips them entirely → EA never runs → record allocations can't be eliminated.
+
+**Current state**: mutator Mut allocations are EA'd (processAll is smaller). Observer record allocations are not yet EA'd — reducing the filter preamble size below the BCEA limit is the next optimization target.
+
+### isChanged guard on flush
+
+The tier-1 generator now emits `if (mut.isChanged()) { flush + write-back }` instead of unconditionally flushing every entity. This avoids `flush()`, SoA decomposition, and storage writes for the 90% of entities that a selective mutator system doesn't modify.
+
 ## The optimization journey in numbers
 
 | Round | What | Write µs/op (10k) | vs Bevy |
@@ -146,8 +168,9 @@ The multi-target `@Filter` helper originally used `BitSet` for deduplication (he
 | ArchetypeId flat array | TreeSet → sorted ComponentId[] | 38.1 | 6.1× slower |
 | Fresh Mut per entity | Reused Mut → fresh allocation + EA | 24.8 | 3.9× slower |
 | SoA storage + tier-1 inline | Object[] → per-field primitive arrays | 1.70 | **3.7× faster** |
+| Inline processAll + isChanged guard | Entity loop in one compilation unit | 1.9 | **3.3× faster** |
 
-**Total: 57.4 µs → 1.70 µs = 33.8× speedup.** From 9.1× slower than Bevy to 3.7× faster. All on stock JDK 26, no `Unsafe`, no Valhalla.
+**Total: 57.4 µs → 1.9 µs = 30.2× speedup.** From 9.1× slower than Bevy to 3.3× faster. All on stock JDK 26, no `Unsafe`, no Valhalla.
 
 ## What Valhalla would add
 
@@ -170,6 +193,8 @@ Our current SoA approach achieves (1) at the library level. (2) is the remaining
 4. **Tier-1 bytecode generation pays for itself.** The cost of emitting 800 lines of `java.lang.classfile` code is amortized across every tick for the lifetime of the world. The JIT sees clean, predictable bytecode and inlines aggressively.
 
 5. **Benchmark what real code does, not what's convenient.** `bh.consume(pos)` measures heap-reference survival. `bh.consume(pos.x())` measures field access. Real game code does the latter.
+
+6. **Keep hot methods below 150 bytes.** C2's bytecode-level escape analysis (BCEA) skips methods above this threshold. A method that's 200 bytes with perfect EA-friendly code gets zero EA benefit. Split large methods so the allocation-bearing inner loop is a separate small method the JIT inlines back.
 
 ## Related
 

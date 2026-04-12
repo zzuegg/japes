@@ -25,14 +25,14 @@ Numbers are µs/op, lower is better. Copied verbatim from `DEEP_DIVE.md`.
 | benchmark              | entityCount | bevy | **japes** | zayes  | dominion | artemis |
 |------------------------|------------:|-----:|----------:|-------:|---------:|--------:|
 | `iterateSingleComponent` |        1000 | 0.259 |  **0.302** |   2.75 |     0.780 |    0.470 |
-| `iterateSingleComponent` |       10000 | 2.18 |  **2.94** |   28.6 |     7.06 |    4.52 |
-| `iterateSingleComponent` |      100000 | 21.3 |  **31.6** |    383 |     79.4 |     166 |
+| `iterateSingleComponent` |       10000 | 2.18 |  **3.0** |   28.6 |     7.06 |    4.52 |
+| `iterateSingleComponent` |      100000 | 21.3 |  **30.8** |    383 |     79.4 |     166 |
 | `iterateTwoComponents`   |        1000 | 0.395 |  **0.594** |   3.55 |     1.31 |    1.18 |
-| `iterateTwoComponents`   |       10000 | 3.70 |  **5.92** |   38.6 |     12.4 |    11.6 |
-| `iterateTwoComponents`   |      100000 | 36.8 |  **65.8** |    508 |      128 |     237 |
+| `iterateTwoComponents`   |       10000 | 3.70 |  **7.2** |   38.6 |     12.4 |    11.6 |
+| `iterateTwoComponents`   |      100000 | 36.8 |  **76.6** |    508 |      128 |     237 |
 | `iterateWithWrite`       |        1000 | 0.656 |  **0.138** |    182 |     2.32 |    1.83 |
-| `iterateWithWrite`       |       10000 | 6.29 |  **1.70** |   1818 |     22.5 |    18.2 |
-| `iterateWithWrite`       |      100000 | 63.7 |  **26.0** |  17857 |      234 |     334 |
+| `iterateWithWrite`       |       10000 | 6.29 |  **1.9** |   1818 |     22.5 |    18.2 |
+| `iterateWithWrite`       |      100000 | 63.7 |  **31.9** |  17857 |      234 |     334 |
 
 !!! warning "Methodology change: field-level blackhole on iteration micros"
 

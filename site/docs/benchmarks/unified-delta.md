@@ -8,30 +8,28 @@ The unified delta workload tests a single logical observer reacting to added, ch
 
 !!! info "What it measures"
 
-    Per-tick driver: 10% mutations per component type (30% of entities touched total via offset rotating cursors), 1% spawn, 1% despawn, 2% component strip-and-restore (Mana removed then re-added next tick). The observer counts added, changed and removed events. Zay-ES does this with one `EntitySet.applyChanges()` call; japes uses multi-target `@Filter` (5 system registrations) or single-target (9 registrations).
+    Per-tick driver: 3 mutator systems iterate all entities and write 10% each (30% of entities touched total), 1% spawn, 1% despawn, 2% component strip-and-restore (Mana removed then re-added next tick). 3 observer systems count added, changed and removed events via multi-target `@Filter`. Zay-ES does mutations via `EntitySet.applyChanges()` on the same workload shape.
 
 ## Results
 
-| | **japes 3-system (multi-target @Filter)** | Zay-ES (1 EntitySet) |
+| | **japes 6-system** | Zay-ES (1 EntitySet) |
 |---|---:|---:|
-| **10k entities** | 621 µs | **234 µs** |
-| **100k entities** | 5,102 µs | **4,878 µs** |
+| **10k entities** | 596 µs | **237 µs** |
+| **100k entities** | **4,762 µs** | 5,025 µs |
 
-**Zay-ES beats japes at both 10k (2.66×) and 100k (1.05×).** The SoA storage
-default adds overhead to the unified delta workload because SoA decomposition
-and recomposition costs are paid on every mutation. Zay-ES's single
-`applyChanges()` call with object-level storage is a better fit for this
-particular workload shape. japes is still competitive at 100k where the
-dirty-list walk advantage narrows the gap.
-
-## The optimization journey
-
-See the [full optimization log](../deep-dive/unified-delta-optimization.md) for the step-by-step story of how multi-target `@Filter` went from tier-2 (20% regression) to tier-1 with zero-allocation helpers (6% faster than the workaround).
+**Zay-ES beats japes at 10k (2.52×) but japes wins at 100k (1.06×).** At 10k, Zay-ES's EntitySet dirty-set model only touches the ~30% of changed entities per tick, while japes mutator systems iterate all 10k entities and write 10% each. At 100k the sequential SoA iteration advantage overcomes the full-scan overhead. The observer systems use multi-target `@Filter` which walks the union of dirty lists — matching Zay-ES's delta-only approach for the read side.
 
 ## What the japes code looks like
 
 ```java
-// One multi-target @Filter replaces three separate single-target systems
+// Mutator systems iterate all entities, write 10% via Mut<T>
+@System
+void mutateState(@Write Mut<State> s) {
+    if (counter++ % 10 == 0)
+        s.set(new State(s.get().value() + 1));
+}
+
+// Multi-target @Filter observers react to changes across 3 component types
 @System
 @Filter(value = Changed.class, target = {State.class, Health.class, Mana.class})
 void observeChanges(@Read State s, @Read Health h, @Read Mana m) {
@@ -42,12 +40,6 @@ void observeChanges(@Read State s, @Read Health h, @Read Mana m) {
 @Filter(value = Added.class, target = {State.class, Health.class, Mana.class})
 void observeAdded(@Read State s, @Read Health h, @Read Mana m) {
     counters.added++;
-}
-
-// RemovedComponents is still per-type (3 registrations)
-@System
-void removedState(RemovedComponents<State> gone) {
-    for (var r : gone) counters.removedState++;
 }
 ```
 
