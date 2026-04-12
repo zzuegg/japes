@@ -126,9 +126,23 @@ Profiling after round 3 showed ~13% of CPU in scheduler infrastructure: `Schedul
 
 **Result**: within noise on both benchmarks (3.44 vs 3.62 ops/ms at 10k — the error bars overlap). The scheduler overhead was only ~5 µs per tick for 5-system workloads. The win is structural: zero per-tick allocation in the executor, guaranteed O(1) execution order lookup regardless of DAG complexity, and cleaner code. Bigger workloads with more systems will see a larger absolute win.
 
+## Round 5 — `@Filter(Removed)` with last-value binding
+
+The final piece: `@Filter(Removed, target = {S, H, M})` completes the symmetric API. Instead of 3 separate `RemovedComponents<T>` systems, one `@Filter(Removed)` observer fires once per entity that lost any target component, with `@Read` params bound to the last-known values (from the removal log for removed components, from the live entity for still-present ones).
+
+This is a fundamentally different dispatch path — the entity that lost a component is no longer in a matching archetype, so normal chunk iteration can't find it. `RemovedFilterProcessor` walks the removal log directly.
+
+**Bug found during implementation**: the removal log GC check (`consumedRemovedComponents` on the plan) wasn't set for `@Filter(Removed)` systems, so the log grew unbounded. Without the fix, the benchmark ran at **0.73 ops/ms** (5× regression). With the fix: **3.34 ops/ms**.
+
+| | 9-system | 5-system | **3-system** | Zay-ES |
+|---|---:|---:|---:|---:|
+| **10k** | 3.41 | 3.62 | **3.34** | 4.27 |
+| **100k** | 0.276 | 0.263 | **0.257** | 0.198 |
+
+The 3-system version is ~8% slower than 5-system at 10k because `RemovedFilterProcessor` is tier-2 (reflective, `LinkedHashMap` dedup, `SystemInvoker.invoke` per entity). Tier-1 generation for this path would close the gap.
+
 ## Related
 
-- [Multi-target @Filter tutorial](../tutorials/basics/06-change-detection.md)
-- [Benchmarks: unified delta](../benchmarks/predator-prey.md) *(numbers from the predator/prey cell; unified-delta comparison coming)*
-- [Tier fallbacks reference](../reference/tier-fallbacks.md) — the multi-target tier-1 generator removes one entry from the bailout table
+- [Unified delta benchmark](../benchmarks/unified-delta.md)
+- [Tier fallbacks reference](../reference/tier-fallbacks.md)
 - [Optimization journey (relations)](optimization-journey.md) — the earlier 167→32 µs story
