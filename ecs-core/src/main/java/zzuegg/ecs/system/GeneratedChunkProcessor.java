@@ -397,19 +397,9 @@ public final class GeneratedChunkProcessor {
                     cb.astore(firstTrackerVar + i);
                 }
 
-                // Per-chunk Mut setup: tracker and tick are stable across every
-                // entity in this chunk, so push them into each Mut once here
-                // instead of passing them as args to reset() per entity.
-                for (int i = 0; i < paramCount; i++) {
-                    if (kinds[i] != ParamKind.WRITE) continue;
-                    cb.aload(0);
-                    cb.getfield(genDesc, "muts", mutArrayDesc);
-                    cb.ldc(i);
-                    cb.aaload();
-                    cb.aload(firstTrackerVar + i);
-                    cb.lload(2); // tick
-                    cb.invokevirtual(mutDesc, "setContext", mutSetContextDesc);
-                }
+                // Per-chunk: tracker + tick are stable. With fresh-Mut-per-entity
+                // the tracker is already in firstTrackerVar[i] and tick is in
+                // the method arg (slot 2). No per-chunk Mut setup needed.
 
                 // Filter setup: load a ChangeTracker for each filter target,
                 // grab the primary filter's dirty list + count, and cache
@@ -615,15 +605,22 @@ public final class GeneratedChunkProcessor {
                             cb.checkcast(componentTypes[i].describeConstable().orElseThrow());
                         }
                         case WRITE -> {
-                            // Push the hoisted Mut ref, dup (once for
-                            // resetValue, once to remain on the stack for
-                            // the method argument), call resetValue(value,
-                            // slot). tracker+tick were already set per-chunk
-                            // via setContext, so the per-entity path only
-                            // pushes the two variables that actually change
-                            // per slot.
-                            cb.aload(mutLocal[i]);
+                            // Fresh Mut per entity — enables escape analysis
+                            // to scalar-replace both the Mut and the record
+                            // stored in it via set(). The constructor writes
+                            // all fields; EA turns them into local-variable
+                            // assignments that the JIT can register-allocate.
+                            var mutInitDesc = MethodTypeDesc.of(
+                                ConstantDescs.CD_void,
+                                recordDesc,              // value
+                                ConstantDescs.CD_int,    // slot
+                                trackerDesc,             // tracker
+                                ConstantDescs.CD_long,   // tick
+                                ConstantDescs.CD_boolean  // valueTracked
+                            );
+                            cb.new_(mutDesc);
                             cb.dup();
+                            // value from storage
                             if (useDefaultStorageFactory) {
                                 cb.aload(firstStorageVar + i);
                                 cb.iload(slotVar);
@@ -633,8 +630,14 @@ public final class GeneratedChunkProcessor {
                                 cb.iload(slotVar);
                                 cb.invokeinterface(storageDesc, "get", storageGetDesc);
                             }
-                            cb.iload(slotVar);
-                            cb.invokevirtual(mutDesc, "resetValue", mutResetValueDesc);
+                            cb.iload(slotVar);               // slot
+                            cb.aload(firstTrackerVar + i);   // tracker
+                            cb.lload(2);                     // tick
+                            cb.iconst_0();                   // valueTracked = false
+                            cb.invokespecial(mutDesc, "<init>", mutInitDesc);
+                            // Store in the mutLocal so flush can find it
+                            cb.astore(mutLocal[i]);
+                            cb.aload(mutLocal[i]);
                         }
                         case ENTITY -> {
                             // entities[slot] via the hoisted raw Entity[]

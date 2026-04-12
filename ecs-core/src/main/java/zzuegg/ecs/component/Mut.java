@@ -46,7 +46,7 @@ public final class Mut<T extends Record> {
      * iterations. Call after {@link #setContext} in the tier-1 hot loop.
      */
     public void resetValue(T value, int newSlot) {
-        this.original = value;
+        if (valueTracked) this.original = value;
         this.current = value;
         this.slot = newSlot;
         this.changed = false;
