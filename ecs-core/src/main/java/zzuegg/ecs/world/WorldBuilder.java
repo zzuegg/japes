@@ -21,7 +21,7 @@ public final class WorldBuilder {
     // access the backing array directly via rawArray(). Flipped to false
     // by storageFactory() — which also enables the SoA tier-1 inline path
     // for write-heavy workloads.
-    boolean useDefaultStorageFactory = true;
+    boolean useDefaultStorageFactory = false;
     boolean useGeneratedProcessors = true;
     int chunkSize = 1024;
 
