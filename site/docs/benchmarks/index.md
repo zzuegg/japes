@@ -37,8 +37,8 @@ All numbers from a single co-temporal sweep on the same machine (JDK 26, Bevy 0.
 
 | Benchmark | Entities | **japes** (6 systems) | Zay-ES (1 EntitySet) |
 |---|---:|---:|---:|
-| [UnifiedDelta](unified-delta.md) | 10k | 666 | **237** |
-| [UnifiedDelta](unified-delta.md) | 100k | 5,263 | **5,025** |
+| [UnifiedDelta](unified-delta.md) | 10k | **666** | 1,067 |
+| [UnifiedDelta](unified-delta.md) | 100k | **5,263** | 13,889 |
 
 ## Where japes wins
 
@@ -48,12 +48,12 @@ All numbers from a single co-temporal sweep on the same machine (JDK 26, Bevy 0.
 - **Multi-observer scaling** — `RealisticTick 100k`: **6.15× faster than Bevy**, same reason at 10× scale. Also beats every Java library at both 10k and 100k.
 - **Relations vs naive Bevy** — `PredatorPrey @ForEachPair`: **9.4× faster** than Bevy's naive `Component<Entity>` pattern at 500×2000 because the reverse index is built-in.
 - **Particle scenario** — `ParticleScenario 10k`: **1.79× slower than Bevy** but now beats every Java library (Dominion 67.9, Artemis 98.5).
+- **Unified delta** — `UnifiedDelta`: **1.60× faster than Zay-ES at 10k, 2.64× at 100k**. With fair game-logic conditionals (both frameworks iterate all entities and evaluate the same conditions), japes' SoA array reads beat Zay-ES's per-entity HashMap lookups.
 
 ## Where japes loses
 
 - **Read micros** — `iterateSingleComponent 10k`: **1.38× slower than Bevy**. japes uses field-level blackhole while Bevy uses object-level `black_box`, so read rows are not directly comparable. Even so, the gap is small.
 - **Hand-rolled Bevy reverse-index** — `PredatorPrey optimized`: Bevy wins **2.3×** because it skips per-pair change tracking, Commands, archetype markers, and RemovedRelations.
-- **Unified delta** — `UnifiedDelta 10k`: **2.81× slower than Zay-ES**. Zay-ES's EntitySet dirty-set model only touches changed entities; japes mutator systems iterate all entities to evaluate game-logic conditions. At 100k the gap narrows to 1.05×.
 
 ## Speed-up matrix vs Bevy
 

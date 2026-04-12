@@ -12,12 +12,12 @@ The unified delta workload tests a single logical observer reacting to added, ch
 
 ## Results
 
-| | **japes 6-system** | Zay-ES (1 EntitySet) |
+| | **japes** (6 systems) | Zay-ES (1 EntitySet) |
 |---|---:|---:|
-| **10k entities** | 666 µs | **237 µs** |
-| **100k entities** | 5,263 µs | **5,025 µs** |
+| **10k entities** | **666 µs** | 1,067 µs |
+| **100k entities** | **5,263 µs** | 13,889 µs |
 
-**Zay-ES beats japes at 10k (2.81×) and is slightly faster at 100k (1.05×).** At 10k, Zay-ES's EntitySet dirty-set model only touches changed entities, while japes mutator systems iterate all entities to evaluate game-logic conditions (e.g., "is HP > 900?") and write only the ~10% that trigger. At 100k the gap narrows to noise as sequential SoA iteration scales well. The observer systems use multi-target `@Filter` which walks only dirty lists — matching Zay-ES's delta-only approach for the read side.
+**japes beats Zay-ES at both 10k (1.60×) and 100k (2.64×).** Both frameworks iterate all entities per component type, evaluate a game-logic condition (HP > 900, mana < 100, state % 10 == 0), and write only the ~10% that trigger. japes mutator systems read component values through tier-1 SoA primitive array loads; Zay-ES goes through `data.getComponent()` per entity (HashMap lookup). The SoA advantage grows with entity count because sequential array access scales better than per-entity HashMap probes.
 
 ## What the japes code looks like
 

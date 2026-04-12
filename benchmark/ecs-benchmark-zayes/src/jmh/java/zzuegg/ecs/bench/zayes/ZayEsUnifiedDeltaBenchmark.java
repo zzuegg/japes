@@ -15,9 +15,10 @@ import java.util.concurrent.TimeUnit;
  * single {@code applyChanges()} call.
  *
  * <p>Three components ({@code State}, {@code Health}, {@code Mana}) are
- * tracked in one EntitySet.  The driver mutates each component on a
- * different 10% slice per tick (offset cursors — 30% of entities touched
- * total), spawns 1%, despawns 1%, and — crucially — <em>strips</em>
+ * tracked in one EntitySet.  The driver iterates all entities per component
+ * and conditionally mutates ~10% based on game-logic checks (HP &gt; 900,
+ * mana &lt; 100, state % 10 == 0).  Additionally it spawns 1%, despawns
+ * 1%, and — crucially — <em>strips</em>
  * {@code Mana} from 2% of entities and <em>restores</em> it on the next
  * tick.  Stripping a single component causes the entity to leave the
  * EntitySet (reported as removed); restoring it causes the entity to
@@ -57,35 +58,34 @@ public class ZayEsUnifiedDeltaBenchmark {
     @Param({"10000", "100000"})
     int entityCount;
 
-    static final int CHANGE_FRACTION = 10; // 10% per component per tick
-
     EntityData data;
     EntitySet observerSet;
     List<EntityId> handles;
     /** Entities whose Mana was stripped last tick — restored at the start of the next. */
     List<EntityId> strippedIds;
-    int stateCursor, healthCursor, manaCursor, stripCursor;
+    int stripCursor;
     long sumAdded, sumChanged, sumRemoved;
 
     @Setup(Level.Iteration)
     public void setup() {
         data = new DefaultEntityData();
         handles = new ArrayList<>(entityCount);
+        var rng = new java.util.Random(42);
         for (int i = 0; i < entityCount; i++) {
             var id = data.createEntity();
+            int hp = (i % 10 == 0) ? 901 + rng.nextInt(100) : 100 + rng.nextInt(800);
+            int mp = (i % 10 == 1) ? rng.nextInt(100) : 100 + rng.nextInt(400);
+            int st = (i % 10 == 2) ? i * 10 : i * 10 + 1;
             data.setComponents(id,
-                new State(i),
-                new Health(1_000),
-                new Mana(0));
+                new State(st),
+                new Health(hp),
+                new Mana(mp));
             handles.add(id);
         }
         // One EntitySet tracks all three components — the Zay-ES sweet spot.
         observerSet = data.getEntities(State.class, Health.class, Mana.class);
         observerSet.applyChanges(); // prime past the initial spawn
         strippedIds = new ArrayList<>();
-        stateCursor = 0;
-        healthCursor = entityCount / 4;
-        manaCursor = entityCount / 2;
         stripCursor = 3 * entityCount / 4;
         sumAdded = sumChanged = sumRemoved = 0;
     }
@@ -99,7 +99,6 @@ public class ZayEsUnifiedDeltaBenchmark {
     public void tick(Blackhole bh) {
         int n = handles.size();
         int addCount = Math.max(1, entityCount / 100);
-        int changeCount = Math.max(1, entityCount / CHANGE_FRACTION);
         int removeCount = Math.max(1, entityCount / 100);
         int stripCount = Math.max(1, entityCount / 50); // 2%
 
@@ -120,25 +119,20 @@ public class ZayEsUnifiedDeltaBenchmark {
             handles.add(id);
         }
 
-        // 2. Mutate 10% per component via offset rotating cursors.
-        //    Three disjoint slices — 30% of entities touched total.
-        for (int i = 0; i < changeCount; i++) {
-            var id = handles.get(stateCursor % handles.size());
-            stateCursor++;
-            var cur = data.getComponent(id, State.class);
-            if (cur != null) data.setComponent(id, new State(cur.value() + 1));
+        // 2. Game-logic conditional mutations — iterate ALL entities,
+        //    check a condition, write only when triggered (~10% each).
+        //    Same pattern as the japes mutator systems.
+        for (var id : handles) {
+            var h = data.getComponent(id, Health.class);
+            if (h != null && h.hp() > 900) data.setComponent(id, new Health(h.hp() - 1));
         }
-        for (int i = 0; i < changeCount; i++) {
-            var id = handles.get(healthCursor % handles.size());
-            healthCursor++;
-            var cur = data.getComponent(id, Health.class);
-            if (cur != null) data.setComponent(id, new Health(cur.hp() - 1));
+        for (var id : handles) {
+            var m = data.getComponent(id, Mana.class);
+            if (m != null && m.points() < 100) data.setComponent(id, new Mana(m.points() + 1));
         }
-        for (int i = 0; i < changeCount; i++) {
-            var id = handles.get(manaCursor % handles.size());
-            manaCursor++;
-            var cur = data.getComponent(id, Mana.class);
-            if (cur != null) data.setComponent(id, new Mana(cur.points() + 1));
+        for (var id : handles) {
+            var s = data.getComponent(id, State.class);
+            if (s != null && s.value() % 10 == 0) data.setComponent(id, new State(s.value() + 1));
         }
 
         // 3. Strip Mana from 2% of entities — they leave the EntitySet.
