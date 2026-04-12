@@ -37,8 +37,8 @@ All numbers from a single co-temporal sweep on the same machine (JDK 26, Bevy 0.
 
 | Benchmark | Entities | **japes** (6 systems) | Zay-ES (1 EntitySet) |
 |---|---:|---:|---:|
-| [UnifiedDelta](unified-delta.md) | 10k | 596 | **237** |
-| [UnifiedDelta](unified-delta.md) | 100k | **4,762** | 5,025 |
+| [UnifiedDelta](unified-delta.md) | 10k | 666 | **237** |
+| [UnifiedDelta](unified-delta.md) | 100k | 5,263 | **5,025** |
 
 ## Where japes wins
 
@@ -53,7 +53,7 @@ All numbers from a single co-temporal sweep on the same machine (JDK 26, Bevy 0.
 
 - **Read micros** — `iterateSingleComponent 10k`: **1.38× slower than Bevy**. japes uses field-level blackhole while Bevy uses object-level `black_box`, so read rows are not directly comparable. Even so, the gap is small.
 - **Hand-rolled Bevy reverse-index** — `PredatorPrey optimized`: Bevy wins **2.3×** because it skips per-pair change tracking, Commands, archetype markers, and RemovedRelations.
-- **Unified delta** — `UnifiedDelta 10k`: **2.52× slower than Zay-ES**. Zay-ES's EntitySet dirty-set model only touches changed entities; japes mutator systems iterate all entities and write 10%. At 100k, japes wins because sequential SoA iteration scales better.
+- **Unified delta** — `UnifiedDelta 10k`: **2.81× slower than Zay-ES**. Zay-ES's EntitySet dirty-set model only touches changed entities; japes mutator systems iterate all entities to evaluate game-logic conditions. At 100k the gap narrows to 1.05×.
 
 ## Speed-up matrix vs Bevy
 

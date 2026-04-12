@@ -14,19 +14,24 @@ The unified delta workload tests a single logical observer reacting to added, ch
 
 | | **japes 6-system** | Zay-ES (1 EntitySet) |
 |---|---:|---:|
-| **10k entities** | 596 µs | **237 µs** |
-| **100k entities** | **4,762 µs** | 5,025 µs |
+| **10k entities** | 666 µs | **237 µs** |
+| **100k entities** | 5,263 µs | **5,025 µs** |
 
-**Zay-ES beats japes at 10k (2.52×) but japes wins at 100k (1.06×).** At 10k, Zay-ES's EntitySet dirty-set model only touches the ~30% of changed entities per tick, while japes mutator systems iterate all 10k entities and write 10% each. At 100k the sequential SoA iteration advantage overcomes the full-scan overhead. The observer systems use multi-target `@Filter` which walks the union of dirty lists — matching Zay-ES's delta-only approach for the read side.
+**Zay-ES beats japes at 10k (2.81×) and is slightly faster at 100k (1.05×).** At 10k, Zay-ES's EntitySet dirty-set model only touches changed entities, while japes mutator systems iterate all entities to evaluate game-logic conditions (e.g., "is HP > 900?") and write only the ~10% that trigger. At 100k the gap narrows to noise as sequential SoA iteration scales well. The observer systems use multi-target `@Filter` which walks only dirty lists — matching Zay-ES's delta-only approach for the read side.
 
 ## What the japes code looks like
 
 ```java
-// Mutator systems iterate all entities, write 10% via Mut<T>
+// Damage-over-time: entities above 900 HP take 1 damage per tick
 @System
-void mutateState(@Write Mut<State> s) {
-    if (counter++ % 10 == 0)
-        s.set(new State(s.get().value() + 1));
+void damageOverTime(@Write Mut<Health> h) {
+    if (h.get().hp() > 900) h.set(new Health(h.get().hp() - 1));
+}
+
+// Mana regeneration: entities below 100 mana regen 1 per tick
+@System
+void manaRegen(@Write Mut<Mana> m) {
+    if (m.get().points() < 100) m.set(new Mana(m.get().points() + 1));
 }
 
 // Multi-target @Filter observers react to changes across 3 component types
@@ -34,12 +39,6 @@ void mutateState(@Write Mut<State> s) {
 @Filter(value = Changed.class, target = {State.class, Health.class, Mana.class})
 void observeChanges(@Read State s, @Read Health h, @Read Mana m) {
     counters.changed++;
-}
-
-@System
-@Filter(value = Added.class, target = {State.class, Health.class, Mana.class})
-void observeAdded(@Read State s, @Read Health h, @Read Mana m) {
-    counters.added++;
 }
 ```
 

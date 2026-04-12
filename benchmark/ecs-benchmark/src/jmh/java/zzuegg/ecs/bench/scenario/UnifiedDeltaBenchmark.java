@@ -16,15 +16,20 @@ import java.util.concurrent.TimeUnit;
  * Unified delta observer — one logical observer reacts to added, changed,
  * AND removed entities each tick, across three component types.
  *
- * <p>Mutations are expressed as systems (not world.getComponent/setComponent),
- * which is how real game logic works. Each mutator system iterates all
- * entities but only writes 1-in-{@code CHANGE_FRACTION} via a rotating
- * counter, producing 10% Changed events per component type per tick.
+ * <p>Mutations are expressed as systems that read component values and
+ * conditionally write — the same pattern as real game logic (damage-over-time,
+ * mana regeneration, animation ticks). Each mutator iterates all entities
+ * but only writes the ~10% that meet its game-logic condition, producing
+ * Changed events that the observers react to.
  *
- * <p>With multi-target {@code @Filter}, japes needs <em>three</em>
- * observer registrations plus <em>three</em> mutator systems — six total:
+ * <p>This workload favors Zay-ES's {@code EntitySet} model because the
+ * dirty-set only touches changed entities, while japes mutator systems
+ * must iterate all entities to evaluate the condition. At large entity
+ * counts the sequential SoA iteration advantage closes the gap.
+ *
+ * <p>System registrations:
  * <ul>
- *   <li>3 mutator systems (one per component type)</li>
+ *   <li>3 mutator systems (conditional write per component type)</li>
  *   <li>1 {@code @Filter(Added, target = {State, Health, Mana})}</li>
  *   <li>1 {@code @Filter(Changed, target = {State, Health, Mana})}</li>
  *   <li>1 {@code @Filter(Removed, target = {State, Health, Mana})}</li>
@@ -48,43 +53,35 @@ public class UnifiedDeltaBenchmark {
         long added, changed, removed;
     }
 
-    // --- Mutator systems: iterate all entities, write 1/CHANGE_FRACTION. ---
+    // --- Mutator systems: game-logic conditionals, ~10% write rate. ---
 
-    public static final class StateMutator {
-        int counter;
-        final int fraction;
-        StateMutator(int fraction) { this.fraction = fraction; }
-
+    /** Damage-over-time: entities above 900 HP take 1 damage per tick. */
+    public static final class DamageOverTime {
         @System
-        void mutate(@Write Mut<State> s) {
-            if (counter++ % fraction == 0) {
-                s.set(new State(s.get().value() + 1));
-            }
-        }
-    }
-
-    public static final class HealthMutator {
-        int counter;
-        final int fraction;
-        HealthMutator(int fraction) { this.fraction = fraction; }
-
-        @System
-        void mutate(@Write Mut<Health> h) {
-            if (counter++ % fraction == 0) {
+        void tick(@Write Mut<Health> h) {
+            if (h.get().hp() > 900) {
                 h.set(new Health(h.get().hp() - 1));
             }
         }
     }
 
-    public static final class ManaMutator {
-        int counter;
-        final int fraction;
-        ManaMutator(int fraction) { this.fraction = fraction; }
-
+    /** Mana regeneration: entities below 100 mana regenerate 1 per tick. */
+    public static final class ManaRegen {
         @System
-        void mutate(@Write Mut<Mana> m) {
-            if (counter++ % fraction == 0) {
+        void tick(@Write Mut<Mana> m) {
+            if (m.get().points() < 100) {
                 m.set(new Mana(m.get().points() + 1));
+            }
+        }
+    }
+
+    /** Animation tick: advances frame counter for entities whose state is
+     *  a multiple of 10 (simulates conditional animation updates). */
+    public static final class AnimationTick {
+        @System
+        void tick(@Write Mut<State> s) {
+            if (s.get().value() % 10 == 0) {
+                s.set(new State(s.get().value() + 1));
             }
         }
     }
@@ -127,8 +124,6 @@ public class UnifiedDeltaBenchmark {
     @Param({"10000", "100000"})
     int entityCount;
 
-    static final int CHANGE_FRACTION = 10;
-
     World world;
     Counters counters;
     List<Entity> handles;
@@ -139,19 +134,24 @@ public class UnifiedDeltaBenchmark {
     public void setup() {
         counters = new Counters();
         world = World.builder()
-            .addSystem(new StateMutator(CHANGE_FRACTION))
-            .addSystem(new HealthMutator(CHANGE_FRACTION))
-            .addSystem(new ManaMutator(CHANGE_FRACTION))
+            .addSystem(new DamageOverTime())
+            .addSystem(new ManaRegen())
+            .addSystem(new AnimationTick())
             .addSystem(new UnifiedAddedObserver(counters))
             .addSystem(new UnifiedChangedObserver(counters))
             .addSystem(new UnifiedRemovedObserver(counters))
             .build();
         handles = new ArrayList<>(entityCount);
+        // Distribute values so ~10% meet each mutator's condition:
+        //   Health: 90% in [100,900], 10% in [901,1000] → DamageOverTime fires
+        //   Mana:   90% in [100,500], 10% in [0,99]     → ManaRegen fires
+        //   State:  10% are multiples of 10              → AnimationTick fires
+        var rng = new java.util.Random(42);
         for (int i = 0; i < entityCount; i++) {
-            handles.add(world.spawn(
-                new State(i),
-                new Health(1_000),
-                new Mana(0)));
+            int hp = (i % 10 == 0) ? 901 + rng.nextInt(100) : 100 + rng.nextInt(800);
+            int mp = (i % 10 == 1) ? rng.nextInt(100) : 100 + rng.nextInt(400);
+            int st = (i % 10 == 2) ? i * 10 : i * 10 + 1; // ~10% are multiples of 10
+            handles.add(world.spawn(new State(st), new Health(hp), new Mana(mp)));
         }
         world.tick();
         strippedEntities = new ArrayList<>();
