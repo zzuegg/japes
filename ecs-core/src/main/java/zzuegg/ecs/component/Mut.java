@@ -5,7 +5,8 @@ import zzuegg.ecs.change.ChangeTracker;
 public final class Mut<T extends Record> {
 
     private T original;
-    private T current;
+    private T current;       // set once in constructor, never overwritten
+    private T pending;       // written by set(), null if unchanged
     private int slot;
     private ChangeTracker tracker;
     private long tick;
@@ -15,6 +16,7 @@ public final class Mut<T extends Record> {
     public Mut(T value, int slot, ChangeTracker tracker, long tick, boolean valueTracked) {
         if (valueTracked) this.original = value;
         this.current = value;
+        // pending stays null — no write needed
         this.slot = slot;
         this.tracker = tracker;
         this.tick = tick;
@@ -31,33 +33,25 @@ public final class Mut<T extends Record> {
         resetValue(value, newSlot);
     }
 
-    /**
-     * Set the per-chunk context — the ChangeTracker and the current tick are
-     * stable across all entities in a chunk, so tier-1 calls this once before
-     * the iteration loop instead of paying the stores per entity.
-     */
     public void setContext(ChangeTracker newTracker, long newTick) {
         this.tracker = newTracker;
         this.tick = newTick;
     }
 
-    /**
-     * Per-entity reset — updates only the fields that change between
-     * iterations. Call after {@link #setContext} in the tier-1 hot loop.
-     */
     public void resetValue(T value, int newSlot) {
         if (valueTracked) this.original = value;
         this.current = value;
+        this.pending = null;
         this.slot = newSlot;
         this.changed = false;
     }
 
     public T get() {
-        return current;
+        return changed ? pending : current;
     }
 
     public void set(T value) {
-        this.current = value;
+        this.pending = value;
         this.changed = true;
     }
 
@@ -73,11 +67,11 @@ public final class Mut<T extends Record> {
         if (!changed) {
             return current;
         }
-        if (valueTracked && original.equals(current)) {
+        if (valueTracked && original.equals(pending)) {
             changed = false;
             return current;
         }
         tracker.markChanged(slot, tick);
-        return current;
+        return pending;
     }
 }
