@@ -177,6 +177,26 @@ public final class GeneratedChunkProcessor {
             }
         }
 
+        // SoA detection: only when the world uses a non-default storage factory.
+        // The default factory produces DefaultComponentStorage with Object[]
+        // backing — no SoA. With a SoA factory, eligible primitive-only records
+        // get per-field arrays and the generator emits faload/fastore directly.
+        boolean[] isSoA = new boolean[paramCount];
+        java.lang.reflect.RecordComponent[][] soaComponents = new java.lang.reflect.RecordComponent[paramCount][];
+        boolean anySoA = false;
+        if (!useDefaultStorageFactory) {
+            for (int i = 0; i < paramCount; i++) {
+                if ((kinds[i] == ParamKind.READ || kinds[i] == ParamKind.WRITE)
+                    && componentTypes[i] != null
+                    && Record.class.isAssignableFrom(componentTypes[i])
+                    && zzuegg.ecs.storage.SoAComponentStorage.isEligible((Class<? extends Record>) componentTypes[i])) {
+                    isSoA[i] = true;
+                    soaComponents[i] = componentTypes[i].getRecordComponents();
+                    anySoA = true;
+                }
+            }
+        }
+
         var systemLookup = MethodHandles.privateLookupIn(method.getDeclaringClass(), MethodHandles.lookup());
 
         var systemClassDesc = method.getDeclaringClass().describeConstable().orElseThrow();
@@ -364,11 +384,34 @@ public final class GeneratedChunkProcessor {
                 cb.invokevirtual(chunkDesc, "count", MethodTypeDesc.of(ConstantDescs.CD_int));
                 cb.istore(countVar);
 
-                // Load storages into local vars for READ/WRITE params. When
-                // the world uses the default storage factory, go a step
-                // further and grab the raw Record[] backing array so the
-                // per-entity access is just aaload/aastore — no
-                // invokeinterface on the hot path.
+                // Load storages into local vars for READ/WRITE params.
+                // Three paths:
+                //   1. SoA: extract per-field primitive arrays from soaFieldArrays()
+                //   2. Default factory: grab raw Record[] via rawArray()
+                //   3. Interface: store the ComponentStorage ref for invokeinterface
+                //
+                // SoA per-field arrays are stored in extra locals starting after
+                // the normal layout. For param i with N record components,
+                // soaFieldLocals[i][0..N-1] hold the primitive array refs.
+                int[][] soaFieldLocals = new int[paramCount][];
+                int soaNextLocal = firstHoistVar; // extend from the existing layout
+                // First pass: allocate locals for SoA field arrays.
+                for (int i = 0; i < paramCount; i++) {
+                    if (!isSoA[i]) continue;
+                    int nFields = soaComponents[i].length;
+                    soaFieldLocals[i] = new int[nFields];
+                    for (int f = 0; f < nFields; f++) {
+                        soaFieldLocals[i][f] = soaNextLocal++;
+                    }
+                }
+                // Adjust firstHoistVar if SoA locals were allocated
+                // (the entity array local was already allocated, but SoA
+                // locals come after it — let's put them AFTER all existing
+                // hoisted locals by bumping soaNextLocal only).
+                // Actually, soaNextLocal started at firstHoistVar which is
+                // already past all existing hoisted locals. So soaFieldLocals
+                // won't collide.
+
                 for (int i = 0; i < paramCount; i++) {
                     if (kinds[i] != ParamKind.READ && kinds[i] != ParamKind.WRITE) continue;
                     cb.aload(1); // chunk
@@ -378,11 +421,32 @@ public final class GeneratedChunkProcessor {
                     cb.aaload();
                     cb.invokevirtual(chunkDesc, "componentStorage",
                         MethodTypeDesc.of(storageDesc, compIdDesc));
-                    if (useDefaultStorageFactory) {
+                    if (isSoA[i]) {
+                        // Extract per-field arrays from soaFieldArrays().
+                        var objArrDesc = ConstantDescs.CD_Object.arrayType();
+                        cb.invokeinterface(storageDesc, "soaFieldArrays",
+                            MethodTypeDesc.of(objArrDesc));
+                        // For each field: cast and store in a local
+                        for (int f = 0; f < soaComponents[i].length; f++) {
+                            if (f < soaComponents[i].length - 1) cb.dup();
+                            cb.ldc(f);
+                            cb.aaload();
+                            var arrType = soaComponents[i][f].getType().arrayType()
+                                .describeConstable().orElseThrow();
+                            cb.checkcast(arrType);
+                            cb.astore(soaFieldLocals[i][f]);
+                        }
+                        // Also store a placeholder in firstStorageVar (unused for SoA
+                        // reads/writes, but keeps the local layout consistent).
+                        cb.aconst_null();
+                        cb.astore(firstStorageVar + i);
+                    } else if (useDefaultStorageFactory) {
                         cb.checkcast(defaultStorageDesc);
                         cb.invokevirtual(defaultStorageDesc, "rawArray", rawArrayDesc);
+                        cb.astore(firstStorageVar + i);
+                    } else {
+                        cb.astore(firstStorageVar + i);
                     }
-                    cb.astore(firstStorageVar + i);
                 }
 
                 // Load trackers for WRITE params: trackerN = chunk.changeTracker(cids[accessIdx])
@@ -591,25 +655,36 @@ public final class GeneratedChunkProcessor {
                 for (int i = 0; i < paramCount; i++) {
                     switch (kinds[i]) {
                         case READ -> {
-                            // Fast path: aaload from raw Record[] then checkcast.
-                            // Slow path: invokeinterface ComponentStorage.get.
-                            if (useDefaultStorageFactory) {
+                            if (isSoA[i]) {
+                                // SoA: construct record from per-field arrays.
+                                // new Position(pos_x[slot], pos_y[slot], pos_z[slot])
+                                var recDesc = componentTypes[i].describeConstable().orElseThrow();
+                                cb.new_(recDesc);
+                                cb.dup();
+                                var rc = soaComponents[i];
+                                var ctorParams = new ClassDesc[rc.length];
+                                for (int f = 0; f < rc.length; f++) {
+                                    ctorParams[f] = rc[f].getType().describeConstable().orElseThrow();
+                                    cb.aload(soaFieldLocals[i][f]);
+                                    cb.iload(slotVar);
+                                    zzuegg.ecs.storage.SoAComponentStorage.emitArrayLoad(cb, rc[f].getType());
+                                }
+                                cb.invokespecial(recDesc, "<init>",
+                                    MethodTypeDesc.of(ConstantDescs.CD_void, ctorParams));
+                            } else if (useDefaultStorageFactory) {
                                 cb.aload(firstStorageVar + i); // Record[]
                                 cb.iload(slotVar);
                                 cb.aaload();
+                                cb.checkcast(componentTypes[i].describeConstable().orElseThrow());
                             } else {
                                 cb.aload(firstStorageVar + i);
                                 cb.iload(slotVar);
                                 cb.invokeinterface(storageDesc, "get", storageGetDesc);
+                                cb.checkcast(componentTypes[i].describeConstable().orElseThrow());
                             }
-                            cb.checkcast(componentTypes[i].describeConstable().orElseThrow());
                         }
                         case WRITE -> {
-                            // Fresh Mut per entity — enables escape analysis
-                            // to scalar-replace both the Mut and the record
-                            // stored in it via set(). The constructor writes
-                            // all fields; EA turns them into local-variable
-                            // assignments that the JIT can register-allocate.
+                            // Fresh Mut per entity — enables escape analysis.
                             var mutInitDesc = MethodTypeDesc.of(
                                 ConstantDescs.CD_void,
                                 recordDesc,              // value
@@ -620,8 +695,22 @@ public final class GeneratedChunkProcessor {
                             );
                             cb.new_(mutDesc);
                             cb.dup();
-                            // value from storage
-                            if (useDefaultStorageFactory) {
+                            // value from storage — SoA reconstructs the record
+                            if (isSoA[i]) {
+                                var recDesc = componentTypes[i].describeConstable().orElseThrow();
+                                cb.new_(recDesc);
+                                cb.dup();
+                                var rc = soaComponents[i];
+                                var ctorParams = new ClassDesc[rc.length];
+                                for (int f = 0; f < rc.length; f++) {
+                                    ctorParams[f] = rc[f].getType().describeConstable().orElseThrow();
+                                    cb.aload(soaFieldLocals[i][f]);
+                                    cb.iload(slotVar);
+                                    zzuegg.ecs.storage.SoAComponentStorage.emitArrayLoad(cb, rc[f].getType());
+                                }
+                                cb.invokespecial(recDesc, "<init>",
+                                    MethodTypeDesc.of(ConstantDescs.CD_void, ctorParams));
+                            } else if (useDefaultStorageFactory) {
                                 cb.aload(firstStorageVar + i);
                                 cb.iload(slotVar);
                                 cb.aaload();
@@ -635,7 +724,6 @@ public final class GeneratedChunkProcessor {
                             cb.lload(2);                     // tick
                             cb.iconst_0();                   // valueTracked = false
                             cb.invokespecial(mutDesc, "<init>", mutInitDesc);
-                            // Store in the mutLocal so flush can find it
                             cb.astore(mutLocal[i]);
                             cb.aload(mutLocal[i]);
                         }
@@ -672,11 +760,23 @@ public final class GeneratedChunkProcessor {
                     cb.invokevirtual(mutDesc, "flush", mutFlushDesc);
                     cb.astore(tempValueVar);
 
-                    if (useDefaultStorageFactory) {
-                        // raw[slot] = tempValue — direct array store, no
-                        // interface dispatch. The array's runtime component
-                        // type is the concrete component class, so aastore's
-                        // covariance check is satisfied cheaply.
+                    if (isSoA[i]) {
+                        // SoA: decompose the record into per-field array stores.
+                        // pos_x[slot] = value.x(); pos_y[slot] = value.y(); ...
+                        // These are primitive fxstore — no heap reference needed,
+                        // enabling EA to scalar-replace the record.
+                        var recDesc = componentTypes[i].describeConstable().orElseThrow();
+                        var rc = soaComponents[i];
+                        for (int f = 0; f < rc.length; f++) {
+                            cb.aload(soaFieldLocals[i][f]); // field array
+                            cb.iload(slotVar);
+                            cb.aload(tempValueVar);
+                            cb.checkcast(recDesc);
+                            cb.invokevirtual(recDesc, rc[f].getName(),
+                                MethodTypeDesc.of(rc[f].getType().describeConstable().orElseThrow()));
+                            zzuegg.ecs.storage.SoAComponentStorage.emitArrayStore(cb, rc[f].getType());
+                        }
+                    } else if (useDefaultStorageFactory) {
                         cb.aload(firstStorageVar + i);
                         cb.iload(slotVar);
                         cb.aload(tempValueVar);

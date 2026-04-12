@@ -249,7 +249,7 @@ public final class SoAComponentStorage {
         throw new IllegalArgumentException("Not a primitive: " + type);
     }
 
-    private static void emitArrayLoad(java.lang.classfile.CodeBuilder cb, Class<?> type) {
+    public static void emitArrayLoad(java.lang.classfile.CodeBuilder cb, Class<?> type) {
         if (type == float.class) cb.faload();
         else if (type == int.class) cb.iaload();
         else if (type == double.class) cb.daload();
@@ -259,7 +259,7 @@ public final class SoAComponentStorage {
         else if (type == char.class) cb.caload();
     }
 
-    private static void emitArrayStore(java.lang.classfile.CodeBuilder cb, Class<?> type) {
+    public static void emitArrayStore(java.lang.classfile.CodeBuilder cb, Class<?> type) {
         if (type == float.class) cb.fastore();
         else if (type == int.class) cb.iastore();
         else if (type == double.class) cb.dastore();
