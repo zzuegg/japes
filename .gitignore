@@ -20,3 +20,4 @@ zzuegg.ecs.bench.scenario.*/
 # Python venv some contributors use for local mkdocs builds.
 .venv/
 venv/
+zzuegg.ecs.bench.*/
