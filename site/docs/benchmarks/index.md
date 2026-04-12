@@ -75,19 +75,20 @@ fallback.
 
 ## Headline numbers
 
-Summary row per benchmark, stock JDK 26. Lower is better.
+Summary row per benchmark, stock JDK 26. All numbers from a single
+co-temporal sweep (2026-04-11). Lower is better.
 
 | benchmark                                    | entity count | japes µs/op | Bevy µs/op | notes |
 |----------------------------------------------|-------------:|------------:|-----------:|---|
-| `iterateSingleComponent`                     |         10k  |        2.33 |       2.11 | fastest JVM ECS in this comparison |
-| `iterateTwoComponents`                       |         10k  |        4.30 |       3.35 | within 1.3× of Bevy |
-| `iterateWithWrite`                           |         10k  |        38.1 |       6.18 | write-path tax visible |
-| `simulateOneTick` (N-body)                   |         10k  |          41 |       8.79 | record allocation tax |
-| `ParticleScenario tick`                      |         10k  |       108.7 |       22.4 | five-system full scan |
-| `SparseDelta tick`                           |         10k  |        1.84 |       4.01 | **2.18× faster than Bevy** |
-| `RealisticTick` st                           |         10k  |        5.81 |       8.42 | **1.45× faster than Bevy** |
-| `RealisticTick` st                           |        100k  |        7.96 |       73.4 | **9.22× faster than Bevy** |
-| `PredatorPrey @ForEachPair` 500 × 2000       |            — |        31.7 |       11.19 (opt) / 261.9 (naive) | first-class relations |
+| `iterateSingleComponent`                     |         10k  |        2.43 |       2.18 | fastest JVM ECS in this comparison |
+| `iterateTwoComponents`                       |         10k  |        4.33 |       3.70 | within 1.2× of Bevy |
+| `iterateWithWrite`                           |         10k  |        38.5 |       6.29 | write-path tax visible |
+| `simulateOneTick` (N-body)                   |         10k  |          41 |       8.8 | record allocation tax |
+| `ParticleScenario tick`                      |         10k  |         107 |       22.7 | five-system full scan |
+| `SparseDelta tick`                           |         10k  |        1.88 |       4.11 | **2.19× faster than Bevy** |
+| `RealisticTick` st                           |         10k  |        5.86 |       8.81 | **1.50× faster than Bevy** |
+| `RealisticTick` st                           |        100k  |        7.91 |       76.9 | **9.72× faster than Bevy** |
+| `PredatorPrey @ForEachPair` 500 × 2000       |            — |        31.4 |       11.5 (opt) / 243.7 (naive) | first-class relations |
 
 ## Speed-up matrix vs. Bevy
 
@@ -97,27 +98,27 @@ that workload.
 
 | benchmark                   |         case |  **japes** | **japes-v** | zayes |  dominion | artemis |
 |-----------------------------|-------------:|-----------:|------------:|------:|----------:|--------:|
-| `iterateSingleComponent`    |          10k |   **1.1×** |  **0.50×**  | 13.9× |     3.3×  |   2.2×  |
-| `iterateTwoComponents`      |          10k |   **1.3×** |  **0.55×**  | 10.9× |     3.7×  |   3.5×  |
-| `iterateWithWrite`          |          10k |   **6.2×** |    **8.6×** |  277× |     3.7×  |   3.0×  |
+| `iterateSingleComponent`    |          10k |   **1.1×** |  **0.49×**  | 13.1× |     3.2×  |   2.1×  |
+| `iterateTwoComponents`      |          10k |   **1.2×** |  **0.50×**  | 10.4× |     3.4×  |   3.1×  |
+| `iterateWithWrite`          |          10k |   **6.1×** |    **8.5×** |  289× |     3.6×  |   2.9×  |
 | NBody `simulateOneTick`     |          10k |   **4.7×** |    **6.5×** |   50× |     2.7×  |   2.2×  |
-| `ParticleScenario tick`     |          10k |   **4.9×** |        8.0× |   83× |     3.0×  |   4.4×  |
-| `SparseDelta tick`          |          10k |  **0.46×** |   **0.49×** |  1.2× |  **0.09×**| **0.06×**|
+| `ParticleScenario tick`     |          10k |   **4.7×** |        7.9× |   82× |     3.0×  |   4.3×  |
+| `SparseDelta tick`          |          10k |  **0.46×** |   **0.48×** |  1.1× |  **0.09×**| **0.07×**|
 
 !!! note "Cross-library claim summary"
 
-    - **SparseDelta:** japes 1.84 µs vs Bevy 4.01 µs — **2.18× faster**
+    - **SparseDelta:** japes 1.88 µs vs Bevy 4.11 µs — **2.19× faster**
       than the Rust reference on the library change-detection path.
     - **Valhalla reads:** stock japes at 10k `iterateSingleComponent` is
       1.1× Bevy; Valhalla (value records, reference arrays) drops that
-      to 0.50× — japes beats Bevy on reads under the EA JVM.
+      to 0.49× — japes beats Bevy on reads under the EA JVM.
     - **Write-path tax:** on naked-write micros japes pays the
       immutable-record allocation tax that Dominion and Artemis avoid
       by mutating POJOs in place. See the [write-path tax
       section](iteration-micros.md#the-write-path-tax) for the
       fairness discussion.
     - **Predator / prey:** japes `@ForEachPair` beats Bevy naive
-      reverse-lookup at every cell (up to 12.9× at 1000 × 5000),
+      reverse-lookup at every cell (up to 13.6× at 1000 × 5000),
       and sits within 2.7–3.7× of hand-rolled optimised Bevy that
       maintains its own reverse index manually.
 

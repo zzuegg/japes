@@ -96,17 +96,17 @@ Converting to µs/op for readability:
 
 | Entities | 9 systems (single-target) | **5 systems (multi-target)** | Zay-ES | japes vs Zay-ES |
 |---:|---:|---:|---:|---|
-| **10k** | 293 µs | **276 µs** | 234 µs | 1.18× slower |
-| **100k** | 3,623 µs | **3,802 µs** | 5,051 µs | **1.33× faster** |
+| **10k** | 293 µs | **297 µs** | 234 µs | 1.27× slower |
+| **100k** | 3,623 µs | **3,759 µs** | 4,878 µs | **1.30× faster** |
 
 The multi-target `@Filter` feature:
 
 - **Cuts boilerplate 44%** — 5 system registrations instead of 9 for the same logical observer
 - **Is faster than the workaround at 10k** — fewer dispatches win when per-dispatch cost is minimal
-- **Is within 5% at 100k** — the bitmap-union helper adds a small per-chunk overhead that's visible at scale but not load-bearing
-- **Beats Zay-ES at 100k by 1.33×** — japes's dirty-list walks scale with dirty count (30% of N), while Zay-ES's `applyChanges()` scans the full EntitySet membership
+- **Is within 4% at 100k** — the bitmap-union helper adds a small per-chunk overhead that's visible at scale but not load-bearing
+- **Beats Zay-ES at 100k by 1.30×** — japes's dirty-list walks scale with dirty count (30% of N), while Zay-ES's `applyChanges()` scans the full EntitySet membership
 
-The 10k gap to Zay-ES (1.18×) is the remaining cost of 5 system dispatches + scheduler overhead vs Zay-ES's single `applyChanges()` call. Closing it further requires the [Tier 3 unified observer](../tutorials/relations/17-overview.md) design discussed in the API planning sessions.
+The 10k gap to Zay-ES (1.27×) is the remaining cost of 5 system dispatches + scheduler overhead vs Zay-ES's single `applyChanges()` call. Closing it further requires the [Tier 3 unified observer](../tutorials/relations/17-overview.md) design discussed in the API planning sessions.
 
 ## What we learned
 

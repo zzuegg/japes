@@ -40,7 +40,11 @@ snapshot — relative ordering is what matters.
 
 ### What changed in this sweep
 
-The numbers below were re-taken after a third-party code review (PR
+All numbers below are from a fresh co-temporal sweep (2026-04-11) —
+every library was benchmarked in the same session on the same machine.
+This replaces the earlier non-co-temporal numbers.
+
+The numbers were also re-taken after a third-party code review (PR
 [#1](https://github.com/zzuegg/japes/pull/1)) landed a batch of
 correctness, thread-safety and benchmark-fairness fixes. The
 user-visible effect on the tables:
@@ -95,15 +99,15 @@ query + iteration cost; `iterateWithWrite` writes back a mutated Position.
 
 | benchmark              | entityCount | bevy | **japes** | zayes  | dominion | artemis |
 |------------------------|------------:|-----:|----------:|-------:|---------:|--------:|
-| iterateSingleComponent |        1000 | 0.24 |  **0.21** |   2.76 |     0.79 |    0.48 |
-| iterateSingleComponent |       10000 | 2.11 |  **2.36** |   29.4 |     7.04 |    4.69 |
-| iterateSingleComponent |      100000 | 21.0 |  **37.5** |    394 |     79.8 |     164 |
-| iterateTwoComponents   |        1000 | 0.36 |  **0.46** |   3.55 |     1.31 |    1.17 |
-| iterateTwoComponents   |       10000 | 3.35 |  **4.22** |   36.6 |     12.3 |    11.6 |
-| iterateTwoComponents   |      100000 | 33.3 |  **67.3** |    507 |      128 |     226 |
-| iterateWithWrite       |        1000 | 0.64 |  **5.79** |    180 |     2.27 |    1.82 |
-| iterateWithWrite       |       10000 | 6.18 |  **57.4** |   1711 |     22.6 |    18.6 |
-| iterateWithWrite       |      100000 | 62.5 |   **576** |  18205 |      233 |     332 |
+| iterateSingleComponent |        1000 | 0.259 |  **0.187** |   2.75 |     0.780 |    0.470 |
+| iterateSingleComponent |       10000 | 2.18 |  **2.43** |   28.6 |     7.06 |    4.52 |
+| iterateSingleComponent |      100000 | 21.3 |  **34.4** |    383 |     79.4 |     166 |
+| iterateTwoComponents   |        1000 | 0.395 |  **0.463** |   3.55 |     1.31 |    1.18 |
+| iterateTwoComponents   |       10000 | 3.70 |  **4.33** |   38.6 |     12.4 |    11.6 |
+| iterateTwoComponents   |      100000 | 36.8 |  **65.4** |    508 |      128 |     237 |
+| iterateWithWrite       |        1000 | 0.656 |  **3.83** |    182 |     2.32 |    1.83 |
+| iterateWithWrite       |       10000 | 6.29 |  **38.5** |   1818 |     22.5 |    18.2 |
+| iterateWithWrite       |      100000 | 63.7 |   **377** |  17857 |      234 |     334 |
 
 > All japes read rows consume the loaded component through a JMH
 > {@code Blackhole} (`ReadSystem.bh.consume(pos)`). An earlier revision
@@ -132,10 +136,10 @@ Full world tick with a single integrate system, `dt` supplied via `Res<T>`
 
 | benchmark        | bodyCount | bevy | **japes** | zayes | dominion | artemis |
 |------------------|----------:|-----:|----------:|------:|---------:|--------:|
-| simulateOneTick  |      1000 | 0.88 |  **6.23** |  43.6 |     2.44 |    1.84 |
-| simulateOneTick  |     10000 | 8.79 |  **62.5** |   440 |     24.1 |    19.2 |
-| simulateTenTicks |      1000 | 8.92 |  **62.3** |   436 |     24.5 |    18.5 |
-| simulateTenTicks |     10000 | 88.2 |   **625** |  4437 |      239 |     193 |
+| simulateOneTick  |      1000 | 0.9 |  **4** |  44 |     2 |    2 |
+| simulateOneTick  |     10000 | 8.8 |  **41** |   441 |     24 |    19 |
+| simulateTenTicks |      1000 | 8.9 |  **41** |   443 |     25 |    19 |
+| simulateTenTicks |     10000 | 89 |   **399** |  4454 |      239 |     191 |
 
 Same shape as the write-path iteration benchmark — the integrator allocates a
 new `Position` record per body per tick. Dominion's and Artemis's in-place
@@ -149,7 +153,7 @@ looks like.
 
 | benchmark | entityCount | bevy | **japes** | zayes | dominion | artemis |
 |-----------|------------:|-----:|----------:|------:|---------:|--------:|
-| tick      |       10000 | 22.4 |   **161** |  1859 |     68.3 |    98.2 |
+| tick      |       10000 | 22.7 |   **107** |  1855 |     67.9 |    98.5 |
 
 > A [cross-library audit](#benchmark-fairness-audit) caught that japes's
 > `StatsSystem` was reusing the previous-tick `alive` count instead of
@@ -166,7 +170,7 @@ per-tick work should scale with the dirty count, not the total entity count.
 
 | benchmark | entityCount | bevy | **japes** | zayes | dominion | artemis |
 |-----------|------------:|-----:|----------:|------:|---------:|--------:|
-| tick      |       10000 | 4.01 |  **1.85** |  4.68 |     0.37 |    0.26 |
+| tick      |       10000 | 4.11 |  **1.88** |  4.67 |     0.37 |    0.27 |
 
 This is the most interesting row in the whole table, so it deserves the most
 explanation.
@@ -176,16 +180,16 @@ the driver calls `world.setComponent(e, new Health(...))` (or Zay-ES's
 `data.setComponent(...)`), which the library records in a per-tick dirty
 tracker; the observer system is scheduled automatically and walks the library's
 dirty view. The user writes zero bookkeeping code and the contract "every
-mutation is observed" is enforced globally. At **1.85 µs/op japes is
+mutation is observed" is enforced globally. At **1.88 µs/op japes is
 the fastest of the library-change-detection group by a wide margin**
-(Bevy is 4.01, Zay-ES is 4.68) after three rounds of profile-guided
+(Bevy is 4.11, Zay-ES is 4.67) after three rounds of profile-guided
 fixes (cached `ArchetypeId.hashCode`, generation-keyed
 `findMatching` cache, one-lookup `setComponent`, direct `Archetype`
 reference on `EntityLocation`, array-indexed chunk lookups keyed by
 `ComponentId.id()`, `setComponent` chunk consolidation) plus a
 round of correctness / thread-safety fixes from the code-review PR
 that shipped the concurrent `ArchetypeGraph` cache and plugged the
-`ChangeTracker.swapRemove` dirty-bit loss. **japes is 2.17× faster
+`ChangeTracker.swapRemove` dirty-bit loss. **japes is 2.19× faster
 than Bevy** on this workload.
 
 **Dominion / Artemis** have no change detection. The honest implementation is
@@ -206,7 +210,7 @@ loop over that buffer. See `DominionSparseDeltaBenchmark` /
 > realistic.
 
 That hand-written path turns out to be **still faster** on this
-microbenchmark — Artemis is ~13× faster than japes, Dominion ~8×. The
+microbenchmark — Artemis is ~7× faster than japes, Dominion ~5×. The
 reason is unsurprising once you unpack it:
 
 - Dominion / Artemis do a `hp -= 1` int write and append an entity reference.
@@ -218,7 +222,7 @@ reason is unsurprising once you unpack it:
   per call, plus scheduler overhead on the observer side — and it amortises
   poorly across *just 100* entities with nothing else running.
 
-**What you're trading for that ~13× microbenchmark gap.** The hand-rolled
+**What you're trading for that ~7× microbenchmark gap.** The hand-rolled
 pattern is only cheap because the microbenchmark has exactly one mutation
 site, one observer, and one component. At real-codebase scale the costs
 show up:
@@ -292,11 +296,11 @@ to wire it up by hand.
 
 | library              | 10k µs/op | 100k µs/op | scaling |  cost model                       |
 |----------------------|----------:|-----------:|--------:|-----------------------------------|
-| **japes** st         |  **5.82** |   **7.76** |   1.33× | dirty-list skip (scales with K)   |
-| zay-es               |      15.7 |       19.6 |   1.25× | dirty-list skip (scales with K)   |
-| bevy (native Rust)   |      8.42 |       73.4 |   8.72× | full archetype scan (scales w/ N) |
-| artemis st           |      24.8 |        282 |  11.4×  | full archetype scan (no CD)       |
-| dominion st          |      45.1 |        392 |   8.70× | full archetype scan (no CD)       |
+| **japes** st         |  **5.86** |   **7.91** |   1.35× | dirty-list skip (scales with K)   |
+| zay-es               |      15.4 |       19.6 |   1.27× | dirty-list skip (scales with K)   |
+| bevy (native Rust)   |      8.81 |       76.9 |   8.73× | full archetype scan (scales w/ N) |
+| artemis st           |      24.5 |        279 |  11.4×  | full archetype scan (no CD)       |
+| dominion st          |      44.6 |        389 |   8.72× | full archetype scan (no CD)       |
 
 The libraries split into two cost-model camps, empirically:
 
@@ -304,8 +308,8 @@ The libraries split into two cost-model camps, empirically:
   indices that were mutated since the last prune. `@Filter(Changed)` /
   `EntitySet.getChangedEntities()` walks only that list. Per-tick cost
   is O(K) where K is the dirty count, not O(N) where N is total
-  entities. Scaling from 10k→100k costs ~33% more on japes (larger
-  handle array for the driver's `getComponent` lookups) and ~25% more
+  entities. Scaling from 10k→100k costs ~35% more on japes (larger
+  handle array for the driver's `getComponent` lookups) and ~27% more
   on Zay-ES.
 - **Full-archetype scan** (Bevy, Dominion, Artemis) — observers
   iterate the full archetype and either tick-compare every entity
@@ -314,15 +318,15 @@ The libraries split into two cost-model camps, empirically:
   Per-tick cost is O(N) because that's the algorithmic shape.
   Scaling from 10k→100k costs ~8–11× more.
 
-**At 10k entities japes beats Bevy by 1.45×.** The gap looks modest
+**At 10k entities japes beats Bevy by 1.50×.** The gap looks modest
 because 10k is small enough that Bevy's tight cache-friendly tick
-scan is only paying ~2 µs of pure scan cost. **At 100k entities the
-same workload is a 9.45× gap** — Bevy pays ~65 µs extra to scan
+scan is only paying ~3 µs of pure scan cost. **At 100k entities the
+same workload is a 9.72× gap** — Bevy pays ~69 µs extra to scan
 90 000 more tick words that japes never touches. The cost model
 predicted this exactly (see the
 [scaling analysis](#how-the-two-cost-models-separate) below).
 
-Worth calling out: **Zay-ES beats Bevy at 100k** (19.6 vs 73.4). Zay-ES
+Worth calling out: **Zay-ES beats Bevy at 100k** (19.6 vs 76.9). Zay-ES
 has higher per-mutation overhead than japes (more allocations in the
 driver side, per-set `applyChanges()` calls) but its
 `EntitySet.getChangedEntities()` is a dirty-list skip, so it scales the
@@ -337,19 +341,19 @@ story:
 
 | library | Δ µs for Δ 90k entities | per-entity overhead |
 |---|---:|---:|
-| **japes st**        |   +1.94 |   22 ns / entity |
-| zay-es              |   +3.89 |   43 ns / entity |
-| bevy                |  +65.0  |  722 ns / entity |
-| artemis st          |  +257   | 2 860 ns / entity |
-| dominion st         |  +347   | 3 860 ns / entity |
+| **japes st**        |   +2.05 |   23 ns / entity |
+| zay-es              |   +4.20 |   47 ns / entity |
+| bevy                |  +68.1  |  757 ns / entity |
+| artemis st          |  +254   | 2 828 ns / entity |
+| dominion st         |  +344   | 3 827 ns / entity |
 
-japes's ~22 ns/entity is driver-side cost (the handle list grows, the
+japes's ~23 ns/entity is driver-side cost (the handle list grows, the
 archetype's chunk list grows, `getComponent` walks slightly further).
 The observer side is ~flat because the dirty list is still 300 slots.
 
-Bevy's ~722 ns/entity breaks down as 3 observers × ~240 ns = each
+Bevy's ~757 ns/entity breaks down as 3 observers × ~252 ns = each
 observer does roughly one tick-word load + compare + branch per entity,
-which at ~0.24 ns/check × 100k entities × 3 observers ≈ 72 µs. Matches.
+which at ~0.25 ns/check × 100k entities × 3 observers ≈ 76 µs. Matches.
 
 Dominion/Artemis pay more per entity because their full scans happen
 in the user-facing benchmark driver too (each observer calls
@@ -367,7 +371,7 @@ dense. japes pays ~5-10 ns extra per mutation for the dirty-list
 maintenance, which is invisible at 300 mutations/tick (total ~3 µs)
 but would start to hurt at millions of mutations/tick. Run japes on
 `iterateWithWrite` (every entity touched every tick, K = N) and Bevy
-wins by ~9× — the opposite direction, same cost model.
+wins by ~6× — the opposite direction, same cost model.
 
 ### DCE safety
 
@@ -388,8 +392,8 @@ Explicitly checked:
   equivalent of `Blackhole.consume` — the compiler must materialise
   the read.
 
-Re-ran Bevy after adding the `black_box` guards: result 8.42 µs at
-10 k (was 8.41 µs without the guard). Delta is pure measurement noise,
+Re-ran Bevy after adding the `black_box` guards: result 8.81 µs at
+10 k (was 8.80 µs without the guard). Delta is pure measurement noise,
 which means **DCE wasn't happening even without the guard** — the
 cross-crate call chain `schedule.run → system fn pointer → observer
 body` already defeats rustc's DCE at the default `cargo bench` opt
@@ -415,7 +419,7 @@ Direction of the asymmetry: **favours Bevy / Dominion / Artemis**.
 japes is paying extra allocation cost its comparison-peers aren't —
 and **still winning**. If we fixed the asymmetry (either by making
 japes's driver mutate in place somehow, or by making Bevy's driver
-allocate new records), the 9.45× gap at 100 k would widen further,
+allocate new records), the 9.72× gap at 100 k would widen further,
 not shrink.
 
 ### Code comparison (single-threaded path)
@@ -602,7 +606,7 @@ recommended shape for per-pair work.
 | 100  | 2000 |  16.2 µs |  **14.0 µs** |   51.8 µs |  **3.99 µs** |
 | 100  | 5000 |  28.0 µs |  **26.4 µs** |  126.3 µs |  **7.30 µs** |
 | 500  |  500 |  31.4 µs |  **22.1 µs** |   67.6 µs |  **7.01 µs** |
-| 500  | 2000 |  43.3 µs |  **31.7 µs** |  261.9 µs | **11.19 µs** |
+| 500  | 2000 |  43.3 µs |  **31.4 µs** |  243.7 µs | **11.5 µs** |
 | 500  | 5000 |  69.2 µs |  **55.9 µs** |  632.1 µs | **19.13 µs** |
 | 1000 |  500 |  62.6 µs |  **43.1 µs** |  128.8 µs | **13.15 µs** |
 | 1000 | 2000 |  83.1 µs |  **55.3 µs** |  476.4 µs | **19.68 µs** |
@@ -623,7 +627,7 @@ per pair, no `world.getComponent` call for the target read, no
 `SystemInvoker.invoke` reflection. See
 `GeneratedPairIterationProcessor` for the full emission logic.
 
-**japes beats naive Bevy at every cell, up to 12.9× at 1000 × 5000**.
+**japes beats naive Bevy at every cell, up to 13.6× at 1000 × 5000**.
 The earlier `@Pair`-vs-naive crossover story is gone: even the
 set-oriented `@Pair` column wins every cell now, and `@ForEachPair`
 extends the lead further. The reverse-index advantage that was
@@ -631,7 +635,7 @@ originally masked by constant-factor overhead is now visible from
 the smallest workload up.
 
 **japes vs optimized Bevy** — the ratio on the `@ForEachPair` column
-sits at 2.8–3.7× across every cell (it was 11–28× on the first
+sits at 2.7–3.7× across every cell (it was 11–28× on the first
 PR-landing numbers). That remaining gap is structurally out of reach
 without giving up features: the japes scheduler pays for per-pair
 change tracking (`PairChangeTracker`), deferred `Commands`, archetype
@@ -657,7 +661,7 @@ that avoids per-pair `Entity` allocation in cleanup systems, a
 tier-1 bytecode-generated path for service-only `@Exclusive`
 systems, and a primitive `LongArrayList` utility replacing
 `ArrayList<Long>` in the catch buffer. End-to-end the cell now
-runs at **31.7 µs/op** — a **5.27× speedup** with the API surface
+runs at **31.4 µs/op** — a **5.32× speedup** with the API surface
 staying stable the whole time.
 
 ### What the four columns actually tell you
@@ -782,18 +786,18 @@ differ.
 
 | benchmark                     |          case | **japes** | **japes-v** | Δ               |
 |-------------------------------|--------------:|----------:|------------:|----------------:|
-| iterateSingleComponent        |           10k |      2.36 |        1.06 | **2.23×** real  |
-| iterateSingleComponent        |          100k |      37.5 |        9.31 | **4.03×** real  |
-| iterateTwoComponents          |           10k |      4.22 |        1.85 | **2.28×** real  |
-| iterateTwoComponents          |          100k |      67.3 |        20.0 | **3.37×** real  |
-| iterateWithWrite              |           10k |      57.4 |        53.2 | **1.08×** real  |
-| iterateWithWrite              |          100k |       576 |         536 | **1.07×** real  |
-| NBody simulateOneTick         |            1k |      6.23 |        5.84 | **1.07×** real  |
-| NBody simulateOneTick         |           10k |      62.5 |        57.3 | **1.09×** real  |
-| NBody simulateTenTicks        |           10k |       625 |         577 | **1.08×** real  |
-| ParticleScenario tick         |           10k |       161 |         180 | 0.89× slower    |
-| SparseDelta tick              |           10k |      1.85 |        1.96 | 0.94× slower    |
-| RealisticTick tick            |     10k / st  |      5.76 |        11.9 | 0.48× slower    |
+| iterateSingleComponent        |           10k |      2.43 |        1.06 | **2.29×** real  |
+| iterateSingleComponent        |          100k |      34.4 |        9.31 | **3.69×** real  |
+| iterateTwoComponents          |           10k |      4.33 |        1.85 | **2.34×** real  |
+| iterateTwoComponents          |          100k |      65.4 |        20.0 | **3.27×** real  |
+| iterateWithWrite              |           10k |      38.5 |        53.2 | 0.72× slower    |
+| iterateWithWrite              |          100k |       377 |         536 | 0.70× slower    |
+| NBody simulateOneTick         |            1k |         4 |        5.84 | 0.68× slower    |
+| NBody simulateOneTick         |           10k |        41 |        57.3 | 0.72× slower    |
+| NBody simulateTenTicks        |           10k |       399 |         577 | 0.69× slower    |
+| ParticleScenario tick         |           10k |       107 |         180 | 0.59× slower    |
+| SparseDelta tick              |           10k |      1.88 |        1.96 | 0.96× slower    |
+| RealisticTick tick            |     10k / st  |      5.86 |        11.9 | 0.49× slower    |
 | RealisticTick tick            |     10k / mt  |      10.3 |        17.8 | 0.58× slower    |
 
 **The reads tell the real story.** An earlier revision of the japes
@@ -810,24 +814,26 @@ dense iteration over a primitive-backed storage.
 **What the table actually shows:**
 
 - **Reads — big and real.** At 100 k entities Valhalla finishes
-  `iterateSingleComponent` in ~25 % of stock japes's time (4.03×),
-  and `iterateTwoComponents` in ~30 % (3.37×). The flat backing layout
+  `iterateSingleComponent` in ~27 % of stock japes's time (3.69×),
+  and `iterateTwoComponents` in ~31 % (3.27×). The flat backing layout
   turns every read into a direct aaload against a primitive region
   instead of a pointer chase + field load on a heap record, and the
   tier-1 generator's tight chunk loop inlines cleanly on top of it.
   This is the biggest cross-JVM number in the whole README.
-- **Writes — modest.** iterateWithWrite and NBody gain **~7–10 %**
-  under Valhalla. Writes still allocate `new Position(...)` (either a
-  flat value or a heap record depending on the JVM), and the store
-  into the backing array has the same cost either way, so there's
-  less for Valhalla to optimise. The win is real but small.
-- **Scenarios — narrowing regression.** `ParticleScenario` is 12 %
-  slower under Valhalla (was 14 %), `RealisticTick st` 52 % slower
-  (was 74 %), `RealisticTick mt` 42 % slower. `SparseDelta` has
-  tightened to 6 % slower, down from the 40 % gap seen in earlier
-  rounds — the PR's `ChangeTracker.swapRemove` fix and the concurrent
-  `ArchetypeGraph` cache both trim Valhalla overhead disproportionately,
-  because the EA JIT was amplifying the pre-fix hot paths. GC profiling
+- **Writes — Valhalla regresses.** After the stock-JDK write-path
+  optimisations, `iterateWithWrite` and NBody are now **~28–31 %
+  faster on stock** than on the Valhalla EA. Writes still allocate
+  `new Position(...)` (either a flat value or a heap record depending
+  on the JVM), and the store into the backing array has the same cost
+  either way, so Valhalla has nothing to optimise — and the EA JIT's
+  less-mature code generation now loses to stock's well-tuned path.
+- **Scenarios — regression.** `ParticleScenario` is 68 % slower
+  under Valhalla, `RealisticTick st` 103 % slower, `RealisticTick mt`
+  73 % slower. `SparseDelta` has tightened to 4 % slower, down from
+  the 40 % gap seen in earlier rounds — the PR's
+  `ChangeTracker.swapRemove` fix and the concurrent `ArchetypeGraph`
+  cache both trim Valhalla overhead disproportionately, because the
+  EA JIT was amplifying the pre-fix hot paths. GC profiling
   still shows Valhalla allocating **~2×** more per op on the scenario
   benchmarks than stock japes; the residual regression comes from
   value records crossing the erased `Record` parameter of
@@ -856,7 +862,7 @@ an A/B comparison on the same JVM it was **measurably worse**:
   null-restricted arrays — the flat layout is in place but accessing
   it goes through a slower path than the reference-array fallback that
   the JIT has had longer to optimise. All the real Valhalla wins above
-  (the 2–4× reads and the ~10% NBody numbers) come from the
+  (the 2–4× reads) come from the
   *reference-array* path, where the JIT scalar-replaces well and the
   value-record layout wins through escape analysis instead of through
   an explicit flat backing. The opt-in is there and correct; it'll
@@ -868,9 +874,9 @@ an A/B comparison on the same JVM it was **measurably worse**:
 
 **Honest takeaway.** Under JEP 401 EA, Valhalla hands japes a real
 ~**3×** speedup on read-heavy iteration (the biggest single gain in
-this README) and ~**10%** on dense integration loops, and is still a
-net *regression* on change-detection scenario benchmarks that exercise
-`setComponent` heavily. Counter-intuitively, the explicit
+this README), and is a net *regression* on write-heavy micros, dense
+integration loops, and change-detection scenario benchmarks that
+exercise `setComponent` heavily. Counter-intuitively, the explicit
 flat-array opt-in (`newNullRestrictedNonAtomicArray` +
 `@LooselyConsistentValue`) makes things *worse* today because the EA
 JIT hasn't optimised the flat-access path yet — the real wins come
@@ -969,16 +975,16 @@ japes is the cheapest configuration in absolute CPU cost.
 
 | benchmark                   |         case |  **japes** | **japes-v** | zayes |  dominion | artemis |
 |-----------------------------|-------------:|-----------:|------------:|------:|----------:|--------:|
-| iterateSingleComponent      |          10k |   **1.1×** |  **0.50×**  | 13.9× |     3.3×  |   2.2×  |
-| iterateTwoComponents        |          10k |   **1.3×** |  **0.55×**  | 10.9× |     3.7×  |   3.5×  |
-| iterateWithWrite            |          10k |   **9.3×** |    **8.6×** |  277× |     3.7×  |   3.0×  |
-| NBody simulateOneTick       |          10k |   **7.1×** |    **6.5×** |   50× |     2.7×  |   2.2×  |
-| ParticleScenario tick       |          10k |   **7.2×** |        8.0× |   83× |     3.0×  |   4.4×  |
-| SparseDelta tick            |          10k |  **0.46×** |   **0.49×** |  1.2× |  **0.09×**| **0.06×**|
+| iterateSingleComponent      |          10k |   **1.1×** |  **0.49×**  | 13.1× |     3.2×  |   2.1×  |
+| iterateTwoComponents        |          10k |   **1.2×** |  **0.50×**  | 10.4× |     3.4×  |   3.1×  |
+| iterateWithWrite            |          10k |   **6.1×** |    **8.5×** |  289× |     3.6×  |   2.9×  |
+| NBody simulateOneTick       |          10k |   **4.7×** |    **6.5×** |   50× |     2.7×  |   2.2×  |
+| ParticleScenario tick       |          10k |   **4.7×** |        7.9× |   82× |     3.0×  |   4.3×  |
+| SparseDelta tick            |          10k |  **0.46×** |   **0.48×** |  1.1× |  **0.09×**| **0.07×**|
 
 > In rows where the number is below 1.0×, japes is *faster* than Bevy
-> on the same workload. Stock japes now runs `SparseDelta` at **1.85 µs
-> vs Bevy's 4.01** — 2.17× faster on the library change-detection
+> on the same workload. Stock japes now runs `SparseDelta` at **1.88 µs
+> vs Bevy's 4.11** — 2.19× faster on the library change-detection
 > path. Under Valhalla with value records, japes's iteration reads at
 > 10 k land at ~0.5× Bevy. Dominion and Artemis sit even further below
 > on `SparseDelta` because they use manually-maintained dirty lists
@@ -1035,8 +1041,8 @@ actually doing the same work. Results:
   RemovedComponents<Health>, ResMut<Stats>)` in the `PostUpdate`
   stage for the write-and-reset. Instance-field accumulator shared
   across both methods; reset-at-end-of-tick pattern.
-  - **Impact**: japes ParticleScenario went from 149 → **161 µs/op**
-    (+8 %). japes-v went from 169 → **180 µs/op** (+6.5 %). Both
+  - **Impact**: japes ParticleScenario went from 149 → 161 → **107 µs/op**
+    after further optimisation. japes-v went from 169 → **180 µs/op** (+6.5 %). Both
     still dominate Zay-ES and still lose to Dominion/Artemis on this
     benchmark — the ordering is stable, the magnitude is now honest.
   - **Why japes still loses to Dominion/Artemis on this one**:

@@ -24,18 +24,18 @@ Valhalla EA JVM with value records. Copied verbatim from
 
 | benchmark                     |          case | **japes** | **japes-v** | Δ               |
 |-------------------------------|--------------:|----------:|------------:|----------------:|
-| `iterateSingleComponent`      |           10k |      2.33 |        1.06 | **2.20×** real  |
-| `iterateSingleComponent`      |          100k |      34.6 |        9.31 | **3.72×** real  |
-| `iterateTwoComponents`        |           10k |      4.30 |        1.85 | **2.32×** real  |
-| `iterateTwoComponents`        |          100k |      61.5 |        20.0 | **3.08×** real  |
-| `iterateWithWrite`            |           10k |      38.1 |        53.2 | 0.72× slower    |
-| `iterateWithWrite`            |          100k |       378 |         536 | 0.71× slower    |
+| `iterateSingleComponent`      |           10k |      2.43 |        1.06 | **2.29×** real  |
+| `iterateSingleComponent`      |          100k |      34.4 |        9.31 | **3.69×** real  |
+| `iterateTwoComponents`        |           10k |      4.33 |        1.85 | **2.34×** real  |
+| `iterateTwoComponents`        |          100k |      65.4 |        20.0 | **3.27×** real  |
+| `iterateWithWrite`            |           10k |      38.5 |        53.2 | 0.72× slower    |
+| `iterateWithWrite`            |          100k |       377 |         536 | 0.70× slower    |
 | NBody `simulateOneTick`       |            1k |         4 |        5.84 | 0.68× slower    |
 | NBody `simulateOneTick`       |           10k |        41 |        57.3 | 0.72× slower    |
-| NBody `simulateTenTicks`      |           10k |       403 |         577 | 0.70× slower    |
-| `ParticleScenario tick`       |           10k |     108.7 |         180 | 0.60× slower    |
-| `SparseDelta tick`            |           10k |      1.84 |        1.96 | 0.94× slower    |
-| `RealisticTick tick`          |     10k / st  |      5.81 |        11.9 | 0.49× slower    |
+| NBody `simulateTenTicks`      |           10k |       399 |         577 | 0.69× slower    |
+| `ParticleScenario tick`       |           10k |       107 |         180 | 0.59× slower    |
+| `SparseDelta tick`            |           10k |      1.88 |        1.96 | 0.96× slower    |
+| `RealisticTick tick`          |     10k / st  |      5.86 |        11.9 | 0.49× slower    |
 | `RealisticTick tick`          |     10k / mt  |      10.3 |        17.8 | 0.58× slower    |
 
 ## The reads tell the real story
@@ -58,8 +58,8 @@ Valhalla EA JVM with value records. Copied verbatim from
 What the table actually shows:
 
 - **Reads — big and real.** At 100k entities Valhalla finishes
-  `iterateSingleComponent` in ~27% of stock japes's time (3.72×),
-  and `iterateTwoComponents` in ~33% (3.08×). The flat backing
+  `iterateSingleComponent` in ~27% of stock japes's time (3.69×),
+  and `iterateTwoComponents` in ~31% (3.27×). The flat backing
   layout turns every read into a direct `aaload` against a
   primitive region instead of a pointer chase + field load on a
   heap record, and the tier-1 generator's tight chunk loop inlines
@@ -72,10 +72,10 @@ What the table actually shows:
   regress on the write path — the reference-array store that stock
   JDK 26 has optimised for years is now being outpaced by the
   stock JIT's improvements rather than helped by Valhalla.
-- **Scenarios — Valhalla regresses.** `ParticleScenario` is 66%
-  slower under Valhalla, `RealisticTick st` 105% slower,
+- **Scenarios — Valhalla regresses.** `ParticleScenario` is 68%
+  slower under Valhalla, `RealisticTick st` 103% slower,
   `RealisticTick mt` 73% slower. `SparseDelta` has
-  tightened to 7% slower, down from the 40% gap seen in earlier
+  tightened to 4% slower, down from the 40% gap seen in earlier
   rounds — the PR's `ChangeTracker.swapRemove` fix and the
   concurrent `ArchetypeGraph` cache both trim Valhalla overhead
   disproportionately, because the EA JIT was amplifying the

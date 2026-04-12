@@ -130,14 +130,14 @@ path is *built for* — 100 dirty entities out of 10 000 per tick —
 and once you look there, the picture flips. From
 `DEEP_DIVE.md` section 5:
 
-- **japes**: 1.85 µs/op (library change detection, zero user
+- **japes**: 1.88 µs/op (library change detection, zero user
   bookkeeping)
-- **Bevy**: 4.01 µs/op (native Rust change detection)
-- **Zay-ES**: 4.68 µs/op (library change detection)
+- **Bevy**: 4.11 µs/op (native Rust change detection)
+- **Zay-ES**: 4.67 µs/op (library change detection)
 - **Dominion**: 0.37 µs/op (hand-rolled dirty list)
-- **Artemis**: 0.26 µs/op (hand-rolled dirty list)
+- **Artemis**: 0.27 µs/op (hand-rolled dirty list)
 
-japes is 2.17× faster than Bevy on the library-change-detection
+japes is 2.19× faster than Bevy on the library-change-detection
 workload. Dominion is 5× faster than japes — but only by
 hand-rolling the exact dirty-list machinery that japes ships in the
 box, only for this one component, only for this one observer, only
@@ -148,8 +148,8 @@ When you pair the per-write cost with the observer-side work, the
 arithmetic comes out in japes's favour the moment you have *more
 than one observer on more than one component*. The
 [realistic multi-observer tick benchmark](../benchmarks/realistic-tick.md)
-shows exactly this: japes is 1.45× faster than Bevy at 10k and
-**9.45× faster at 100k**, because Bevy pays O(N) per observer per
+shows exactly this: japes is 1.50× faster than Bevy at 10k and
+**9.72× faster at 100k**, because Bevy pays O(N) per observer per
 tick and japes pays O(K).
 
 ## Composition, parallelism, and `RemovedComponents`
@@ -188,11 +188,11 @@ becomes a plain store to the backing flat array.
 Measured on the `iterateWithWrite` row from
 [the Valhalla investigation page](valhalla-investigation.md):
 
-- **Stock JDK 26**: 57.4 µs at 10k, 576 µs at 100k.
-- **Valhalla EA with `value record`**: 53.2 µs at 10k (1.08×), 536
-  µs at 100k (1.07×).
+- **Stock JDK 26**: 38.5 µs at 10k, 377 µs at 100k.
+- **Valhalla EA with `value record`**: 53.2 µs at 10k (0.72×
+  slower), 536 µs at 100k (0.70× slower).
 
-A ~7–8 % win. Real, repeatable, but modest. The blocker is that
+Stock JDK 26 is now faster than Valhalla on writes. The blocker is that
 `World.setComponent` takes `Record` as its declared parameter type,
 which erases through the call site and forces the JVM to box the
 value record into a heap wrapper crossing that boundary even

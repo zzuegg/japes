@@ -35,11 +35,11 @@ verbatim from `DEEP_DIVE.md`.
 
 | library              | 10k µs/op | 100k µs/op | scaling |  cost model                       |
 |----------------------|----------:|-----------:|--------:|-----------------------------------|
-| **japes** st         |  **5.81** |   **7.96** |   1.37× | dirty-list skip (scales with K)   |
-| zay-es               |      15.7 |       19.6 |   1.25× | dirty-list skip (scales with K)   |
-| bevy (native Rust)   |      8.42 |       73.4 |   8.72× | full archetype scan (scales w/ N) |
-| artemis st           |      24.8 |        282 |  11.4×  | full archetype scan (no CD)       |
-| dominion st          |      45.1 |        392 |   8.70× | full archetype scan (no CD)       |
+| **japes** st         |  **5.86** |   **7.91** |   1.35× | dirty-list skip (scales with K)   |
+| zay-es               |      15.4 |       19.6 |   1.27× | dirty-list skip (scales with K)   |
+| bevy (native Rust)   |      8.81 |       76.9 |   8.73× | full archetype scan (scales w/ N) |
+| artemis st           |      24.5 |        279 |  11.4×  | full archetype scan (no CD)       |
+| dominion st          |      44.6 |        389 |   8.72× | full archetype scan (no CD)       |
 
 The libraries split into two cost-model camps, empirically:
 
@@ -47,8 +47,8 @@ The libraries split into two cost-model camps, empirically:
   indices that were mutated since the last prune. `@Filter(Changed)` /
   `EntitySet.getChangedEntities()` walks only that list. Per-tick
   cost is O(K) where K is the dirty count, not O(N) where N is total
-  entities. Scaling from 10k→100k costs ~33% more on japes (larger
-  handle array for the driver's `getComponent` lookups) and ~25%
+  entities. Scaling from 10k→100k costs ~35% more on japes (larger
+  handle array for the driver's `getComponent` lookups) and ~27%
   more on Zay-ES.
 - **Full-archetype scan** (Bevy, Dominion, Artemis) — observers
   iterate the full archetype and either tick-compare every entity
@@ -57,13 +57,13 @@ The libraries split into two cost-model camps, empirically:
   Per-tick cost is O(N) because that's the algorithmic shape.
   Scaling from 10k→100k costs ~8–11× more.
 
-**At 10k entities japes beats Bevy by 1.45×.** The gap looks modest
+**At 10k entities japes beats Bevy by 1.50×.** The gap looks modest
 because 10k is small enough that Bevy's tight cache-friendly tick
-scan is only paying ~2 µs of pure scan cost. **At 100k entities the
-same workload is a 9.22× gap** — Bevy pays ~65 µs extra to scan
+scan is only paying ~3 µs of pure scan cost. **At 100k entities the
+same workload is a 9.72× gap** — Bevy pays ~69 µs extra to scan
 90 000 more tick words that japes never touches.
 
-Worth calling out: **Zay-ES beats Bevy at 100k** (19.6 vs 73.4).
+Worth calling out: **Zay-ES beats Bevy at 100k** (19.6 vs 76.9).
 Zay-ES has higher per-mutation overhead than japes (more allocations
 in the driver side, per-set `applyChanges()` calls) but its
 `EntitySet.getChangedEntities()` is a dirty-list skip, so it scales
@@ -78,21 +78,21 @@ whole story:
 
 | library            | Δ µs for Δ 90k entities | per-entity overhead |
 |--------------------|------------------------:|--------------------:|
-| **japes** st       |                   +2.15 |       24 ns / entity |
-| zay-es             |                   +3.89 |       43 ns / entity |
-| bevy               |                  +65.0  |      722 ns / entity |
-| artemis st         |                  +257   |    2 860 ns / entity |
-| dominion st        |                  +347   |    3 860 ns / entity |
+| **japes** st       |                   +2.05 |       23 ns / entity |
+| zay-es             |                   +4.20 |       47 ns / entity |
+| bevy               |                  +68.1  |      757 ns / entity |
+| artemis st         |                  +254   |    2 828 ns / entity |
+| dominion st        |                  +344   |    3 827 ns / entity |
 
-japes's ~24 ns/entity is driver-side cost (the handle list grows,
+japes's ~23 ns/entity is driver-side cost (the handle list grows,
 the archetype's chunk list grows, `getComponent` walks slightly
 further). The observer side is ~flat because the dirty list is
 still 300 slots.
 
-Bevy's ~722 ns/entity breaks down as 3 observers × ~240 ns = each
+Bevy's ~757 ns/entity breaks down as 3 observers × ~252 ns = each
 observer does roughly one tick-word load + compare + branch per
-entity, which at ~0.24 ns/check × 100k entities × 3 observers ≈
-72 µs. Matches.
+entity, which at ~0.25 ns/check × 100k entities × 3 observers ≈
+76 µs. Matches.
 
 Dominion / Artemis pay more per entity because their full scans
 happen in the user-facing benchmark driver too (each observer calls
@@ -113,7 +113,7 @@ filter.
     maintenance, which is invisible at 300 mutations/tick (total
     ~3 µs) but would start to hurt at millions of mutations/tick.
     Run japes on `iterateWithWrite` (every entity touched every
-    tick, K = N) and Bevy wins by ~9× — the opposite direction,
+    tick, K = N) and Bevy wins by ~6× — the opposite direction,
     same cost model.
 
 ## DCE safety
@@ -136,8 +136,8 @@ Explicitly checked:
   / `sum_hp` / `sum_mana` after `schedule.run`. `black_box` is
   rustc's equivalent of `Blackhole.consume`.
 
-Re-ran Bevy after adding the `black_box` guards: result 8.42 µs at
-10k (was 8.41 µs without the guard). Delta is pure measurement
+Re-ran Bevy after adding the `black_box` guards: result 8.81 µs at
+10k (was 8.80 µs without the guard). Delta is pure measurement
 noise, which means **DCE wasn't happening even without the guard** —
 the cross-crate call chain
 `schedule.run → system fn pointer → observer body` already defeats
@@ -163,7 +163,7 @@ Direction of the asymmetry: **favours Bevy / Dominion / Artemis**.
 japes is paying extra allocation cost its comparison-peers aren't —
 and **still winning**. If we fixed the asymmetry (either by making
 japes's driver mutate in place somehow, or by making Bevy's driver
-allocate new records), the 9.45× gap at 100k would widen further,
+allocate new records), the 9.72× gap at 100k would widen further,
 not shrink.
 
 ## Code comparison (single-threaded path)
@@ -229,7 +229,7 @@ builder.
 
 | benchmark            |      case | **japes** | **japes-v** | Δ              |
 |----------------------|----------:|----------:|------------:|---------------:|
-| `RealisticTick tick` | 10k / st  |      5.81 |        11.9 | 0.49× slower   |
+| `RealisticTick tick` | 10k / st  |      5.86 |        11.9 | 0.49× slower   |
 | `RealisticTick tick` | 10k / mt  |      10.3 |        17.8 | 0.58× slower   |
 
 Valhalla regresses this benchmark by 42–52% (down from 74% in

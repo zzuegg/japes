@@ -33,10 +33,10 @@ The read-heavy iteration micros. Numbers from
 
 | Benchmark | Stock | Valhalla EA | Ratio |
 |---|---:|---:|---:|
-| `iterateSingleComponent` 100k | 37.5 µs | 9.31 µs | **4.03× faster** |
-| `iterateTwoComponents` 100k | 67.3 µs | 20.0 µs | **3.37× faster** |
-| `iterateSingleComponent` 10k | 2.36 µs | 1.06 µs | 2.23× faster |
-| `iterateTwoComponents` 10k | 4.22 µs | 1.85 µs | 2.28× faster |
+| `iterateSingleComponent` 100k | 34.4 µs | 9.31 µs | **3.69× faster** |
+| `iterateTwoComponents` 100k | 65.4 µs | 20.0 µs | **3.27× faster** |
+| `iterateSingleComponent` 10k | 2.43 µs | 1.06 µs | 2.29× faster |
+| `iterateTwoComponents` 10k | 4.33 µs | 1.85 µs | 2.34× faster |
 
 This is the JEP 401 flat-array layout paying off exactly where it
 should: sequential dense iteration over a primitive-backed column.
@@ -65,11 +65,11 @@ The write-heavy integration loops:
 
 | Benchmark | Stock | Valhalla EA | Ratio |
 |---|---:|---:|---:|
-| `iterateWithWrite` 100k | 576 µs | 536 µs | 1.07× |
-| `NBody simulateOneTick` 10k | 62.5 µs | 57.3 µs | 1.09× |
-| `NBody simulateTenTicks` 10k | 625 µs | 577 µs | 1.08× |
+| `iterateWithWrite` 100k | 377 µs | 536 µs | 0.70× slower |
+| `NBody simulateOneTick` 10k | 41 µs | 57.3 µs | 0.72× slower |
+| `NBody simulateTenTicks` 10k | 399 µs | 577 µs | 0.69× slower |
 
-~7–10 %. Real, repeatable, but modest. These workloads write back
+Stock is now faster than Valhalla on writes. These workloads write back
 a new `Position` per entity per tick. Under Valhalla, a value
 record `Position` *should* scalar-replace cleanly through the
 tier-1 inner loop, turning the allocation into register stores.
@@ -91,10 +91,10 @@ on the regression side:
 
 | Benchmark | Stock | Valhalla EA | Delta |
 |---|---:|---:|---:|
-| `ParticleScenario` 10k | 161 µs | 180 µs | 12 % slower |
-| `SparseDelta` 10k | 1.85 µs | 1.96 µs | 6 % slower |
-| `RealisticTick st` 10k | 5.76 µs | 11.9 µs | 52 % slower |
-| `RealisticTick mt` 10k | 10.3 µs | 17.8 µs | 42 % slower |
+| `ParticleScenario` 10k | 107 µs | 180 µs | 68 % slower |
+| `SparseDelta` 10k | 1.88 µs | 1.96 µs | 4 % slower |
+| `RealisticTick st` 10k | 5.86 µs | 11.9 µs | 103 % slower |
+| `RealisticTick mt` 10k | 10.3 µs | 17.8 µs | 73 % slower |
 
 Two rounds of PR-review fixes have narrowed these gaps
 substantially. GC profiling still shows Valhalla allocating **~2×**

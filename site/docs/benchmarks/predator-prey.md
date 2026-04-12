@@ -136,7 +136,7 @@ recommended shape for per-pair work. Copied verbatim from
 | 100  | 2000 |  16.2 µs |  **14.0 µs** |   51.8 µs |  **3.99 µs** |
 | 100  | 5000 |  28.0 µs |  **26.4 µs** |  126.3 µs |  **7.30 µs** |
 | 500  |  500 |  31.4 µs |  **22.1 µs** |   67.6 µs |  **7.01 µs** |
-| 500  | 2000 |  43.3 µs |  **31.7 µs** |  261.9 µs | **11.19 µs** |
+| 500  | 2000 |  43.3 µs |  **31.4 µs** |  243.7 µs | **11.5 µs** |
 | 500  | 5000 |  69.2 µs |  **55.9 µs** |  632.1 µs | **19.13 µs** |
 | 1000 |  500 |  62.6 µs |  **43.1 µs** |  128.8 µs | **13.15 µs** |
 | 1000 | 2000 |  83.1 µs |  **55.3 µs** |  476.4 µs | **19.68 µs** |
@@ -157,7 +157,7 @@ per pair, no `world.getComponent` call for the target read, no
 `SystemInvoker.invoke` reflection. See
 `GeneratedPairIterationProcessor` for the full emission logic.
 
-**japes beats naive Bevy at every cell, up to 12.9× at 1000 × 5000.**
+**japes beats naive Bevy at every cell, up to 13.6× at 1000 × 5000.**
 The earlier `@Pair`-vs-naive crossover story is gone: even the
 set-oriented `@Pair` column wins every cell now, and `@ForEachPair`
 extends the lead further. The reverse-index advantage that was
@@ -165,7 +165,7 @@ originally masked by constant-factor overhead is now visible from
 the smallest workload up.
 
 **japes vs optimized Bevy** — the ratio on the `@ForEachPair` column
-sits at **2.8–3.7×** across every cell (it was 11–28× on the first
+sits at **2.7–3.7×** across every cell (it was 11–28× on the first
 PR-landing numbers). That remaining gap is structurally out of
 reach without giving up features: the japes scheduler pays for
 per-pair change tracking (`PairChangeTracker`), deferred `Commands`,
@@ -198,7 +198,7 @@ probes per target read). Successive rounds replaced those with:
 - a primitive `LongArrayList` utility replacing `ArrayList<Long>`
   in the catch buffer.
 
-End-to-end the cell now runs at **31.7 µs/op** — a **5.27×
+End-to-end the cell now runs at **31.4 µs/op** — a **5.32×
 speedup** with the API surface staying stable the whole time.
 
 ## What the four columns actually tell you

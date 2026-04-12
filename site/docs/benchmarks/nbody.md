@@ -26,10 +26,10 @@ Numbers are µs/op, lower is better. Copied verbatim from `DEEP_DIVE.md`.
 
 | benchmark          | bodyCount | bevy | **japes** | zayes | dominion | artemis |
 |--------------------|----------:|-----:|----------:|------:|---------:|--------:|
-| `simulateOneTick`  |      1000 | 0.88 |    **4** |  43.6 |     2.44 |    1.84 |
-| `simulateOneTick`  |     10000 | 8.79 |   **41** |   440 |     24.1 |    19.2 |
-| `simulateTenTicks` |      1000 | 8.92 |   **40** |   436 |     24.5 |    18.5 |
-| `simulateTenTicks` |     10000 | 88.2 |   **403** |  4437 |      239 |     193 |
+| `simulateOneTick`  |      1000 | 0.9 |    **4** |  44 |     2 |    2 |
+| `simulateOneTick`  |     10000 | 8.8 |   **41** |   441 |     24 |    19 |
+| `simulateTenTicks` |      1000 | 8.9 |   **41** |   443 |     25 |    19 |
+| `simulateTenTicks` |     10000 | 89 |   **399** |  4454 |      239 |     191 |
 
 ## Analysis
 
@@ -43,7 +43,7 @@ SIMD-ish registers.
     japes is paying the same [write-path
     tax](iteration-micros.md#the-write-path-tax) documented on the
     iteration micros page. Look at the `simulateTenTicks / 10000` row
-    — japes at 403 µs is almost exactly 10× the `simulateOneTick /
+    — japes at 399 µs is almost exactly 10× the `simulateOneTick /
     10000` number (41 µs), which confirms that per-tick cost is
     stable and dominated by the integrator body, not by scheduler
     one-shot overhead.
@@ -56,7 +56,7 @@ From section 8 of `DEEP_DIVE.md`:
 |---------------------------|-----:|----------:|------------:|---------------:|
 | NBody `simulateOneTick`   |   1k |         4 |        5.84 | **0.68×** real |
 | NBody `simulateOneTick`   |  10k |        41 |        57.3 | **0.72×** real |
-| NBody `simulateTenTicks`  |  10k |       403 |         577 | **0.70×** real |
+| NBody `simulateTenTicks`  |  10k |       399 |         577 | **0.69×** real |
 
 Stock japes is now faster than Valhalla on this benchmark. Writes still allocate
 `new Position(...)` (either a flat value or a heap record depending

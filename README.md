@@ -152,13 +152,13 @@ maintenance the relation API does for you.
 
 | implementation                                  | 500 × 2000 tick µs/op |
 |-------------------------------------------------|----------------------:|
-| bevy 0.15 — hand-rolled reverse index           |             **11.2** |
-| **japes** — `@ForEachPair` (tier-1 bytecode-gen)|              **31.7** |
-| japes — `@Pair` + `PairReader` (tier-1)         |                  43.8 |
-| bevy 0.15 — naive `Component<Entity>`           |                 261.9 |
+| bevy 0.15 — hand-rolled reverse index           |             **11.5** |
+| **japes** — `@ForEachPair` (tier-1 bytecode-gen)|              **31.4** |
+| japes — `@Pair` + `PairReader` (tier-1)         |                  43.3 |
+| bevy 0.15 — naive `Component<Entity>`           |                 243.7 |
 
 japes now **beats the naive Bevy pattern at every grid cell** — up
-to 12.9× faster at 1000 × 5000 — because the forward / reverse
+to 13.6× faster at 1000 × 5000 — because the forward / reverse
 indices are built in, so the `O(predators × prey)` awareness scan
 that sinks the naive approach never happens. A determined Bevy user
 willing to hand-maintain `HuntedBy(Vec<Entity>)` on every prey still
@@ -168,7 +168,7 @@ change tracking, deferred `Commands`, archetype marker maintenance,
 `RemovedRelations<T>` log drain).
 
 The optimization journey: the 500 × 2000 cell has gone from **167 µs
-at PR landing → 31.7 µs today**, a 5.27× speedup with the API surface
+at PR landing → 31.4 µs today**, a 5.32× speedup with the API surface
 staying stable. See
 [DEEP_DIVE § Predator / prey — the relations scenario](DEEP_DIVE.md#predator--prey--the-relations-scenario)
 for the full 9-cell 4-way grid, the decision table for
@@ -183,15 +183,15 @@ for.
 
 | library          | 10k µs/op | 100k µs/op |
 |------------------|----------:|-----------:|
-| **japes** (this) |  **5.82** |   **7.76** |
-| zay-es           |      15.7 |       19.6 |
-| bevy (Rust)      |      8.42 |       73.4 |
-| artemis-odb      |      24.8 |        282 |
-| dominion-ecs     |      45.1 |        392 |
+| **japes** (this) |  **5.86** |   **7.91** |
+| zay-es           |      15.4 |       19.6 |
+| bevy (Rust)      |      8.81 |       76.9 |
+| artemis-odb      |      24.5 |        279 |
+| dominion-ecs     |      44.6 |        389 |
 
 Single-threaded numbers. **japes beats every library in the
 comparison at both entity counts**, including Bevy's Rust reference
-on the same workload — by 1.45× at 10 k and **9.45× at 100 k**. The
+on the same workload — by 1.50× at 10 k and **9.72× at 100 k**. The
 gap widens because japes (and Zay-ES) walk a dirty-slot list that
 scales with the ~300 dirty entities per tick, while Bevy, Dominion
 and Artemis scan the full archetype per observer and scale linearly
@@ -205,11 +205,11 @@ Valhalla investigation, benchmark-fairness audit) are in
 Short version:
 
 - **`SparseDelta tick`** (10 k entities, 100 dirty per tick, 1 observer):
-  japes **1.85 µs/op**, Bevy 4.01 µs/op, Zay-ES 4.68 µs/op —
-  japes is **2.17× faster than Bevy** on the library change-detection
+  japes **1.88 µs/op**, Bevy 4.11 µs/op, Zay-ES 4.67 µs/op —
+  japes is **2.19× faster than Bevy** on the library change-detection
   path it's optimised for.
-- **`iterateWithWrite`** (write-heavy micro): Dominion 22.6 µs,
-  Artemis 18.6 µs, japes 57.4 µs. Mutable-POJO libraries win on
+- **`iterateWithWrite`** (write-heavy micro): Dominion 22.5 µs,
+  Artemis 18.2 µs, japes 38.5 µs. Mutable-POJO libraries win on
   naive per-entity writes because they skip change tracking entirely
   — if you don't need observers or filters, use them.
 

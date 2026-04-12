@@ -31,7 +31,7 @@ Numbers are µs/op, lower is better. Copied verbatim from `DEEP_DIVE.md`.
 
 | benchmark | entityCount | bevy | **japes** | zayes | dominion | artemis |
 |-----------|------------:|-----:|----------:|------:|---------:|--------:|
-| `tick`    |       10000 | 22.4 |   **108.7** |  1859 |     68.3 |    98.2 |
+| `tick`    |       10000 | 22.7 |   **107** |  1855 |     67.9 |    98.5 |
 
 ## Analysis
 
@@ -46,7 +46,7 @@ Numbers are µs/op, lower is better. Copied verbatim from `DEEP_DIVE.md`.
     version).
 
     Impact on the rows: japes ParticleScenario went from 149 →
-    161 → **108.7 µs/op** after further optimisation. japes-v
+    161 → **107 µs/op** after further optimisation. japes-v
     (Valhalla) went from 169 → **180 µs/op** (+6.5%). Both still
     dominate Zay-ES and still lose to Dominion / Artemis on this
     benchmark — the ordering is stable, the magnitude is now honest.
@@ -69,11 +69,11 @@ alive scan to run for real.
 
 | library | µs/op | cost model |
 |---|---:|---|
-| Bevy     |  22.4 | in-place float writes, Rust SIMD-friendly loops |
-| **japes**| **108.7** | immutable-record writes, change-tracker maintained, five-system scheduler |
-| Dominion |  68.3 | mutable POJO writes, no change tracking |
-| Artemis  |  98.2 | mutable POJO writes, no change tracking |
-| Zay-ES   |  1859 | immutable components, per-set `applyChanges()` cost dominates |
+| Bevy     |  22.7 | in-place float writes, Rust SIMD-friendly loops |
+| **japes**| **107** | immutable-record writes, change-tracker maintained, five-system scheduler |
+| Dominion |  67.9 | mutable POJO writes, no change tracking |
+| Artemis  |  98.5 | mutable POJO writes, no change tracking |
+| Zay-ES   |  1855 | immutable components, per-set `applyChanges()` cost dominates |
 
 ## Valhalla delta
 
@@ -81,7 +81,7 @@ From section 8 of `DEEP_DIVE.md`:
 
 | benchmark               |  case | **japes** | **japes-v** | Δ          |
 |-------------------------|------:|----------:|------------:|-----------:|
-| `ParticleScenario tick` |   10k |     108.7 |         180 | 0.60× slower |
+| `ParticleScenario tick` |   10k |       107 |         180 | 0.59× slower |
 
 Valhalla regresses this benchmark (was 14% before the PR's
 `ArchetypeGraph` fix trimmed it). GC profiling shows Valhalla
