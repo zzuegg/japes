@@ -67,7 +67,7 @@ if (!desc.whereFilters().isEmpty())
 
 !!! note "`@Filter(Removed)` is NOT in this list"
 
-    `@Filter(Removed)` systems never reach `GeneratedChunkProcessor` — they're routed to a completely separate dispatch path (`GeneratedRemovedFilterProcessor`) that walks the removal log instead of archetype chunks. See [below](#filterremoved--its-own-tier-1-path) for details.
+    `@Filter(Removed)` systems never reach `GeneratedChunkProcessor` — they're routed to a completely separate dispatch path (`GeneratedRemovedFilterProcessor`) that walks the removal log instead of archetype chunks. See [below](#filterremoved-its-own-tier-1-path) for details.
 
 ### 1. No component params
 
