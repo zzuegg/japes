@@ -137,6 +137,7 @@ nav:
       - Write-path tax: deep-dive/write-path-tax.md
       - Valhalla investigation: deep-dive/valhalla-investigation.md
       - Optimisation journey: deep-dive/optimization-journey.md
+      - '"One JIT to rule them all"': deep-dive/one-jit-to-rule-them-all.md
       - 'Multi-target @Filter log': deep-dive/unified-delta-optimization.md
   - Benchmarks:
       - benchmarks/index.md
