@@ -14,27 +14,26 @@ import java.util.concurrent.TimeUnit;
  * AND removed entities each tick, all from a single {@link EntitySet} and a
  * single {@code applyChanges()} call.
  *
- * This is the workload shape Zay-ES is designed for: the EntitySet maintains
- * all three delta views (added / changed / removed) internally, and one
- * synchronization call exposes them with zero marginal cost per additional
- * delta type.
+ * <p>Three components ({@code State}, {@code Health}, {@code Mana}) are
+ * tracked in one EntitySet. The driver mutates each component on a
+ * different 10% slice per tick (offset cursors — 30% of entities touched
+ * total), spawns 1%, and despawns 1%. The observer calls
+ * {@code applyChanges()} once and iterates the three delta views — added,
+ * changed, removed — regardless of how many component types triggered the
+ * change.
  *
- * <p>Per tick the driver:
- * <ol>
- *   <li>Spawns 1% new entities         (exercises {@code getAddedEntities})</li>
- *   <li>Mutates 10% existing entities  (exercises {@code getChangedEntities})</li>
- *   <li>Despawns 1% oldest entities    (exercises {@code getRemovedEntities})</li>
- * </ol>
- * Then a single observer calls {@code applyChanges()} and iterates all three
- * delta views.
- *
- * <p><b>Why this favours Zay-ES:</b> japes needs three separate system
- * registrations ({@code @Filter(Added)}, {@code @Filter(Changed)},
- * {@code RemovedComponents<T>}), each with its own watermark, dirty-list
- * walk, and execution-plan slot. The scheduler, stage-graph traversal, and
- * dirty-list pruning overhead is paid even though only one logical observer
- * is running.  Zay-ES pays none of that — one {@code applyChanges()} call
- * and three cheap view iterations.
+ * <p><b>Why this favours Zay-ES:</b> japes needs <em>seven</em> separate
+ * system registrations to cover the same ground:
+ * <ul>
+ *   <li>1 {@code @Filter(Added)}  — for new entities</li>
+ *   <li>3 {@code @Filter(Changed)} — one per component type</li>
+ *   <li>3 {@code RemovedComponents<T>} — one per component type</li>
+ * </ul>
+ * Each system has its own watermark, dirty-list walk, and execution-plan
+ * slot.  The scheduler, stage-graph traversal, and dirty-list pruning
+ * overhead scales with the number of systems, while Zay-ES pays a fixed
+ * cost of one {@code applyChanges()} call no matter how many component
+ * types the EntitySet tracks.
  *
  * <p>Counterpart: {@code UnifiedDeltaBenchmark} in ecs-benchmark.
  */
@@ -47,14 +46,18 @@ import java.util.concurrent.TimeUnit;
 public class ZayEsUnifiedDeltaBenchmark {
 
     public record State(int value) implements EntityComponent {}
+    public record Health(int hp) implements EntityComponent {}
+    public record Mana(int points) implements EntityComponent {}
 
     @Param({"10000", "100000"})
     int entityCount;
 
+    static final int CHANGE_FRACTION = 10; // 10% per component per tick
+
     EntityData data;
     EntitySet observerSet;
     List<EntityId> handles;
-    int changeCursor;
+    int stateCursor, healthCursor, manaCursor;
     long sumAdded, sumChanged, sumRemoved;
 
     @Setup(Level.Iteration)
@@ -63,12 +66,18 @@ public class ZayEsUnifiedDeltaBenchmark {
         handles = new ArrayList<>(entityCount);
         for (int i = 0; i < entityCount; i++) {
             var id = data.createEntity();
-            data.setComponents(id, new State(i));
+            data.setComponents(id,
+                new State(i),
+                new Health(1_000),
+                new Mana(0));
             handles.add(id);
         }
-        observerSet = data.getEntities(State.class);
+        // One EntitySet tracks all three components — the Zay-ES sweet spot.
+        observerSet = data.getEntities(State.class, Health.class, Mana.class);
         observerSet.applyChanges(); // prime past the initial spawn
-        changeCursor = 0;
+        stateCursor = 0;
+        healthCursor = entityCount / 3;
+        manaCursor = 2 * entityCount / 3;
         sumAdded = sumChanged = sumRemoved = 0;
     }
 
@@ -79,26 +88,40 @@ public class ZayEsUnifiedDeltaBenchmark {
 
     @Benchmark
     public void tick(Blackhole bh) {
+        int n = handles.size();
         int addCount = Math.max(1, entityCount / 100);
-        int changeCount = Math.max(1, entityCount / 10);
+        int changeCount = Math.max(1, entityCount / CHANGE_FRACTION);
         int removeCount = Math.max(1, entityCount / 100);
 
-        // 1. Spawn 1% new entities.
+        // 1. Spawn 1% new entities (all three components).
         for (int i = 0; i < addCount; i++) {
             var id = data.createEntity();
-            data.setComponents(id, new State(handles.size() + i));
+            data.setComponents(id,
+                new State(n + i),
+                new Health(1_000),
+                new Mana(0));
             handles.add(id);
         }
 
-        // 2. Mutate 10% via rotating cursor.
+        // 2. Mutate 10% per component via offset rotating cursors.
+        //    Three disjoint slices — 30% of entities touched total.
         for (int i = 0; i < changeCount; i++) {
-            int idx = changeCursor % handles.size();
-            changeCursor++;
-            var id = handles.get(idx);
+            var id = handles.get(stateCursor % handles.size());
+            stateCursor++;
             var cur = data.getComponent(id, State.class);
-            if (cur != null) {
-                data.setComponent(id, new State(cur.value() + 1));
-            }
+            if (cur != null) data.setComponent(id, new State(cur.value() + 1));
+        }
+        for (int i = 0; i < changeCount; i++) {
+            var id = handles.get(healthCursor % handles.size());
+            healthCursor++;
+            var cur = data.getComponent(id, Health.class);
+            if (cur != null) data.setComponent(id, new Health(cur.hp() - 1));
+        }
+        for (int i = 0; i < changeCount; i++) {
+            var id = handles.get(manaCursor % handles.size());
+            manaCursor++;
+            var cur = data.getComponent(id, Mana.class);
+            if (cur != null) data.setComponent(id, new Mana(cur.points() + 1));
         }
 
         // 3. Despawn 1% oldest.
@@ -107,7 +130,9 @@ public class ZayEsUnifiedDeltaBenchmark {
             data.removeEntity(id);
         }
 
-        // Observer: one applyChanges(), three delta views — the Zay-ES sweet spot.
+        // Observer: ONE applyChanges(), three delta views.
+        // The EntitySet merges mutations across all three component types
+        // into a single changed view — no per-component overhead.
         observerSet.applyChanges();
         for (Entity e : observerSet.getAddedEntities()) {
             sumAdded++;
