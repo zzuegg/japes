@@ -186,6 +186,17 @@ No phi merge → EA independently proves: (1) the original record in `current` i
 
 **Impact**: unified-delta allocation dropped from **1.07 MB to 603 KB** (44% reduction). EA now eliminates 78% of all allocations (up from 61%).
 
+### The 600 KB floor: what EA can't reach
+
+After the phi-merge fix, we tested **10 different approaches** to eliminate the remaining ~350 KB of record allocations (inline flush, eliminate pending, primitive payload, unconditional decompose before guard, null pending after extract, primitive field on Mut, hidden Mut subclass, diagnostic set variants, void flushChanged, unconditional SoA write). All converged on the same ~600 KB floor.
+
+The remaining allocation breaks down as:
+
+- **~250 KB structural**: `EntityLocation` records from archetype migration (spawn/despawn/addComponent/removeComponent), `HashMap.Node` from archetype graph operations, `RemovalLog.Entry` from despawn. These objects genuinely escape into framework data structures — they're stored in `ArrayList`, `HashMap`, or `RemovalLog` and survive across ticks.
+- **~350 KB JIT residual**: Records that EA handles in most compilations but not all, due to C2 compilation non-determinism (OSR transitions, deoptimization/recompilation cycles, bimorphic `soaFieldArrays()` profiles from JMH iteration rebuilds).
+
+This is irreducible without Valhalla value types (which would eliminate the `Record` type boundary that forces materialization) or a fundamentally different `Mut` API that avoids `Record` references entirely.
+
 ## The optimization journey in numbers
 
 | Round | What | Write µs/op (10k) | vs Bevy |
