@@ -59,4 +59,6 @@ jobs:
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew :ecs-core:publish
+        run: |
+          echo "Publishing as $GITHUB_ACTOR to maven.pkg.github.com/zzuegg/japes"
+          ./gradlew :ecs-core:publish --info 2>&1 | tail -40
