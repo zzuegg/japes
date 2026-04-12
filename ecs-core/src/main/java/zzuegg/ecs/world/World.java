@@ -447,12 +447,16 @@ public final class World {
     public zzuegg.ecs.entity.Entity spawn(Record... components) {
         var entity = entityAllocator.allocate();
 
+        // Single lookup per component: getOrRegisterInfo returns both
+        // ComponentId and ComponentInfo. The old code called getOrRegister
+        // + info separately = two lookups per component per spawn.
         var compIds = new HashSet<ComponentId>();
-        for (var comp : components) {
-            var id = componentRegistry.getOrRegister(comp.getClass());
-            var info = componentRegistry.info(comp.getClass());
+        var infos = new zzuegg.ecs.component.ComponentInfo[components.length];
+        for (int i = 0; i < components.length; i++) {
+            var info = componentRegistry.getOrRegisterInfo(components[i].getClass());
+            infos[i] = info;
             if (info.isTableStorage()) {
-                compIds.add(id);
+                compIds.add(info.id());
             }
         }
 
@@ -461,10 +465,9 @@ public final class World {
         var location = archetype.add(entity);
         setLocation(entity.index(), location);
 
-        for (var comp : components) {
-            var info = componentRegistry.info(comp.getClass());
-            if (info.isTableStorage()) {
-                archetype.set(info.id(), location, comp);
+        for (int i = 0; i < components.length; i++) {
+            if (infos[i].isTableStorage()) {
+                archetype.set(infos[i].id(), location, components[i]);
             }
         }
 

@@ -13,8 +13,13 @@ public final class ArchetypeGraph {
     private final int chunkCapacity;
     private final ComponentStorage.Factory storageFactory;
     private final Map<ArchetypeId, Archetype> archetypes = new HashMap<>();
-    private final Map<ArchetypeId, Map<ComponentId, ArchetypeId>> addEdges = new HashMap<>();
-    private final Map<ArchetypeId, Map<ComponentId, ArchetypeId>> removeEdges = new HashMap<>();
+    // Edge caches: archetype → flat array indexed by ComponentId.id().
+    // Replaces HashMap<ArchetypeId, HashMap<ComponentId, ArchetypeId>> —
+    // the inner HashMap had ~5 entries per archetype; a flat array is
+    // ~10× faster per lookup (array index vs hash + bucket + equals).
+    private final Map<ArchetypeId, ArchetypeId[]> addEdges = new HashMap<>();
+    private final Map<ArchetypeId, ArchetypeId[]> removeEdges = new HashMap<>();
+    private int maxComponentId = 16; // grows as needed
     // Memoized results of findMatching(required). Invalidated whenever a new
     // archetype is created; mutations of existing archetypes' entity contents
     // don't affect which archetypes match a given required set.
@@ -114,23 +119,46 @@ public final class ArchetypeGraph {
     }
 
     public ArchetypeId addEdge(ArchetypeId source, ComponentId added) {
-        return addEdges
-            .computeIfAbsent(source, k -> new HashMap<>())
-            .computeIfAbsent(added, k -> {
-                var targetId = source.with(added);
-                getOrCreate(targetId);
-                return targetId;
-            });
+        var edges = addEdges.get(source);
+        int id = added.id();
+        if (edges != null && id < edges.length && edges[id] != null) {
+            return edges[id];
+        }
+        // Cache miss — compute and store.
+        var targetId = source.with(added);
+        getOrCreate(targetId);
+        ensureEdgeCapacity(id);
+        if (edges == null || id >= edges.length) {
+            edges = java.util.Arrays.copyOf(
+                edges != null ? edges : new ArchetypeId[0],
+                Math.max(id + 1, maxComponentId));
+            addEdges.put(source, edges);
+        }
+        edges[id] = targetId;
+        return targetId;
     }
 
     public ArchetypeId removeEdge(ArchetypeId source, ComponentId removed) {
-        return removeEdges
-            .computeIfAbsent(source, k -> new HashMap<>())
-            .computeIfAbsent(removed, k -> {
-                var targetId = source.without(removed);
-                getOrCreate(targetId);
-                return targetId;
-            });
+        var edges = removeEdges.get(source);
+        int id = removed.id();
+        if (edges != null && id < edges.length && edges[id] != null) {
+            return edges[id];
+        }
+        var targetId = source.without(removed);
+        getOrCreate(targetId);
+        ensureEdgeCapacity(id);
+        if (edges == null || id >= edges.length) {
+            edges = java.util.Arrays.copyOf(
+                edges != null ? edges : new ArchetypeId[0],
+                Math.max(id + 1, maxComponentId));
+            removeEdges.put(source, edges);
+        }
+        edges[id] = targetId;
+        return targetId;
+    }
+
+    private void ensureEdgeCapacity(int id) {
+        if (id >= maxComponentId) maxComponentId = id + 8;
     }
 
     public List<Archetype> findMatching(Set<ComponentId> required) {
