@@ -81,6 +81,41 @@ public final class ScheduleGraph {
         Arrays.fill(completed, false);
     }
 
+    /**
+     * Pre-computed topological order — built once lazily, cached forever.
+     * The single-threaded executor iterates this flat array instead of
+     * running the readySystems/complete DAG loop on every tick, saving
+     * per-tick HashMap lookups, ArrayList allocations, and boolean scans.
+     */
+    private SystemNode[] cachedFlatOrder;
+
+    public SystemNode[] flatOrder() {
+        if (cachedFlatOrder != null) return cachedFlatOrder;
+        // Kahn's algorithm — same topological sort readySystems/complete
+        // does, but executed once at build time.
+        int n = nodes.size();
+        var tempInDeg = Arrays.copyOf(originalInDegree, n);
+        var queue = new ArrayDeque<Integer>();
+        for (int i = 0; i < n; i++) {
+            if (tempInDeg[i] == 0) queue.add(i);
+        }
+        var result = new SystemNode[n];
+        int write = 0;
+        while (!queue.isEmpty()) {
+            int idx = queue.poll();
+            result[write++] = nodes.get(idx);
+            for (int dep : edges.getOrDefault(idx, Set.of())) {
+                tempInDeg[dep]--;
+                if (tempInDeg[dep] == 0) queue.add(dep);
+            }
+        }
+        if (write != n) {
+            throw new IllegalStateException("Deadlock: cycle in schedule DAG — only " + write + " of " + n + " systems reachable");
+        }
+        cachedFlatOrder = result;
+        return cachedFlatOrder;
+    }
+
     public void buildInvokers() {
         for (var node : nodes) {
             if (node.descriptor().method() != null && node.invoker() == null) {
