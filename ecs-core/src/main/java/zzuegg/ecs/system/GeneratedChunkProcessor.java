@@ -316,32 +316,27 @@ public final class GeneratedChunkProcessor {
                 cb.return_();
             });
 
-            // process(Chunk chunk, long currentTick)
-            clb.withMethodBody("process",
-                MethodTypeDesc.of(ConstantDescs.CD_void, chunkDesc, ConstantDescs.CD_long),
-                ACC_PUBLIC, cb -> {
+            // Shared entity-loop emitter. Called once for process() (chunk at
+            // param 1, tick at param 2) and once for processAll() (chunk in a
+            // local from the List loop, tick at param 2). By inlining the full
+            // entity loop into processAll, the JIT compiles it as one unit —
+            // no cross-method boundary prevents escape analysis.
+            //
+            // chunkVar: local index holding the Chunk reference
+            // tickVar:  local index holding the tick (long, 2 slots)
+            // baseLocal: first free local after the method parameters
+            interface EntityLoopEmitter {
+                void emit(java.lang.classfile.CodeBuilder cb, int chunkVar, int tickVar, int baseLocal);
+            }
+            EntityLoopEmitter emitEntityLoop = (cb, chunkVar, tickVar, baseLocal) -> {
 
-                // Local var layout:
-                //   0  this
-                //   1  chunk
-                //   2-3 tick (long)
-                //   4  count
-                //   5  slot
-                //   6..6+paramCount-1                : storages (Record[] or ComponentStorage)
-                //   6+paramCount..6+2*paramCount-1   : trackers for WRITE params (unused entries stay null)
-                //   6+2*paramCount                   : tempValue for flushed write-back
-                //   6+2*paramCount+1                 : dirtyIdx (filter loop index, only if hasFilters)
-                //   6+2*paramCount+2                 : dirtyList (int[], only if hasFilters)
-                //   6+2*paramCount+3                 : dirtyCount (int, only if hasFilters)
-                //   6+2*paramCount+4..+3+filterCount : filter trackers (ChangeTracker, only if hasFilters)
-                //   +(4+filterCount)                 : lastSeen (long, 2 slots, only if hasFilters)
-                //   next                             : hoisted `this.inst` (instance ref, only if !isStatic)
-                //   next+1..                         : hoisted service[i] per SERVICE param
-                //   next                             : hoisted mut[i] per WRITE param
-                //   next                             : hoisted entities[] array (only if any ENTITY param)
-                int countVar = 4;
-                int slotVar = 5;
-                int firstStorageVar = 6;
+                // Local var layout (relative to baseLocal):
+                //   baseLocal+0  count
+                //   baseLocal+1  slot
+                //   +2..                             : storages, trackers, temp, filter state, hoisted refs
+                int countVar = baseLocal;
+                int slotVar = baseLocal + 1;
+                int firstStorageVar = baseLocal + 2;
                 int firstTrackerVar = firstStorageVar + paramCount;
                 int tempValueVar = firstTrackerVar + paramCount;
                 int dirtyIdxVar = tempValueVar + 1;
@@ -380,7 +375,7 @@ public final class GeneratedChunkProcessor {
                 for (var k : kinds) if (k == ParamKind.ENTITY) { anyEntity = true; break; }
                 int entityArrayLocal = anyEntity ? firstHoistVar++ : -1;
 
-                cb.aload(1); // chunk
+                cb.aload(chunkVar); // chunk
                 cb.invokevirtual(chunkDesc, "count", MethodTypeDesc.of(ConstantDescs.CD_int));
                 cb.istore(countVar);
 
@@ -414,7 +409,7 @@ public final class GeneratedChunkProcessor {
 
                 for (int i = 0; i < paramCount; i++) {
                     if (kinds[i] != ParamKind.READ && kinds[i] != ParamKind.WRITE) continue;
-                    cb.aload(1); // chunk
+                    cb.aload(chunkVar); // chunk
                     cb.aload(0); // this
                     cb.getfield(genDesc, "cids", compIdArrayDesc);
                     cb.ldc(paramToAccessIdx[i]);
@@ -452,7 +447,7 @@ public final class GeneratedChunkProcessor {
                 // Load trackers for WRITE params: trackerN = chunk.changeTracker(cids[accessIdx])
                 for (int i = 0; i < paramCount; i++) {
                     if (kinds[i] != ParamKind.WRITE) continue;
-                    cb.aload(1); // chunk
+                    cb.aload(chunkVar); // chunk
                     cb.aload(0); // this
                     cb.getfield(genDesc, "cids", compIdArrayDesc);
                     cb.ldc(paramToAccessIdx[i]);
@@ -497,7 +492,7 @@ public final class GeneratedChunkProcessor {
                         for (int ti = 0; ti < filterTargetCount; ti++) {
                             cb.dup();
                             cb.ldc(ti);
-                            cb.aload(1); // chunk
+                            cb.aload(chunkVar); // chunk
                             cb.aload(0);
                             cb.getfield(genDesc, "filterCids", compIdArrayDesc);
                             cb.ldc(ti);
@@ -534,7 +529,7 @@ public final class GeneratedChunkProcessor {
                         // Single-target path: load one tracker per filter, use
                         // the primary's dirty list directly (existing code).
                         for (int fi = 0; fi < resolvedFilters.length; fi++) {
-                            cb.aload(1); // chunk
+                            cb.aload(chunkVar); // chunk
                             cb.aload(0);
                             cb.getfield(genDesc, "filterCids", compIdArrayDesc);
                             cb.ldc(fi);
@@ -594,7 +589,7 @@ public final class GeneratedChunkProcessor {
                 // is a plain aaload on a local Entity[] rather than an
                 // invokevirtual through Chunk.entity(int).
                 if (entityArrayLocal >= 0) {
-                    cb.aload(1); // chunk
+                    cb.aload(chunkVar); // chunk
                     cb.invokevirtual(chunkDesc, "entityArray",
                         MethodTypeDesc.of(entityDesc.arrayType()));
                     cb.astore(entityArrayLocal);
@@ -721,7 +716,7 @@ public final class GeneratedChunkProcessor {
                             }
                             cb.iload(slotVar);               // slot
                             cb.aload(firstTrackerVar + i);   // tracker
-                            cb.lload(2);                     // tick
+                            cb.lload(tickVar);               // tick
                             cb.iconst_0();                   // valueTracked = false
                             cb.invokespecial(mutDesc, "<init>", mutInitDesc);
                             cb.astore(mutLocal[i]);
@@ -799,46 +794,66 @@ public final class GeneratedChunkProcessor {
                 }
                 cb.goto_(loopStart);
                 cb.labelBinding(loopEnd);
-                cb.return_();
-            });
+            };
 
-            // processAll(List<Chunk>, long) — overrides the default method
-            // so the inner this.process() call is invokevirtual on the
-            // concrete hidden class, not invokeinterface on ChunkProcessor.
-            // This makes the call site monomorphic → JIT inlines process()
-            // → EA can scalar-replace Mut and record allocations.
+            // process(Chunk chunk, long currentTick) — interface method.
+            // Delegates to the entity loop emitter with chunk at param 1, tick at param 2.
+            clb.withMethodBody("process",
+                MethodTypeDesc.of(ConstantDescs.CD_void, chunkDesc, ConstantDescs.CD_long),
+                ACC_PUBLIC, cb -> {
+                    // chunk = param 1, tick = param 2, first free local = 4
+                    emitEntityLoop.emit(cb, 1, 2, 4);
+                    cb.return_();
+                });
+
+            // processAll(List<Chunk>, long) — self-contained: the chunk loop
+            // AND the entity loop are emitted inline in one method body.
+            // No delegation to process() — the JIT compiles this as a single
+            // compilation unit, so EA can scalar-replace Mut and records
+            // without being blocked by "already compiled" heuristics.
             var listDescLocal = ClassDesc.of("java.util.List");
             clb.withMethodBody("processAll",
                 MethodTypeDesc.of(ConstantDescs.CD_void, listDescLocal, ConstantDescs.CD_long),
                 ACC_PUBLIC, cb -> {
-                    // int n = chunks.size();
+                    // Local layout:
+                    //   0  this
+                    //   1  chunks (List)
+                    //   2-3 tick (long)
+                    //   4  chunkCount (int)
+                    //   5  chunkIdx (int)
+                    //   6  currentChunk (Chunk)
+                    //   7+ entity loop locals (via emitEntityLoop baseLocal=7)
+                    int chunkCountLocal = 4;
+                    int chunkIdxLocal = 5;
+                    int currentChunkLocal = 6;
+                    int entityLoopBase = 7;
+
+                    // int chunkCount = chunks.size();
                     cb.aload(1);
                     cb.invokeinterface(listDescLocal, "size", MethodTypeDesc.of(ConstantDescs.CD_int));
-                    int nLocal = 4;
-                    cb.istore(nLocal);
-                    // for (int i = 0; i < n; i++)
-                    int iLocal = 5;
+                    cb.istore(chunkCountLocal);
+                    // for (int ci = 0; ci < chunkCount; ci++)
                     cb.iconst_0();
-                    cb.istore(iLocal);
-                    var loopStart = cb.newLabel();
-                    var loopEnd = cb.newLabel();
-                    cb.labelBinding(loopStart);
-                    cb.iload(iLocal);
-                    cb.iload(nLocal);
-                    cb.if_icmpge(loopEnd);
-                    // this.process((Chunk) chunks.get(i), tick)
-                    cb.aload(0);
+                    cb.istore(chunkIdxLocal);
+                    var outerStart = cb.newLabel();
+                    var outerEnd = cb.newLabel();
+                    cb.labelBinding(outerStart);
+                    cb.iload(chunkIdxLocal);
+                    cb.iload(chunkCountLocal);
+                    cb.if_icmpge(outerEnd);
+                    // Chunk chunk = (Chunk) chunks.get(ci);
                     cb.aload(1);
-                    cb.iload(iLocal);
+                    cb.iload(chunkIdxLocal);
                     cb.invokeinterface(listDescLocal, "get",
                         MethodTypeDesc.of(ConstantDescs.CD_Object, ConstantDescs.CD_int));
                     cb.checkcast(chunkDesc);
-                    cb.lload(2);
-                    cb.invokevirtual(genDesc, "process",
-                        MethodTypeDesc.of(ConstantDescs.CD_void, chunkDesc, ConstantDescs.CD_long));
-                    cb.iinc(iLocal, 1);
-                    cb.goto_(loopStart);
-                    cb.labelBinding(loopEnd);
+                    cb.astore(currentChunkLocal);
+                    // Inline the full entity loop for this chunk.
+                    // chunk = currentChunkLocal, tick = param 2
+                    emitEntityLoop.emit(cb, currentChunkLocal, 2, entityLoopBase);
+                    cb.iinc(chunkIdxLocal, 1);
+                    cb.goto_(outerStart);
+                    cb.labelBinding(outerEnd);
                     cb.return_();
                 });
         });
