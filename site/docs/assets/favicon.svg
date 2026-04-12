@@ -1,14 +1,77 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="japes">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#7e57c2"/>
+    <linearGradient id="fur" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9575cd"/>
+      <stop offset="50%" stop-color="#5e35b1"/>
       <stop offset="100%" stop-color="#311b92"/>
     </linearGradient>
+    <linearGradient id="face" x1="30%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" stop-color="#b39ddb"/>
+      <stop offset="100%" stop-color="#7e57c2"/>
+    </linearGradient>
+    <linearGradient id="eyeGlow" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#ffe082"/>
+      <stop offset="100%" stop-color="#ff8f00"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="0.8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
   </defs>
-  <rect width="64" height="64" rx="12" fill="url(#bg)"/>
-  <path d="M14 50 Q28 34 28 26 Q28 16 24 12 Q30 6 32 6 Q34 6 40 12 Q36 16 36 26 Q36 34 50 50 Z" fill="#ede7f6"/>
-  <ellipse cx="32" cy="20" rx="13" ry="3" fill="#311b92" opacity="0.55"/>
-  <circle cx="26" cy="22" r="2" fill="#ffd54f"/>
-  <circle cx="38" cy="22" r="2" fill="#ffd54f"/>
+
+  <!-- Background with rounded corners -->
+  <rect width="64" height="64" rx="14" fill="#1a0a3e"/>
+
+  <g transform="translate(32, 33)">
+    <!-- Outer head -->
+    <ellipse cx="0" cy="-2" rx="26" ry="27" fill="url(#fur)"/>
+
+    <!-- Ears -->
+    <ellipse cx="-24" cy="-6" rx="6" ry="8" fill="#4527a0"/>
+    <ellipse cx="-24" cy="-6" rx="3.5" ry="5.5" fill="#7e57c2" opacity="0.4"/>
+    <ellipse cx="24" cy="-6" rx="6" ry="8" fill="#4527a0"/>
+    <ellipse cx="24" cy="-6" rx="3.5" ry="5.5" fill="#7e57c2" opacity="0.4"/>
+
+    <!-- Inner face / muzzle -->
+    <ellipse cx="0" cy="4" rx="17" ry="16" fill="url(#face)"/>
+
+    <!-- Brow ridge -->
+    <path d="M-18 -10 Q-10 -17 0 -17 Q10 -17 18 -10 Q10 -12 0 -12.5 Q-10 -12 -18 -10 Z"
+          fill="#311b92" opacity="0.7"/>
+
+    <!-- Eye sockets -->
+    <ellipse cx="-9" cy="-7" rx="6.5" ry="4.5" fill="#1a0a3e" opacity="0.5"/>
+    <ellipse cx="9" cy="-7" rx="6.5" ry="4.5" fill="#1a0a3e" opacity="0.5"/>
+
+    <!-- Eyes — glowing amber -->
+    <ellipse cx="-9" cy="-7" rx="4" ry="3.2" fill="url(#eyeGlow)" filter="url(#glow)"/>
+    <ellipse cx="9" cy="-7" rx="4" ry="3.2" fill="url(#eyeGlow)" filter="url(#glow)"/>
+
+    <!-- Pupils -->
+    <circle cx="-8" cy="-7" r="1.5" fill="#3e2723"/>
+    <circle cx="10" cy="-7" r="1.5" fill="#3e2723"/>
+
+    <!-- Eye highlights -->
+    <circle cx="-10" cy="-8.5" r="0.9" fill="white" opacity="0.8"/>
+    <circle cx="8" cy="-8.5" r="0.9" fill="white" opacity="0.8"/>
+
+    <!-- Nose -->
+    <path d="M-5 3 Q-3 0 0 0 Q3 0 5 3 Q5 6 3 7.5 Q0 9 -3 7.5 Q-5 6 -5 3 Z"
+          fill="#4527a0"/>
+    <ellipse cx="-2.5" cy="4" rx="1.5" ry="1.2" fill="#1a0a3e" opacity="0.6"/>
+    <ellipse cx="2.5" cy="4" rx="1.5" ry="1.2" fill="#1a0a3e" opacity="0.6"/>
+
+    <!-- Mouth -->
+    <path d="M-6 11 Q-2 14 0 13.5 Q2 14 6 11"
+          fill="none" stroke="#4527a0" stroke-width="1" stroke-linecap="round"/>
+
+    <!-- Entity nodes on forehead -->
+    <circle cx="-7" cy="-20" r="1.2" fill="#ffb300" opacity="0.6"/>
+    <circle cx="0" cy="-23" r="1.4" fill="#ffb300" opacity="0.7"/>
+    <circle cx="7" cy="-20" r="1.2" fill="#ffb300" opacity="0.6"/>
+    <line x1="-7" y1="-20" x2="0" y2="-23" stroke="#ffb300" stroke-width="0.6" opacity="0.4"/>
+    <line x1="0" y1="-23" x2="7" y2="-20" stroke="#ffb300" stroke-width="0.6" opacity="0.4"/>
+    <line x1="-7" y1="-20" x2="7" y2="-20" stroke="#ffb300" stroke-width="0.5" opacity="0.25"/>
+  </g>
 </svg>

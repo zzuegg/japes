@@ -1,38 +1,117 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 96" role="img" aria-label="japes — Java Archetype-based Parallel Entity System">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 96" role="img" aria-label="japes — Java Archetype-based Parallel Entity System">
   <title>japes</title>
   <defs>
-    <linearGradient id="apeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#7e57c2"/>
-      <stop offset="100%" stop-color="#4527a0"/>
-    </linearGradient>
-    <linearGradient id="textGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#5e35b1"/>
+    <linearGradient id="fur" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9575cd"/>
+      <stop offset="50%" stop-color="#5e35b1"/>
       <stop offset="100%" stop-color="#311b92"/>
+    </linearGradient>
+    <linearGradient id="face" x1="30%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" stop-color="#b39ddb"/>
+      <stop offset="100%" stop-color="#7e57c2"/>
+    </linearGradient>
+    <linearGradient id="eyeGlow" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#ffe082"/>
+      <stop offset="100%" stop-color="#ff8f00"/>
+    </linearGradient>
+    <radialGradient id="noseShine" cx="50%" cy="30%">
+      <stop offset="0%" stop-color="#9575cd" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#4527a0" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="wordJ" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#b39ddb"/>
+      <stop offset="100%" stop-color="#7e57c2"/>
+    </linearGradient>
+    <linearGradient id="wordAPE" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffb300"/>
+      <stop offset="100%" stop-color="#ff8f00"/>
+    </linearGradient>
+    <linearGradient id="wordS" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#b39ddb"/>
+      <stop offset="100%" stop-color="#7e57c2"/>
     </linearGradient>
   </defs>
 
-  <!-- Stylized ape silhouette inside the acronym placeholder.
-       Head + shoulders, two highlight eyes, brow ridge. -->
-  <g transform="translate(14, 14)">
-    <!-- Shoulders / body base -->
-    <path
-      d="M12 58 Q34 38 34 30 Q34 18 28 12 Q38 2 48 2 Q58 2 68 12 Q62 18 62 30 Q62 38 84 58 Z"
-      fill="url(#apeGradient)" />
-    <!-- Brow ridge -->
-    <ellipse cx="48" cy="22" rx="20" ry="4" fill="#1a0f4a" opacity="0.55"/>
-    <!-- Left eye -->
-    <circle cx="40" cy="24" r="2.8" fill="#ffd54f"/>
-    <!-- Right eye -->
-    <circle cx="56" cy="24" r="2.8" fill="#ffd54f"/>
-    <!-- Muzzle highlight -->
-    <ellipse cx="48" cy="36" rx="11" ry="6" fill="#ede7f6" opacity="0.18"/>
+  <!-- === APE FACE (centered at 48, 48) === -->
+  <g transform="translate(6, 2)">
+    <!-- Outer head — broad rounded shape -->
+    <ellipse cx="48" cy="44" rx="40" ry="42" fill="url(#fur)"/>
+
+    <!-- Ears -->
+    <ellipse cx="10" cy="38" rx="10" ry="13" fill="#4527a0"/>
+    <ellipse cx="10" cy="38" rx="6" ry="9" fill="#7e57c2" opacity="0.5"/>
+    <ellipse cx="86" cy="38" rx="10" ry="13" fill="#4527a0"/>
+    <ellipse cx="86" cy="38" rx="6" ry="9" fill="#7e57c2" opacity="0.5"/>
+
+    <!-- Inner face (lighter muzzle area) -->
+    <ellipse cx="48" cy="52" rx="26" ry="24" fill="url(#face)"/>
+
+    <!-- Brow ridge — heavy, gives the gorilla character -->
+    <path d="M20 30 Q28 22 48 22 Q68 22 76 30 Q68 28 48 27 Q28 28 20 30 Z"
+          fill="#311b92" opacity="0.7"/>
+
+    <!-- Eye sockets (dark recesses) -->
+    <ellipse cx="34" cy="34" rx="10" ry="7" fill="#1a0a3e" opacity="0.6"/>
+    <ellipse cx="62" cy="34" rx="10" ry="7" fill="#1a0a3e" opacity="0.6"/>
+
+    <!-- Eyes — glowing amber, the signature -->
+    <ellipse cx="34" cy="34" rx="6" ry="5" fill="url(#eyeGlow)" filter="url(#glow)"/>
+    <ellipse cx="62" cy="34" rx="6" ry="5" fill="url(#eyeGlow)" filter="url(#glow)"/>
+
+    <!-- Pupils -->
+    <circle cx="36" cy="34" r="2.2" fill="#4e342e"/>
+    <circle cx="64" cy="34" r="2.2" fill="#4e342e"/>
+
+    <!-- Eye highlights -->
+    <circle cx="33" cy="32" r="1.2" fill="white" opacity="0.8"/>
+    <circle cx="61" cy="32" r="1.2" fill="white" opacity="0.8"/>
+
+    <!-- Nose -->
+    <path d="M40 48 Q42 44 48 44 Q54 44 56 48 Q56 53 52 55 Q48 57 44 55 Q40 53 40 48 Z"
+          fill="#4527a0"/>
+    <!-- Nostrils -->
+    <ellipse cx="44" cy="50" rx="2.5" ry="2" fill="#1a0a3e" opacity="0.7"/>
+    <ellipse cx="52" cy="50" rx="2.5" ry="2" fill="#1a0a3e" opacity="0.7"/>
+    <!-- Nose shine -->
+    <ellipse cx="48" cy="47" rx="6" ry="4" fill="url(#noseShine)"/>
+
+    <!-- Mouth line — slight smirk -->
+    <path d="M38 60 Q43 64 48 63 Q53 64 58 60"
+          fill="none" stroke="#4527a0" stroke-width="1.5" stroke-linecap="round"/>
+
+    <!-- Chin shadow -->
+    <ellipse cx="48" cy="68" rx="14" ry="5" fill="#311b92" opacity="0.2"/>
+
+    <!-- Entity node dots — subtle tech overlay on forehead -->
+    <circle cx="36" cy="18" r="1.5" fill="#ffb300" opacity="0.5"/>
+    <circle cx="48" cy="14" r="1.8" fill="#ffb300" opacity="0.6"/>
+    <circle cx="60" cy="18" r="1.5" fill="#ffb300" opacity="0.5"/>
+    <!-- Connection lines between nodes -->
+    <line x1="36" y1="18" x2="48" y2="14" stroke="#ffb300" stroke-width="0.7" opacity="0.35"/>
+    <line x1="48" y1="14" x2="60" y2="18" stroke="#ffb300" stroke-width="0.7" opacity="0.35"/>
+    <line x1="36" y1="18" x2="60" y2="18" stroke="#ffb300" stroke-width="0.7" opacity="0.2"/>
   </g>
 
-  <!-- Wordmark: "j" + [APE inside tinted box] + "s" -->
-  <g font-family="'JetBrains Mono','SFMono-Regular','Menlo',monospace" font-weight="700">
-    <text x="108" y="62" font-size="48" fill="url(#textGradient)">j</text>
-    <text x="130" y="62" font-size="48" fill="#7e57c2">APE</text>
-    <text x="224" y="62" font-size="48" fill="url(#textGradient)">s</text>
+  <!-- === WORDMARK === -->
+  <g font-family="'JetBrains Mono','SF Mono','Fira Code','Cascadia Code',monospace" font-weight="800">
+    <!-- "j" in soft purple -->
+    <text x="114" y="64" font-size="52" fill="url(#wordJ)" letter-spacing="-1">j</text>
+
+    <!-- "APE" in amber/gold — the visual anchor -->
+    <text x="140" y="64" font-size="52" fill="url(#wordAPE)" letter-spacing="-1">APE</text>
+
+    <!-- "s" in soft purple to match "j" -->
+    <text x="248" y="64" font-size="52" fill="url(#wordS)" letter-spacing="-1">s</text>
   </g>
+
+  <!-- Subtle tagline -->
+  <text x="116" y="82" font-family="'Inter','Segoe UI','Helvetica Neue',sans-serif"
+        font-size="9" fill="#9575cd" letter-spacing="2.5" opacity="0.7">
+    APE-GRADE PARALLEL ECS
+  </text>
 </svg>
