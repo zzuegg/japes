@@ -35,7 +35,7 @@ verbatim from `DEEP_DIVE.md`.
 
 | library              | 10k µs/op | 100k µs/op | scaling |  cost model                       |
 |----------------------|----------:|-----------:|--------:|-----------------------------------|
-| **japes** st         |  **5.86** |   **7.91** |   1.35× | dirty-list skip (scales with K)   |
+| **japes** st         |  **6.94** |  **12.7**  |   1.83× | dirty-list skip (scales with K)   |
 | zay-es               |      15.4 |       19.6 |   1.27× | dirty-list skip (scales with K)   |
 | bevy (native Rust)   |      8.81 |       76.9 |   8.73× | full archetype scan (scales w/ N) |
 | artemis st           |      24.5 |        279 |  11.4×  | full archetype scan (no CD)       |
@@ -57,10 +57,10 @@ The libraries split into two cost-model camps, empirically:
   Per-tick cost is O(N) because that's the algorithmic shape.
   Scaling from 10k→100k costs ~8–11× more.
 
-**At 10k entities japes beats Bevy by 1.50×.** The gap looks modest
+**At 10k entities japes beats Bevy by 1.27×.** The gap looks modest
 because 10k is small enough that Bevy's tight cache-friendly tick
 scan is only paying ~3 µs of pure scan cost. **At 100k entities the
-same workload is a 9.72× gap** — Bevy pays ~69 µs extra to scan
+same workload is a 6.06× gap** — Bevy pays ~64 µs extra to scan
 90 000 more tick words that japes never touches.
 
 Worth calling out: **Zay-ES beats Bevy at 100k** (19.6 vs 76.9).
@@ -78,16 +78,15 @@ whole story:
 
 | library            | Δ µs for Δ 90k entities | per-entity overhead |
 |--------------------|------------------------:|--------------------:|
-| **japes** st       |                   +2.05 |       23 ns / entity |
+| **japes** st       |                   +5.76 |       64 ns / entity |
 | zay-es             |                   +4.20 |       47 ns / entity |
 | bevy               |                  +68.1  |      757 ns / entity |
 | artemis st         |                  +254   |    2 828 ns / entity |
 | dominion st        |                  +344   |    3 827 ns / entity |
 
-japes's ~23 ns/entity is driver-side cost (the handle list grows,
-the archetype's chunk list grows, `getComponent` walks slightly
-further). The observer side is ~flat because the dirty list is
-still 300 slots.
+japes's ~64 ns/entity is driver-side cost (the handle list grows,
+the archetype's chunk list grows, SoA field-array resizing). The
+observer side is ~flat because the dirty list is still 300 slots.
 
 Bevy's ~757 ns/entity breaks down as 3 observers × ~252 ns = each
 observer does roughly one tick-word load + compare + branch per
@@ -229,14 +228,13 @@ builder.
 
 | benchmark            |      case | **japes** | **japes-v** | Δ              |
 |----------------------|----------:|----------:|------------:|---------------:|
-| `RealisticTick tick` | 10k / st  |      5.86 |        11.9 | 0.49× slower   |
-| `RealisticTick tick` | 10k / mt  |      10.3 |        17.8 | 0.58× slower   |
+| `RealisticTick tick` | 10k / st  |      6.94 |        11.9 | — |
+| `RealisticTick tick` | 10k / mt  |       — |        17.8 | — |
 
-Valhalla regresses this benchmark by 42–52% (down from 74% in
-earlier rounds). The same root cause as on the [particle
-scenario](particle-scenario.md) — value records crossing the erased
-`Record` parameter of `World.setComponent` box into a heap wrapper.
-See the [Valhalla page](valhalla.md) for full breakdown.
+The Valhalla numbers are from the pre-SoA sweep and are **not directly
+comparable** to the new stock numbers. A fresh Valhalla sweep with SoA
+storage is pending. See the [Valhalla page](valhalla.md) for the
+previous breakdown.
 
 ## Reproducing
 

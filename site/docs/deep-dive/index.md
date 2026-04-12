@@ -72,7 +72,7 @@ docs are describing it, not specifying it.
     ---
 
     How the 500×2000 predator/prey cell went from 167 µs at PR-landing
-    to 31.4 µs today. Round by round: what each fix saved, what the
+    to 27.6 µs today. Round by round: what each fix saved, what the
     profile showed, and which ideas did not help.
 
 </div>

@@ -12,7 +12,7 @@ This page collects everything we learned about JVM performance during the japes 
 
 The JIT compiler is astonishingly good at optimizing code — **if you let it**. Most "Java is slow" benchmarks are actually measuring how badly the code's data structures prevent the JIT from doing its job. Remove the obstacles, and Java competes with hand-written Rust on the same workload.
 
-japes went from **9.3× slower than Bevy** on writes to **3.6× faster** — not by rewriting in native code, not by using `sun.misc.Unsafe`, not by waiting for Valhalla. Just by understanding three things:
+japes went from **9.3× slower than Bevy** on writes to **3.7× faster** — not by rewriting in native code, not by using `sun.misc.Unsafe`, not by waiting for Valhalla. Just by understanding three things:
 
 1. What prevents escape analysis
 2. What prevents scalar replacement
@@ -145,9 +145,9 @@ The multi-target `@Filter` helper originally used `BitSet` for deduplication (he
 | Start | Reflective dispatch, Object[], HashMap everywhere | 57.4 | 9.1× slower |
 | ArchetypeId flat array | TreeSet → sorted ComponentId[] | 38.1 | 6.1× slower |
 | Fresh Mut per entity | Reused Mut → fresh allocation + EA | 24.8 | 3.9× slower |
-| SoA storage + tier-1 inline | Object[] → per-field primitive arrays | 1.75 | **3.6× faster** |
+| SoA storage + tier-1 inline | Object[] → per-field primitive arrays | 1.70 | **3.7× faster** |
 
-**Total: 57.4 µs → 1.75 µs = 32.8× speedup.** From 9.1× slower than Bevy to 3.6× faster. All on stock JDK 26, no `Unsafe`, no Valhalla.
+**Total: 57.4 µs → 1.70 µs = 33.8× speedup.** From 9.1× slower than Bevy to 3.7× faster. All on stock JDK 26, no `Unsafe`, no Valhalla.
 
 ## What Valhalla would add
 
@@ -173,7 +173,7 @@ Our current SoA approach achieves (1) at the library level. (2) is the remaining
 
 ## Related
 
-- [Optimization journey (relations)](optimization-journey.md) — the 167 → 27.7 µs predator/prey story
+- [Optimization journey (relations)](optimization-journey.md) — the 167 → 27.6 µs predator/prey story
 - [Multi-target @Filter log](unified-delta-optimization.md) — the 9-system → 3-system change detection story
 - [Tier-1 bytecode generation](tier-1-generation.md) — how the hidden classes are emitted
 - [Write-path tax](write-path-tax.md) — the historical context for why writes were slow

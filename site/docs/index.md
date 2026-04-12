@@ -83,7 +83,7 @@ The scheduler analyses each system's access set statically and runs everything t
 </div>
 
 <div class="japes-perf-callout" markdown>
-**Headline benchmark.** Realistic 10 000-entity tick with three `@Filter(Changed)` observers lands at **japes 1.88 µs/op** vs Bevy 0.15's 4.11 µs/op — **2.19× faster** than the Rust reference on the library's own change-detection strength. The [benchmarks section](benchmarks/index.md) shows the full cross-library tables plus the predator/prey relations workload where japes runs at **31.4 µs/op** on 500 × 2000 tuples.
+**Headline benchmark.** With SoA storage, `iterateWithWrite` at 10k lands at **japes 1.70 µs/op** vs Bevy 0.15's 6.29 µs/op — **3.7× faster** than the Rust reference on writes. Change detection stays strong: `SparseDelta` at **2.16 µs/op** vs Bevy's 4.11 — **1.90× faster**. The [benchmarks section](benchmarks/index.md) shows the full cross-library tables plus the predator/prey relations workload where japes runs at **27.6 µs/op** on 500 × 2000 tuples.
 </div>
 
 ## Where to start

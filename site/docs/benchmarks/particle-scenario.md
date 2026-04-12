@@ -31,7 +31,7 @@ Numbers are µs/op, lower is better. Copied verbatim from `DEEP_DIVE.md`.
 
 | benchmark | entityCount | bevy | **japes** | zayes | dominion | artemis |
 |-----------|------------:|-----:|----------:|------:|---------:|--------:|
-| `tick`    |       10000 | 22.7 |   **107** |  1855 |     67.9 |    98.5 |
+| `tick`    |       10000 | 22.7 |  **41.8** |  1855 |     67.9 |    98.5 |
 
 ## Analysis
 
@@ -46,31 +46,24 @@ Numbers are µs/op, lower is better. Copied verbatim from `DEEP_DIVE.md`.
     version).
 
     Impact on the rows: japes ParticleScenario went from 149 →
-    161 → **107 µs/op** after further optimisation. japes-v
-    (Valhalla) went from 169 → **180 µs/op** (+6.5%). Both still
-    dominate Zay-ES and still lose to Dominion / Artemis on this
-    benchmark — the ordering is stable, the magnitude is now honest.
+    161 → 107 → **41.8 µs/op** after SoA storage became the default.
+    japes-v (Valhalla) went from 169 → **180 µs/op** (+6.5%) on the
+    pre-SoA sweep. japes now beats Dominion (67.9) and Artemis (98.5)
+    on this benchmark and lands within 1.84× of Bevy.
 
-**Why japes loses to Dominion / Artemis here.** `MoveSystem`,
-`DamageSystem` and `StatsSystem` all iterate every entity, and japes's
-immutable-record writes allocate per entity. Five-system full-scan
-scenarios are exactly where the [write-path
-tax](iteration-micros.md#the-write-path-tax) bites hardest; the
-Dominion / Artemis mutable-POJO path has no equivalent cost.
-
-**What the fix to `Archetype.findOrCreateChunkIndex` bought us.** The
-O(n) linear scan replaced with an O(1) `openChunkIndex` helped this
-benchmark specifically (it respawns ~100 entities per tick) — japes
-dropped from ~157 to **149 µs/op** under the PR fixes, then gained
-back ~8% when the `StatsSystem` fairness fix forced the per-tick
-alive scan to run for real.
+**With SoA storage, japes now beats every Java library on this benchmark.**
+The `MoveSystem` and `DamageSystem` writes that previously allocated a new
+record per entity are now scalar-replaced by the JIT — the SoA backing
+arrays receive primitive `fastore` / `iastore` instructions directly. japes
+at 41.8 µs beats Dominion (67.9) and Artemis (98.5) while still maintaining
+automatic change tracking that neither of those libraries provides.
 
 **Cross-library summary.**
 
 | library | µs/op | cost model |
 |---|---:|---|
 | Bevy     |  22.7 | in-place float writes, Rust SIMD-friendly loops |
-| **japes**| **107** | immutable-record writes, change-tracker maintained, five-system scheduler |
+| **japes**| **41.8** | SoA writes, change-tracker maintained, five-system scheduler |
 | Dominion |  67.9 | mutable POJO writes, no change tracking |
 | Artemis  |  98.5 | mutable POJO writes, no change tracking |
 | Zay-ES   |  1855 | immutable components, per-set `applyChanges()` cost dominates |
@@ -81,16 +74,12 @@ From section 8 of `DEEP_DIVE.md`:
 
 | benchmark               |  case | **japes** | **japes-v** | Δ          |
 |-------------------------|------:|----------:|------------:|-----------:|
-| `ParticleScenario tick` |   10k |       107 |         180 | 0.59× slower |
+| `ParticleScenario tick` |   10k |      41.8 |         180 | — |
 
-Valhalla regresses this benchmark (was 14% before the PR's
-`ArchetypeGraph` fix trimmed it). GC profiling shows Valhalla
-allocating ~2× more per op on the scenario benchmarks than stock
-japes; the residual regression comes from value records crossing
-the erased `Record` parameter of `World.setComponent`, which forces
-the JVM to box the value into a heap wrapper even though the
-storage layer is value-aware. See the [Valhalla page](valhalla.md)
-for the full story.
+The Valhalla number (180 µs) is from the pre-SoA sweep and is **not
+directly comparable** to the new stock number. A fresh Valhalla sweep
+with SoA storage is pending. See the [Valhalla page](valhalla.md)
+for the previous breakdown.
 
 ## Reproducing
 

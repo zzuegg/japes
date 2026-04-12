@@ -12,16 +12,17 @@ The unified delta workload tests a single logical observer reacting to added, ch
 
 ## Results
 
-| | japes 9-system (single-target) | **japes 5-system (multi-target @Filter)** | Zay-ES (1 EntitySet) |
-|---|---:|---:|---:|
-| **10k entities** | 293 µs / 3.41 ops/ms | **297 µs / 3.37 ops/ms** | 234 µs / 4.28 ops/ms |
-| **100k entities** | 3,623 µs / 0.276 ops/ms | **3,759 µs / 0.266 ops/ms** | 4,878 µs / 0.205 ops/ms |
+| | **japes 5-system (multi-target @Filter)** | Zay-ES (1 EntitySet) |
+|---|---:|---:|
+| **10k entities** | **621 µs / 1.61 ops/ms** | 234 µs / 4.28 ops/ms |
+| **100k entities** | **5,102 µs / 0.196 ops/ms** | 4,878 µs / 0.205 ops/ms |
 
-**japes beats Zay-ES at 100k by 1.30×** — dirty-list walks scale with dirty count (30% of N), not total entity count. Zay-ES's `applyChanges()` does an O(N) membership scan.
-
-**Zay-ES beats japes at 10k by 1.27×** — one `applyChanges()` call vs five system dispatches. The remaining gap is scheduler overhead that a future [unified observer API](../deep-dive/unified-delta-optimization.md) would close.
-
-**Multi-target @Filter and 9 separate systems are neck-and-neck at 10k** (297 vs 293 µs). At 100k the helper's per-chunk bitmap walk adds ~4% overhead.
+**Zay-ES beats japes at both 10k (2.66×) and 100k (1.05×).** The SoA storage
+default adds overhead to the unified delta workload because SoA decomposition
+and recomposition costs are paid on every mutation. Zay-ES's single
+`applyChanges()` call with object-level storage is a better fit for this
+particular workload shape. japes is still competitive at 100k where the
+dirty-list walk advantage narrows the gap.
 
 ## The optimization journey
 

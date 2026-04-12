@@ -1,8 +1,8 @@
-# Optimisation journey — 167 µs to 31.4 µs on 500×2000
+# Optimisation journey — 167 µs to 27.6 µs on 500×2000
 
 **What you'll learn:** how the 500-predator × 2000-prey cell of
 `PredatorPreyForEachPairBenchmark` went from 167 µs/op at PR-landing
-to 31.4 µs/op today — a **5.32× speedup** with the public API
+to 27.6 µs/op today — a **6.05× speedup** with the public API
 staying stable the whole time. This is the narrative companion to
 [benchmarks/predator-prey](../benchmarks/predator-prey.md), which
 owns the tables. Every round below is tied to the code file it
@@ -274,11 +274,12 @@ change, not yet shipped.
 | 7 | Per-archetype read-storage cache in the pair runner | ~38 | -4 |
 | 8 | `forEachPairLong` / `ComponentReader.getById` | ~35 | -3 |
 | 9 | Tier-1 `@Exclusive` cleanup | ~34 | -1 |
-| 10 | Primitive `LongArrayList` catch buffer | 31.4 | -2.6 |
+| 10 | Primitive `LongArrayList` catch buffer | ~31.4 | -2.6 |
+| 11 | SoA storage default | 27.6 | -3.8 |
 
 Per-round deltas are rough — each round's measurement is from that
 branch's JMH run, and workload variance between rounds is part of
-the motion. The cumulative **5.32× end-to-end speedup** is the
+the motion. The cumulative **6.05× end-to-end speedup** is the
 solid number.
 
 ## API stability through the journey
@@ -297,7 +298,7 @@ facing API didn't move once:
   policy enum.
 
 The user's code compiled and ran unchanged from PR-landing to
-31.4 µs. Every performance round was picked up for free on library
+27.6 µs. Every performance round was picked up for free on library
 upgrade.
 
 This is what the tier-1 generator is for. The tight iteration

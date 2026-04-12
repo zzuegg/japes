@@ -101,6 +101,9 @@ public final class SoAComponentStorage {
             }
             clb.withField("capacity", ConstantDescs.CD_int, fb -> fb.withFlags(ACC_PRIVATE | ACC_FINAL));
             clb.withField("type", classDesc, fb -> fb.withFlags(ACC_PRIVATE | ACC_FINAL));
+            // Cached soaFieldArrays result — avoids allocation per call.
+            var objArrDescCtor = ConstantDescs.CD_Object.arrayType();
+            clb.withField("cachedFieldArrays", objArrDescCtor, fb -> fb.withFlags(ACC_PRIVATE));
 
             // Constructor: allocates the arrays.
             clb.withMethodBody("<init>",
@@ -118,6 +121,18 @@ public final class SoAComponentStorage {
                         cb.newarray(java.lang.classfile.TypeKind.from(comps[i].getType()));
                         cb.putfield(genDesc, fieldNames[i], fieldDescs[i]);
                     }
+                    // Build + cache the fieldArrays Object[]
+                    cb.aload(0);
+                    cb.ldc(comps.length);
+                    cb.anewarray(ConstantDescs.CD_Object);
+                    for (int i = 0; i < comps.length; i++) {
+                        cb.dup();
+                        cb.ldc(i);
+                        cb.aload(0);
+                        cb.getfield(genDesc, fieldNames[i], fieldDescs[i]);
+                        cb.aastore();
+                    }
+                    cb.putfield(genDesc, "cachedFieldArrays", objArrDescCtor);
                     cb.return_();
                 });
 
@@ -213,20 +228,13 @@ public final class SoAComponentStorage {
                     cb.areturn();
                 });
 
-            // soaFieldArrays() → Object[] of the per-field primitive arrays
+            // soaFieldArrays() → cached Object[] of the per-field primitive arrays
             var objArrDesc = ConstantDescs.CD_Object.arrayType();
             clb.withMethodBody("soaFieldArrays",
                 MethodTypeDesc.of(objArrDesc),
                 ACC_PUBLIC, cb -> {
-                    cb.ldc(comps.length);
-                    cb.anewarray(ConstantDescs.CD_Object);
-                    for (int i = 0; i < comps.length; i++) {
-                        cb.dup();
-                        cb.ldc(i);
-                        cb.aload(0);
-                        cb.getfield(genDesc, fieldNames[i], fieldDescs[i]);
-                        cb.aastore();
-                    }
+                    cb.aload(0);
+                    cb.getfield(genDesc, "cachedFieldArrays", objArrDesc);
                     cb.areturn();
                 });
         });
