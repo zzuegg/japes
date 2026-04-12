@@ -79,15 +79,15 @@ Summary row per benchmark, stock JDK 26. Lower is better.
 
 | benchmark                                    | entity count | japes µs/op | Bevy µs/op | notes |
 |----------------------------------------------|-------------:|------------:|-----------:|---|
-| `iterateSingleComponent`                     |         10k  |        2.36 |       2.11 | fastest JVM ECS in this comparison |
-| `iterateTwoComponents`                       |         10k  |        4.22 |       3.35 | within 1.3× of Bevy |
-| `iterateWithWrite`                           |         10k  |        57.4 |       6.18 | write-path tax visible |
-| `simulateOneTick` (N-body)                   |         10k  |        62.5 |       8.79 | record allocation tax |
-| `ParticleScenario tick`                      |         10k  |         161 |       22.4 | five-system full scan |
-| `SparseDelta tick`                           |         10k  |        1.85 |       4.01 | **2.17× faster than Bevy** |
-| `RealisticTick` st                           |         10k  |        5.82 |       8.42 | **1.45× faster than Bevy** |
-| `RealisticTick` st                           |        100k  |        7.76 |       73.4 | **9.45× faster than Bevy** |
-| `PredatorPrey @ForEachPair` 500 × 2000       |            — |        32.0 |       11.19 (opt) / 261.9 (naive) | first-class relations |
+| `iterateSingleComponent`                     |         10k  |        2.33 |       2.11 | fastest JVM ECS in this comparison |
+| `iterateTwoComponents`                       |         10k  |        4.30 |       3.35 | within 1.3× of Bevy |
+| `iterateWithWrite`                           |         10k  |        38.1 |       6.18 | write-path tax visible |
+| `simulateOneTick` (N-body)                   |         10k  |          41 |       8.79 | record allocation tax |
+| `ParticleScenario tick`                      |         10k  |       108.7 |       22.4 | five-system full scan |
+| `SparseDelta tick`                           |         10k  |        1.84 |       4.01 | **2.18× faster than Bevy** |
+| `RealisticTick` st                           |         10k  |        5.81 |       8.42 | **1.45× faster than Bevy** |
+| `RealisticTick` st                           |        100k  |        7.96 |       73.4 | **9.22× faster than Bevy** |
+| `PredatorPrey @ForEachPair` 500 × 2000       |            — |        31.7 |       11.19 (opt) / 261.9 (naive) | first-class relations |
 
 ## Speed-up matrix vs. Bevy
 
@@ -99,14 +99,14 @@ that workload.
 |-----------------------------|-------------:|-----------:|------------:|------:|----------:|--------:|
 | `iterateSingleComponent`    |          10k |   **1.1×** |  **0.50×**  | 13.9× |     3.3×  |   2.2×  |
 | `iterateTwoComponents`      |          10k |   **1.3×** |  **0.55×**  | 10.9× |     3.7×  |   3.5×  |
-| `iterateWithWrite`          |          10k |   **9.3×** |    **8.6×** |  277× |     3.7×  |   3.0×  |
-| NBody `simulateOneTick`     |          10k |   **7.1×** |    **6.5×** |   50× |     2.7×  |   2.2×  |
-| `ParticleScenario tick`     |          10k |   **7.2×** |        8.0× |   83× |     3.0×  |   4.4×  |
+| `iterateWithWrite`          |          10k |   **6.2×** |    **8.6×** |  277× |     3.7×  |   3.0×  |
+| NBody `simulateOneTick`     |          10k |   **4.7×** |    **6.5×** |   50× |     2.7×  |   2.2×  |
+| `ParticleScenario tick`     |          10k |   **4.9×** |        8.0× |   83× |     3.0×  |   4.4×  |
 | `SparseDelta tick`          |          10k |  **0.46×** |   **0.49×** |  1.2× |  **0.09×**| **0.06×**|
 
 !!! note "Cross-library claim summary"
 
-    - **SparseDelta:** japes 1.85 µs vs Bevy 4.01 µs — **2.17× faster**
+    - **SparseDelta:** japes 1.84 µs vs Bevy 4.01 µs — **2.18× faster**
       than the Rust reference on the library change-detection path.
     - **Valhalla reads:** stock japes at 10k `iterateSingleComponent` is
       1.1× Bevy; Valhalla (value records, reference arrays) drops that
@@ -118,7 +118,7 @@ that workload.
       fairness discussion.
     - **Predator / prey:** japes `@ForEachPair` beats Bevy naive
       reverse-lookup at every cell (up to 12.9× at 1000 × 5000),
-      and sits within 2.8–3.7× of hand-rolled optimised Bevy that
+      and sits within 2.7–3.7× of hand-rolled optimised Bevy that
       maintains its own reverse index manually.
 
 ## How to read these pages

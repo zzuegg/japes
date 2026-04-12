@@ -24,15 +24,15 @@ Numbers are µs/op, lower is better. Copied verbatim from `DEEP_DIVE.md`.
 
 | benchmark              | entityCount | bevy | **japes** | zayes  | dominion | artemis |
 |------------------------|------------:|-----:|----------:|-------:|---------:|--------:|
-| `iterateSingleComponent` |        1000 | 0.24 |  **0.21** |   2.76 |     0.79 |    0.48 |
-| `iterateSingleComponent` |       10000 | 2.11 |  **2.36** |   29.4 |     7.04 |    4.69 |
-| `iterateSingleComponent` |      100000 | 21.0 |  **37.5** |    394 |     79.8 |     164 |
-| `iterateTwoComponents`   |        1000 | 0.36 |  **0.46** |   3.55 |     1.31 |    1.17 |
-| `iterateTwoComponents`   |       10000 | 3.35 |  **4.22** |   36.6 |     12.3 |    11.6 |
-| `iterateTwoComponents`   |      100000 | 33.3 |  **67.3** |    507 |      128 |     226 |
-| `iterateWithWrite`       |        1000 | 0.64 |  **5.79** |    180 |     2.27 |    1.82 |
-| `iterateWithWrite`       |       10000 | 6.18 |  **57.4** |   1711 |     22.6 |    18.6 |
-| `iterateWithWrite`       |      100000 | 62.5 |   **576** |  18205 |      233 |     332 |
+| `iterateSingleComponent` |        1000 | 0.24 |  **0.187** |   2.76 |     0.79 |    0.48 |
+| `iterateSingleComponent` |       10000 | 2.11 |  **2.33** |   29.4 |     7.04 |    4.69 |
+| `iterateSingleComponent` |      100000 | 21.0 |  **34.6** |    394 |     79.8 |     164 |
+| `iterateTwoComponents`   |        1000 | 0.36 |  **0.459** |   3.55 |     1.31 |    1.17 |
+| `iterateTwoComponents`   |       10000 | 3.35 |  **4.30** |   36.6 |     12.3 |    11.6 |
+| `iterateTwoComponents`   |      100000 | 33.3 |  **61.5** |    507 |      128 |     226 |
+| `iterateWithWrite`       |        1000 | 0.64 |  **3.79** |    180 |     2.27 |    1.82 |
+| `iterateWithWrite`       |       10000 | 6.18 |  **38.1** |   1711 |     22.6 |    18.6 |
+| `iterateWithWrite`       |      100000 | 62.5 |   **378** |  18205 |      233 |     332 |
 
 !!! note "DCE-safety: why every read row has a Blackhole"
 

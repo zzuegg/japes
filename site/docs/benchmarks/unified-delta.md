@@ -14,14 +14,14 @@ The unified delta workload tests a single logical observer reacting to added, ch
 
 | | japes 9-system (single-target) | **japes 5-system (multi-target @Filter)** | Zay-ES (1 EntitySet) |
 |---|---:|---:|---:|
-| **10k entities** | 293 µs / 3.41 ops/ms | **276 µs / 3.62 ops/ms** | 234 µs / 4.27 ops/ms |
+| **10k entities** | 293 µs / 3.41 ops/ms | **294 µs / 3.40 ops/ms** | 234 µs / 4.27 ops/ms |
 | **100k entities** | 3,623 µs / 0.276 ops/ms | **3,802 µs / 0.263 ops/ms** | 5,051 µs / 0.198 ops/ms |
 
 **japes beats Zay-ES at 100k by 1.33×** — dirty-list walks scale with dirty count (30% of N), not total entity count. Zay-ES's `applyChanges()` does an O(N) membership scan.
 
-**Zay-ES beats japes at 10k by 1.18×** — one `applyChanges()` call vs five system dispatches. The remaining gap is scheduler overhead that a future [unified observer API](../deep-dive/unified-delta-optimization.md) would close.
+**Zay-ES beats japes at 10k by 1.26×** — one `applyChanges()` call vs five system dispatches. The remaining gap is scheduler overhead that a future [unified observer API](../deep-dive/unified-delta-optimization.md) would close.
 
-**Multi-target @Filter beats 9 separate systems at 10k** (276 vs 293 µs) — the dispatch savings from 5 vs 9 systems exceed the helper-method union overhead. At 100k the helper's per-chunk bitmap walk adds ~5% overhead.
+**Multi-target @Filter and 9 separate systems are neck-and-neck at 10k** (294 vs 293 µs). At 100k the helper's per-chunk bitmap walk adds ~5% overhead.
 
 ## The optimization journey
 

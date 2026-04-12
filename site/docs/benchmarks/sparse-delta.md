@@ -26,7 +26,7 @@ Numbers are µs/op, lower is better. Copied verbatim from `DEEP_DIVE.md`.
 
 | benchmark | entityCount | bevy | **japes** | zayes | dominion | artemis |
 |-----------|------------:|-----:|----------:|------:|---------:|--------:|
-| `tick`    |       10000 | 4.01 |  **1.85** |  4.68 |     0.37 |    0.26 |
+| `tick`    |       10000 | 4.01 |  **1.84** |  4.68 |     0.37 |    0.26 |
 
 This is the most interesting row in the whole cross-library table,
 so it deserves the most explanation.
@@ -39,7 +39,7 @@ advertises: the driver calls `world.setComponent(e, new Health(...))`
 a per-tick dirty tracker; the observer system is scheduled
 automatically and walks the library's dirty view. The user writes
 zero bookkeeping code and the contract "every mutation is observed"
-is enforced globally. At **1.85 µs/op japes is the fastest of the
+is enforced globally. At **1.84 µs/op japes is the fastest of the
 library-change-detection group by a wide margin** (Bevy is 4.01,
 Zay-ES is 4.68) after three rounds of profile-guided fixes (cached
 `ArchetypeId.hashCode`, generation-keyed `findMatching` cache,
@@ -47,7 +47,7 @@ one-lookup `setComponent`, direct `Archetype` reference on
 `EntityLocation`, array-indexed chunk lookups keyed by
 `ComponentId.id()`, `setComponent` chunk consolidation) plus the
 concurrent `ArchetypeGraph` cache and the `ChangeTracker.swapRemove`
-dirty-bit fix from the code-review PR. **japes is 2.17× faster than
+dirty-bit fix from the code-review PR. **japes is 2.18× faster than
 Bevy** on this workload.
 
 **Dominion / Artemis** have no change detection. The honest
@@ -149,13 +149,13 @@ microbenchmark measures.
     any of it. Material at only 100 dirty entities. The disclosure
     simply makes the comparison honest — the japes number is not
     artificially inflated by tick overhead subtraction, and it still
-    comes in at 1.85 µs/op.
+    comes in at 1.84 µs/op.
 
 ## Valhalla delta
 
 | benchmark          | case | **japes** | **japes-v** | Δ            |
 |--------------------|-----:|----------:|------------:|-------------:|
-| `SparseDelta tick` |  10k |      1.85 |        1.96 | 0.94× slower |
+| `SparseDelta tick` |  10k |      1.84 |        1.96 | 0.94× slower |
 
 Within noise. The bottleneck is change-tracker bookkeeping, not
 component reads, so there's nothing for Valhalla to flatten.

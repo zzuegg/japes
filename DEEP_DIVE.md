@@ -602,7 +602,7 @@ recommended shape for per-pair work.
 | 100  | 2000 |  16.2 µs |  **14.0 µs** |   51.8 µs |  **3.99 µs** |
 | 100  | 5000 |  28.0 µs |  **26.4 µs** |  126.3 µs |  **7.30 µs** |
 | 500  |  500 |  31.4 µs |  **22.1 µs** |   67.6 µs |  **7.01 µs** |
-| 500  | 2000 |  43.8 µs |  **32.0 µs** |  261.9 µs | **11.19 µs** |
+| 500  | 2000 |  43.3 µs |  **31.7 µs** |  261.9 µs | **11.19 µs** |
 | 500  | 5000 |  69.2 µs |  **55.9 µs** |  632.1 µs | **19.13 µs** |
 | 1000 |  500 |  62.6 µs |  **43.1 µs** |  128.8 µs | **13.15 µs** |
 | 1000 | 2000 |  83.1 µs |  **55.3 µs** |  476.4 µs | **19.68 µs** |
@@ -657,7 +657,7 @@ that avoids per-pair `Entity` allocation in cleanup systems, a
 tier-1 bytecode-generated path for service-only `@Exclusive`
 systems, and a primitive `LongArrayList` utility replacing
 `ArrayList<Long>` in the catch buffer. End-to-end the cell now
-runs at **32.0 µs/op** — a **5.22× speedup** with the API surface
+runs at **31.7 µs/op** — a **5.27× speedup** with the API surface
 staying stable the whole time.
 
 ### What the four columns actually tell you
@@ -899,7 +899,7 @@ parameters as the stock benchmark.
 | 100 × 2000 | **14.0 µs** |  14.3 µs (+2 %)  |  25.8 µs ( +85 %) |
 | 100 × 5000 | **26.4 µs** |  26.7 µs (+1 %)  |  37.7 µs ( +43 %) |
 | 500 × 500  | **22.1 µs** |  25.0 µs (+13 %) |  80.9 µs (+266 %) |
-| 500 × 2000 | **32.0 µs** |  33.9 µs (+6 %)  |  90.0 µs (+181 %) |
+| 500 × 2000 | **31.7 µs** |  33.9 µs (+7 %)  |  90.0 µs (+184 %) |
 | 500 × 5000 | **55.9 µs** |  57.9 µs (+4 %)  | 108.8 µs ( +95 %) |
 | 1000 × 500 | **43.1 µs** |  48.9 µs (+13 %) | 161.0 µs (+274 %) |
 | 1000 × 2000| **55.3 µs** |  61.1 µs (+10 %) | 169.3 µs (+206 %) |

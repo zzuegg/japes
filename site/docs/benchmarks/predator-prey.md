@@ -136,7 +136,7 @@ recommended shape for per-pair work. Copied verbatim from
 | 100  | 2000 |  16.2 µs |  **14.0 µs** |   51.8 µs |  **3.99 µs** |
 | 100  | 5000 |  28.0 µs |  **26.4 µs** |  126.3 µs |  **7.30 µs** |
 | 500  |  500 |  31.4 µs |  **22.1 µs** |   67.6 µs |  **7.01 µs** |
-| 500  | 2000 |  43.8 µs |  **32.0 µs** |  261.9 µs | **11.19 µs** |
+| 500  | 2000 |  43.3 µs |  **31.7 µs** |  261.9 µs | **11.19 µs** |
 | 500  | 5000 |  69.2 µs |  **55.9 µs** |  632.1 µs | **19.13 µs** |
 | 1000 |  500 |  62.6 µs |  **43.1 µs** |  128.8 µs | **13.15 µs** |
 | 1000 | 2000 |  83.1 µs |  **55.3 µs** |  476.4 µs | **19.68 µs** |
@@ -198,7 +198,7 @@ probes per target read). Successive rounds replaced those with:
 - a primitive `LongArrayList` utility replacing `ArrayList<Long>`
   in the catch buffer.
 
-End-to-end the cell now runs at **32.0 µs/op** — a **5.22×
+End-to-end the cell now runs at **31.7 µs/op** — a **5.27×
 speedup** with the API surface staying stable the whole time.
 
 ## What the four columns actually tell you

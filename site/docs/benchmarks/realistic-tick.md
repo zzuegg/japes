@@ -35,7 +35,7 @@ verbatim from `DEEP_DIVE.md`.
 
 | library              | 10k µs/op | 100k µs/op | scaling |  cost model                       |
 |----------------------|----------:|-----------:|--------:|-----------------------------------|
-| **japes** st         |  **5.82** |   **7.76** |   1.33× | dirty-list skip (scales with K)   |
+| **japes** st         |  **5.81** |   **7.96** |   1.37× | dirty-list skip (scales with K)   |
 | zay-es               |      15.7 |       19.6 |   1.25× | dirty-list skip (scales with K)   |
 | bevy (native Rust)   |      8.42 |       73.4 |   8.72× | full archetype scan (scales w/ N) |
 | artemis st           |      24.8 |        282 |  11.4×  | full archetype scan (no CD)       |
@@ -60,7 +60,7 @@ The libraries split into two cost-model camps, empirically:
 **At 10k entities japes beats Bevy by 1.45×.** The gap looks modest
 because 10k is small enough that Bevy's tight cache-friendly tick
 scan is only paying ~2 µs of pure scan cost. **At 100k entities the
-same workload is a 9.45× gap** — Bevy pays ~65 µs extra to scan
+same workload is a 9.22× gap** — Bevy pays ~65 µs extra to scan
 90 000 more tick words that japes never touches.
 
 Worth calling out: **Zay-ES beats Bevy at 100k** (19.6 vs 73.4).
@@ -78,13 +78,13 @@ whole story:
 
 | library            | Δ µs for Δ 90k entities | per-entity overhead |
 |--------------------|------------------------:|--------------------:|
-| **japes** st       |                   +1.94 |       22 ns / entity |
+| **japes** st       |                   +2.15 |       24 ns / entity |
 | zay-es             |                   +3.89 |       43 ns / entity |
 | bevy               |                  +65.0  |      722 ns / entity |
 | artemis st         |                  +257   |    2 860 ns / entity |
 | dominion st        |                  +347   |    3 860 ns / entity |
 
-japes's ~22 ns/entity is driver-side cost (the handle list grows,
+japes's ~24 ns/entity is driver-side cost (the handle list grows,
 the archetype's chunk list grows, `getComponent` walks slightly
 further). The observer side is ~flat because the dirty list is
 still 300 slots.
@@ -229,7 +229,7 @@ builder.
 
 | benchmark            |      case | **japes** | **japes-v** | Δ              |
 |----------------------|----------:|----------:|------------:|---------------:|
-| `RealisticTick tick` | 10k / st  |      5.76 |        11.9 | 0.48× slower   |
+| `RealisticTick tick` | 10k / st  |      5.81 |        11.9 | 0.49× slower   |
 | `RealisticTick tick` | 10k / mt  |      10.3 |        17.8 | 0.58× slower   |
 
 Valhalla regresses this benchmark by 42–52% (down from 74% in
