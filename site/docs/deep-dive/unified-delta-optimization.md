@@ -10,12 +10,12 @@ title: "Optimization log: multi-target @Filter"
 
 | Round | Change | 10k ops/ms | Delta | Link |
 |---|---|---:|---|---|
-| 0 | Baseline: 9 single-target systems | 3.41 | — | [Round 0](#round-0--the-problem) |
-| 1 | Multi-target `@Filter` (tier-2 only) | 2.83 | **−17%** | [Round 1](#round-1--multi-target-filter-annotation) |
-| 2 | Tier-1 bytecode gen for multi-target | 3.38 | **+19%** | [Round 2](#round-2--tier-1-bytecode-generation-for-multi-target) |
-| 3 | Zero-allocation helper (reusable buffers) | 3.62 | **+7%** | [Round 3](#round-3--zero-allocation-helper) |
-| 4 | Flat topological order in executor | 3.44 | noise | [Round 4](#round-4--flat-topological-order-in-the-executor) |
-| 5 | `@Filter(Removed)` with last-value binding | 3.34 | −2% | [Round 5](#round-5--filterremoved-with-last-value-binding) |
+| 0 | Baseline: 9 single-target systems | 3.41 | — | [Round 0](#round-0-the-problem) |
+| 1 | Multi-target `@Filter` (tier-2 only) | 2.83 | **−17%** | [Round 1](#round-1-multi-target-filter-annotation) |
+| 2 | Tier-1 bytecode gen for multi-target | 3.38 | **+19%** | [Round 2](#round-2-tier-1-bytecode-generation-for-multi-target) |
+| 3 | Zero-allocation helper (reusable buffers) | 3.62 | **+7%** | [Round 3](#round-3-zero-allocation-helper) |
+| 4 | Flat topological order in executor | 3.44 | noise | [Round 4](#round-4-flat-topological-order-in-the-executor) |
+| 5 | `@Filter(Removed)` with last-value binding | 3.34 | −2% | [Round 5](#round-5-filterremoved-with-last-value-binding) |
 | 6 | Tier-1 bytecode gen for Removed | 3.37 | noise | [Round 6](#round-6-tier-1-bytecode-generation-for-filterremoved) |
 | 7 | `ArchetypeId` flat array backing | **3.42** | +1.5% | [Round 7](#round-7-archetypeid-flat-array-backing) |
 
