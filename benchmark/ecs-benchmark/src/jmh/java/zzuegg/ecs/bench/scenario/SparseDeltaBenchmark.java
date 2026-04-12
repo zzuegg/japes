@@ -56,7 +56,7 @@ public class SparseDeltaBenchmark {
         @Filter(value = Changed.class, target = Health.class)
         void observe(@Read Health h) {
             count++;
-            if (bh != null) bh.consume(h);
+            if (bh != null) bh.consume(h.hp());
         }
     }
 
