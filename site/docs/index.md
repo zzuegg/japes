@@ -14,9 +14,9 @@ hide:
 </p>
 
 <div class="cta">
-  [:rocket: Quick start](getting-started/quick-start.md){ .md-button .md-button--primary }
-  [:material-book-open-page-variant: Tutorials](tutorials/index.md){ .md-button }
-  [:material-chart-line: Benchmarks](benchmarks/index.md){ .md-button }
+  <a href="getting-started/quick-start/" class="md-button md-button--primary">Quick start</a>
+  <a href="tutorials/" class="md-button">Tutorials</a>
+  <a href="benchmarks/" class="md-button">Benchmarks</a>
 </div>
 
 </div>
