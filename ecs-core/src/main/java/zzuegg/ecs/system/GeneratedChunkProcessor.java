@@ -85,6 +85,9 @@ public final class GeneratedChunkProcessor {
             if (f.filterType() != Added.class && f.filterType() != Changed.class) {
                 return "system uses @Filter(" + f.filterType().getSimpleName() + ") which is unsupported";
             }
+            if (f.targets().size() > 1) {
+                return "system uses multi-target @Filter (tier-2 only for now)";
+            }
         }
         return null;
     }

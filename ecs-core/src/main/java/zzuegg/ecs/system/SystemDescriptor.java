@@ -60,7 +60,12 @@ public record SystemDescriptor(
     Object instance
 ) {
 
-    public record FilterDescriptor(Class<?> filterType, Class<? extends Record> target) {}
+    public record FilterDescriptor(Class<?> filterType, java.util.List<Class<? extends Record>> targets) {
+        /** Backward-compat single-target constructor used by existing tests. */
+        public FilterDescriptor(Class<?> filterType, Class<? extends Record> singleTarget) {
+            this(filterType, java.util.List.of(singleTarget));
+        }
+    }
 
     /**
      * One {@code @Pair} annotation parse result — the relation type

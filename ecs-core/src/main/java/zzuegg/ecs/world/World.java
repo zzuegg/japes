@@ -176,10 +176,14 @@ public final class World {
                      : f.filterType() == Changed.class ? SystemExecutionPlan.FilterKind.CHANGED
                      : null;
             if (kind == null) continue;  // Removed is unsupported for now
-            var targetId = componentRegistry.getOrRegister(f.target());
-            resolvedChangeFilters.add(new SystemExecutionPlan.ResolvedChangeFilter(targetId, kind));
-            trackedChangeFilterComponents.add(targetId);
-            archetypeGraph.enableDirtyTracking(targetId);
+            var targetIds = new zzuegg.ecs.component.ComponentId[f.targets().size()];
+            for (int i = 0; i < f.targets().size(); i++) {
+                var tid = componentRegistry.getOrRegister(f.targets().get(i));
+                targetIds[i] = tid;
+                trackedChangeFilterComponents.add(tid);
+                archetypeGraph.enableDirtyTracking(tid);
+            }
+            resolvedChangeFilters.add(new SystemExecutionPlan.ResolvedChangeFilter(targetIds, kind));
         }
 
         var plan = new SystemExecutionPlan(params.length, componentSlots, serviceArgIndices,
@@ -304,7 +308,16 @@ public final class World {
         // are now supported by the BytecodeChunkProcessor and DirectProcessor
         // tiers (GeneratedChunkProcessor tier-1 still bails via skipReason
         // because its read-only fast path doesn't emit the entity load).
-        if (useGeneratedProcessors && !desc.isExclusive() && !desc.componentAccesses().isEmpty()) {
+        // Skip chunk-processor generation when the system has multi-target
+        // @Filter annotations — BytecodeChunkProcessor and DirectProcessor
+        // don't understand @Filter at all, so the dispatch must fall through
+        // to plan.processChunk() (which does). GeneratedChunkProcessor
+        // already bails via skipReason for multi-target filters; this guard
+        // prevents the generator from falling to a filter-unaware tier.
+        boolean hasMultiTargetFilter = desc.changeFilters().stream()
+            .anyMatch(f -> f.targets().size() > 1);
+        if (useGeneratedProcessors && !desc.isExclusive() && !desc.componentAccesses().isEmpty()
+                && !hasMultiTargetFilter) {
             chunkProcessors.put(desc.name(),
                 ChunkProcessorGenerator.generate(desc, resolvedServiceArgs, useDefaultStorageFactory, plan));
         }
@@ -1002,7 +1015,11 @@ public final class World {
                 for (var p : systemPlans.values()) {
                     if (!p.hasChangeFilters()) continue;
                     for (var f : p.resolvedChangeFilters()) {
-                        if (f.targetId().equals(compId) && p.lastSeenTick() < minWatermark) {
+                        boolean targets = false;
+                        for (var tid : f.targetIds()) {
+                            if (tid.equals(compId)) { targets = true; break; }
+                        }
+                        if (targets && p.lastSeenTick() < minWatermark) {
                             minWatermark = p.lastSeenTick();
                         }
                     }

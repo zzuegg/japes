@@ -219,7 +219,7 @@ public final class SystemParser {
                 withoutFilters.add(w.value());
             }
             for (var f : method.getAnnotationsByType(Filter.class)) {
-                changeFilters.add(new SystemDescriptor.FilterDescriptor(f.value(), f.target()));
+                changeFilters.add(new SystemDescriptor.FilterDescriptor(f.value(), java.util.List.of(f.target())));
             }
 
             var pairReads = new ArrayList<SystemDescriptor.PairRead>();

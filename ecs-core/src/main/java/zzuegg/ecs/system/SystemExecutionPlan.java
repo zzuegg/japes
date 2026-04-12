@@ -19,7 +19,24 @@ public final class SystemExecutionPlan {
 
     public enum FilterKind { ADDED, CHANGED }
 
-    public record ResolvedChangeFilter(ComponentId targetId, FilterKind kind) {}
+    /**
+     * One resolved change-filter group. Within a group, targets are
+     * OR'd: the group matches a slot if ANY of the target trackers
+     * report dirty. Across groups (multiple {@code @Filter}
+     * annotations), the match is AND'd.
+     *
+     * <p>Single-target filters produce a group with one entry;
+     * multi-target {@code @Filter(Changed, target = {A, B, C})}
+     * produces a group with three entries.
+     */
+    public record ResolvedChangeFilter(ComponentId[] targetIds, FilterKind kind) {
+        /** Backward-compat single-target constructor. */
+        public ResolvedChangeFilter(ComponentId singleTarget, FilterKind kind) {
+            this(new ComponentId[]{singleTarget}, kind);
+        }
+        /** Convenience: first target id (for single-target fast path). */
+        public ComponentId targetId() { return targetIds[0]; }
+    }
 
     private final Object[] args;
     private final ParamSlot[] slots; // array for indexed access, no List overhead
@@ -32,9 +49,10 @@ public final class SystemExecutionPlan {
 
     // Change-filter state: resolved filters + per-chunk tracker cache + per-system
     // "last seen" tick so isAddedSince / isChangedSince compare against the tick
-    // at which the system last ran.
+    // at which the system last ran. The tracker cache is 2D: first dimension is
+    // filter-group index, second is target-within-group (for multi-target @Filter).
     private final ResolvedChangeFilter[] changeFilters;
-    private final ChangeTracker[] cachedFilterTrackers;
+    private final ChangeTracker[][] cachedFilterTrackers;
     private long lastSeenTick = 0;
 
     // Reusable component map for @Where evaluation — populated per entity from
@@ -122,7 +140,10 @@ public final class SystemExecutionPlan {
         this.cachedTrackers = new ChangeTracker[slots.length];
         this.whereFilters = whereFilters;
         this.changeFilters = changeFilters.toArray(ResolvedChangeFilter[]::new);
-        this.cachedFilterTrackers = new ChangeTracker[this.changeFilters.length];
+        this.cachedFilterTrackers = new ChangeTracker[this.changeFilters.length][];
+        for (int i = 0; i < this.changeFilters.length; i++) {
+            this.cachedFilterTrackers[i] = new ChangeTracker[this.changeFilters[i].targetIds().length];
+        }
         this.whereLookup = whereFilters.isEmpty() ? null : new HashMap<>();
     }
 
@@ -174,7 +195,10 @@ public final class SystemExecutionPlan {
             }
         }
         for (int i = 0; i < changeFilters.length; i++) {
-            cachedFilterTrackers[i] = chunk.changeTracker(changeFilters[i].targetId());
+            var ids = changeFilters[i].targetIds();
+            for (int t = 0; t < ids.length; t++) {
+                cachedFilterTrackers[i][t] = chunk.changeTracker(ids[t]);
+            }
         }
     }
 
@@ -229,35 +253,54 @@ public final class SystemExecutionPlan {
         int count = chunk.count();
 
         if (changeFilters.length > 0) {
-            // Sparse path: iterate only the slots that were appended to the
-            // first filter's dirty list since the last prune. The AND semantics
-            // of multiple filters guarantees any matching slot must appear in
-            // the first filter's dirty list, so using it as the iteration
-            // source is safe — we still do the per-slot filter check to weed
-            // out stale entries and multi-filter mismatches. The tracker's
-            // own bitmap guarantees each slot appears at most once in the
-            // list, so no iteration-side dedup is needed.
-            var primary = cachedFilterTrackers[0];
-            int[] dirty = primary.dirtySlots();
-            int dirtyN = primary.dirtyCount();
+            // Sparse path: iterate the union of the first filter group's
+            // dirty lists. For single-target groups this is one dirty list
+            // (same as before). For multi-target groups (e.g.
+            // @Filter(Changed, target = {A, B, C})) we iterate ALL targets'
+            // dirty lists and use a seen-bitmap to deduplicate slots.
+            //
+            // Per-slot: each filter GROUP is checked with OR semantics
+            // across its targets (any dirty target in the group → group
+            // matches). Across groups the match is AND'd (all groups must
+            // match). This preserves the existing contract for stacked
+            // @Filter annotations while adding multi-target OR.
+            var primaryTrackers = cachedFilterTrackers[0];
+            boolean multiTarget = primaryTrackers.length > 1;
 
-            for (int d = 0; d < dirtyN; d++) {
-                int slot = dirty[d];
-                if (slot >= count) continue;  // swap-removed since the mark
+            // Collect iteration slots. For single-target, just walk the
+            // one dirty list directly. For multi-target, union into a
+            // temporary int array with dedup via a small bitset (if count
+            // is manageable) or a HashSet (if huge).
+            if (!multiTarget) {
+                // Fast path: single-target, same as before.
+                var primary = primaryTrackers[0];
+                int[] dirty = primary.dirtySlots();
+                int dirtyN = primary.dirtyCount();
 
-                boolean match = true;
-                for (int i = 0; i < changeFilters.length; i++) {
-                    var cf = changeFilters[i];
-                    var tracker = cachedFilterTrackers[i];
-                    boolean ok = switch (cf.kind()) {
-                        case ADDED -> tracker.isAddedSince(slot, lastSeenTick);
-                        case CHANGED -> tracker.isChangedSince(slot, lastSeenTick);
-                    };
-                    if (!ok) { match = false; break; }
+                for (int d = 0; d < dirtyN; d++) {
+                    int slot = dirty[d];
+                    if (slot >= count) continue;
+
+                    if (!checkAllFilterGroups(slot)) continue;
+                    processSlot(chunk, slot, invoker, currentTick);
                 }
-                if (!match) continue;
+            } else {
+                // Multi-target path: union dirty lists, deduplicate.
+                var seen = new java.util.BitSet(count);
+                for (var tracker : primaryTrackers) {
+                    int[] dirty = tracker.dirtySlots();
+                    int dirtyN = tracker.dirtyCount();
+                    for (int d = 0; d < dirtyN; d++) {
+                        int slot = dirty[d];
+                        if (slot >= count) continue;
+                        if (seen.get(slot)) continue;
+                        seen.set(slot);
 
-                processSlot(chunk, slot, invoker, currentTick);
+                        // Check this slot against ALL filter groups.
+                        if (!checkAllFilterGroups(slot)) continue;
+                        processSlot(chunk, slot, invoker, currentTick);
+                    }
+                }
             }
         } else {
             // Dense path: full slot scan. Unchanged from the pre-dirty-list
@@ -267,6 +310,47 @@ public final class SystemExecutionPlan {
                 processSlot(chunk, slot, invoker, currentTick);
             }
         }
+    }
+
+    /**
+     * Check a slot against ALL filter groups using OR-within-group +
+     * AND-across-groups semantics. Returns {@code true} if the slot
+     * matches every group.
+     */
+    private boolean checkAllFilterGroups(int slot) {
+        for (int i = 0; i < changeFilters.length; i++) {
+            if (!checkFilterGroup(i, slot)) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Check a slot against filter groups 1..N (skipping group 0, which
+     * was already used as the iteration source for single-target).
+     */
+    private boolean checkRemainingFilters(int slot) {
+        for (int i = 1; i < changeFilters.length; i++) {
+            if (!checkFilterGroup(i, slot)) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Check a single filter group against a slot. OR semantics: returns
+     * {@code true} if ANY target in the group reports dirty since the
+     * last seen tick.
+     */
+    private boolean checkFilterGroup(int groupIndex, int slot) {
+        var cf = changeFilters[groupIndex];
+        var trackers = cachedFilterTrackers[groupIndex];
+        for (var tracker : trackers) {
+            boolean ok = switch (cf.kind()) {
+                case ADDED -> tracker.isAddedSince(slot, lastSeenTick);
+                case CHANGED -> tracker.isChangedSince(slot, lastSeenTick);
+            };
+            if (ok) return true;
+        }
+        return false;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

@@ -7,7 +7,7 @@ import java.lang.annotation.*;
 @Repeatable(Filter.List.class)
 public @interface Filter {
     Class<?> value();
-    Class<? extends Record> target();
+    Class<? extends Record>[] target();
 
     @Target(ElementType.METHOD)
     @Retention(RetentionPolicy.RUNTIME)
