@@ -2,76 +2,107 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="japes">
   <defs>
     <linearGradient id="fur" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7e57c2"/>
+      <stop offset="40%" stop-color="#4527a0"/>
+      <stop offset="100%" stop-color="#1a0a3e"/>
+    </linearGradient>
+    <linearGradient id="faceSkin" x1="30%" y1="0%" x2="70%" y2="100%">
       <stop offset="0%" stop-color="#9575cd"/>
-      <stop offset="50%" stop-color="#5e35b1"/>
-      <stop offset="100%" stop-color="#311b92"/>
+      <stop offset="100%" stop-color="#6a3baf"/>
     </linearGradient>
-    <linearGradient id="face" x1="30%" y1="0%" x2="70%" y2="100%">
-      <stop offset="0%" stop-color="#b39ddb"/>
-      <stop offset="100%" stop-color="#7e57c2"/>
-    </linearGradient>
-    <linearGradient id="eyeGlow" x1="50%" y1="0%" x2="50%" y2="100%">
-      <stop offset="0%" stop-color="#ffe082"/>
-      <stop offset="100%" stop-color="#ff8f00"/>
+    <linearGradient id="eyeFire" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#fff176"/>
+      <stop offset="50%" stop-color="#ffb300"/>
+      <stop offset="100%" stop-color="#e65100"/>
     </linearGradient>
     <filter id="glow">
-      <feGaussianBlur stdDeviation="0.8" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      <feGaussianBlur stdDeviation="1.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="cGlow">
+      <feGaussianBlur stdDeviation="0.6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
   </defs>
 
-  <!-- Background with rounded corners -->
-  <rect width="64" height="64" rx="14" fill="#1a0a3e"/>
+  <!-- Dark background -->
+  <rect width="64" height="64" rx="14" fill="#0d0620"/>
 
-  <g transform="translate(32, 33)">
-    <!-- Outer head -->
-    <ellipse cx="0" cy="-2" rx="26" ry="27" fill="url(#fur)"/>
+  <g transform="translate(32, 34)">
+    <!-- Shoulders -->
+    <ellipse cx="-18" cy="18" rx="12" ry="14" fill="#311b92"/>
+    <ellipse cx="18" cy="18" rx="12" ry="14" fill="#311b92"/>
+    <path d="M-14 12 Q0 6 14 12 L14 30 L-14 30 Z" fill="#311b92"/>
+
+    <!-- Head -->
+    <path d="M-22 2 Q-22 -20 -12 -26 Q-4 -30 0 -30 Q4 -30 12 -26 Q22 -20 22 2 Q22 14 14 18 Q6 20 0 20 Q-6 20 -14 18 Q-22 14 -22 2 Z"
+          fill="url(#fur)"/>
+
+    <!-- Sagittal crest -->
+    <path d="M-6 -28 Q-2 -33 0 -33 Q2 -33 6 -28 Q2 -29 0 -29.5 Q-2 -29 -6 -28 Z"
+          fill="#1a0a3e"/>
 
     <!-- Ears -->
-    <ellipse cx="-24" cy="-6" rx="6" ry="8" fill="#4527a0"/>
-    <ellipse cx="-24" cy="-6" rx="3.5" ry="5.5" fill="#7e57c2" opacity="0.4"/>
-    <ellipse cx="24" cy="-6" rx="6" ry="8" fill="#4527a0"/>
-    <ellipse cx="24" cy="-6" rx="3.5" ry="5.5" fill="#7e57c2" opacity="0.4"/>
+    <ellipse cx="-22" cy="-6" rx="4" ry="7" fill="#1a0a3e"/>
+    <ellipse cx="22" cy="-6" rx="4" ry="7" fill="#1a0a3e"/>
 
-    <!-- Inner face / muzzle -->
-    <ellipse cx="0" cy="4" rx="17" ry="16" fill="url(#face)"/>
+    <!-- Face plate -->
+    <ellipse cx="0" cy="4" rx="16" ry="14" fill="url(#faceSkin)"/>
 
     <!-- Brow ridge -->
-    <path d="M-18 -10 Q-10 -17 0 -17 Q10 -17 18 -10 Q10 -12 0 -12.5 Q-10 -12 -18 -10 Z"
-          fill="#311b92" opacity="0.7"/>
+    <path d="M-16 -6 Q-8 -12 0 -13 Q8 -12 16 -6 Q8 -9 0 -9.5 Q-8 -9 -16 -6 Z"
+          fill="#0d0620" opacity="0.7"/>
 
     <!-- Eye sockets -->
-    <ellipse cx="-9" cy="-7" rx="6.5" ry="4.5" fill="#1a0a3e" opacity="0.5"/>
-    <ellipse cx="9" cy="-7" rx="6.5" ry="4.5" fill="#1a0a3e" opacity="0.5"/>
+    <ellipse cx="-7" cy="-4" rx="6" ry="4" fill="#0d0620" opacity="0.6"/>
+    <ellipse cx="7" cy="-4" rx="6" ry="4" fill="#0d0620" opacity="0.6"/>
 
-    <!-- Eyes — glowing amber -->
-    <ellipse cx="-9" cy="-7" rx="4" ry="3.2" fill="url(#eyeGlow)" filter="url(#glow)"/>
-    <ellipse cx="9" cy="-7" rx="4" ry="3.2" fill="url(#eyeGlow)" filter="url(#glow)"/>
-
-    <!-- Pupils -->
-    <circle cx="-8" cy="-7" r="1.5" fill="#3e2723"/>
-    <circle cx="10" cy="-7" r="1.5" fill="#3e2723"/>
-
-    <!-- Eye highlights -->
-    <circle cx="-10" cy="-8.5" r="0.9" fill="white" opacity="0.8"/>
-    <circle cx="8" cy="-8.5" r="0.9" fill="white" opacity="0.8"/>
+    <!-- Eyes -->
+    <ellipse cx="-7" cy="-4" rx="4" ry="3.2" fill="url(#eyeFire)" filter="url(#glow)"/>
+    <ellipse cx="7" cy="-4" rx="4" ry="3.2" fill="url(#eyeFire)" filter="url(#glow)"/>
+    <!-- Slit pupils -->
+    <ellipse cx="-6.5" cy="-4" rx="1.2" ry="2.8" fill="#0d0620"/>
+    <ellipse cx="7.5" cy="-4" rx="1.2" ry="2.8" fill="#0d0620"/>
+    <!-- Highlights -->
+    <circle cx="-8.5" cy="-5.5" r="1" fill="white" opacity="0.8"/>
+    <circle cx="5.5" cy="-5.5" r="1" fill="white" opacity="0.8"/>
 
     <!-- Nose -->
-    <path d="M-5 3 Q-3 0 0 0 Q3 0 5 3 Q5 6 3 7.5 Q0 9 -3 7.5 Q-5 6 -5 3 Z"
-          fill="#4527a0"/>
-    <ellipse cx="-2.5" cy="4" rx="1.5" ry="1.2" fill="#1a0a3e" opacity="0.6"/>
-    <ellipse cx="2.5" cy="4" rx="1.5" ry="1.2" fill="#1a0a3e" opacity="0.6"/>
+    <path d="M-4 5 Q-2 2 0 2 Q2 2 4 5 Q4 8 2 9 Q0 10 -2 9 Q-4 8 -4 5 Z" fill="#2a1050"/>
+    <ellipse cx="-2" cy="6.5" rx="1.5" ry="1.1" fill="#0d0620" opacity="0.5"/>
+    <ellipse cx="2" cy="6.5" rx="1.5" ry="1.1" fill="#0d0620" opacity="0.5"/>
 
     <!-- Mouth -->
-    <path d="M-6 11 Q-2 14 0 13.5 Q2 14 6 11"
-          fill="none" stroke="#4527a0" stroke-width="1" stroke-linecap="round"/>
+    <path d="M-5 12 Q-1 14 0 13.5 Q1 14 5 12"
+          fill="none" stroke="#2a1050" stroke-width="1" stroke-linecap="round"/>
 
-    <!-- Entity nodes on forehead -->
-    <circle cx="-7" cy="-20" r="1.2" fill="#ffb300" opacity="0.6"/>
-    <circle cx="0" cy="-23" r="1.4" fill="#ffb300" opacity="0.7"/>
-    <circle cx="7" cy="-20" r="1.2" fill="#ffb300" opacity="0.6"/>
-    <line x1="-7" y1="-20" x2="0" y2="-23" stroke="#ffb300" stroke-width="0.6" opacity="0.4"/>
-    <line x1="0" y1="-23" x2="7" y2="-20" stroke="#ffb300" stroke-width="0.6" opacity="0.4"/>
-    <line x1="-7" y1="-20" x2="7" y2="-20" stroke="#ffb300" stroke-width="0.5" opacity="0.25"/>
+    <!-- Circuit traces -->
+    <g filter="url(#cGlow)">
+      <!-- Forehead -->
+      <polyline points="-8,-22 -4,-25 0,-27 4,-25 8,-22"
+                fill="none" stroke="#00e5ff" stroke-width="0.8" opacity="0.6"/>
+      <circle cx="0" cy="-27" r="1.3" fill="#00e5ff" opacity="0.8"/>
+      <circle cx="-4" cy="-25" r="1" fill="#00e5ff" opacity="0.6"/>
+      <circle cx="4" cy="-25" r="1" fill="#00e5ff" opacity="0.6"/>
+
+      <!-- Shoulder circuits -->
+      <polyline points="-20,22 -16,16 -12,12 -8,8"
+                fill="none" stroke="#00e5ff" stroke-width="0.7" opacity="0.45"/>
+      <circle cx="-16" cy="16" r="1" fill="#00e5ff" opacity="0.6"/>
+      <polyline points="20,22 16,16 12,12 8,8"
+                fill="none" stroke="#00e5ff" stroke-width="0.7" opacity="0.45"/>
+      <circle cx="16" cy="16" r="1" fill="#00e5ff" opacity="0.6"/>
+
+      <!-- Spine -->
+      <line x1="0" y1="-22" x2="0" y2="20" stroke="#00e5ff" stroke-width="0.5" opacity="0.15"/>
+    </g>
+
+    <!-- Face scan lines -->
+    <g opacity="0.05">
+      <line x1="-14" y1="-4" x2="14" y2="-4" stroke="#00e5ff" stroke-width="0.5"/>
+      <line x1="-12" y1="0" x2="12" y2="0" stroke="#00e5ff" stroke-width="0.5"/>
+      <line x1="-12" y1="4" x2="12" y2="4" stroke="#00e5ff" stroke-width="0.5"/>
+      <line x1="-10" y1="8" x2="10" y2="8" stroke="#00e5ff" stroke-width="0.5"/>
+    </g>
   </g>
 </svg>
