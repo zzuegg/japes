@@ -4,7 +4,24 @@ title: "Optimization log: multi-target @Filter"
 
 # Optimization log: multi-target @Filter
 
-*How we went from 9 system registrations to 5 without losing tier-1 speed — and the bugs we found along the way.*
+*How we went from 9 system registrations to 3 — with tier-1 bytecode generation, zero-allocation helpers, and a flat ArchetypeId backing — without losing speed.*
+
+## At a glance
+
+| Round | Change | 10k ops/ms | Delta | Link |
+|---|---|---:|---|---|
+| 0 | Baseline: 9 single-target systems | 3.41 | — | [Round 0](#round-0--the-problem) |
+| 1 | Multi-target `@Filter` (tier-2 only) | 2.83 | **−17%** | [Round 1](#round-1--multi-target-filter-annotation) |
+| 2 | Tier-1 bytecode gen for multi-target | 3.38 | **+19%** | [Round 2](#round-2--tier-1-bytecode-generation-for-multi-target) |
+| 3 | Zero-allocation helper (reusable buffers) | 3.62 | **+7%** | [Round 3](#round-3--zero-allocation-helper) |
+| 4 | Flat topological order in executor | 3.44 | noise | [Round 4](#round-4--flat-topological-order-in-the-executor) |
+| 5 | `@Filter(Removed)` with last-value binding | 3.34 | −2% | [Round 5](#round-5--filterremoved-with-last-value-binding) |
+| 6 | Tier-1 bytecode gen for Removed | 3.37 | noise | [Round 6](#round-6--tier-1-bytecode-generation-for-filterremoved) |
+| 7 | `ArchetypeId` flat array backing | **3.42** | +1.5% | [Round 7](#round-7--archetypeid-flat-array-backing) |
+
+**Net result**: 9 systems → 3 systems, 3.41 → **3.42 ops/ms** at 10k (no regression), all three `@Filter` categories on tier-1. japes beats Zay-ES at 100k by **1.30×**; Zay-ES leads at 10k by 1.25×.
+
+---
 
 This page is a chronological log of the multi-target `@Filter` feature, from the benchmark that motivated it to the final tier-1 bytecode emission with zero-allocation helpers. Every number is a JMH measurement on the same hardware; every intermediate state was a real commit.
 
