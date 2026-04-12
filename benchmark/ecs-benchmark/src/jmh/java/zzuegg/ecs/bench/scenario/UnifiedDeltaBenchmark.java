@@ -15,18 +15,18 @@ import java.util.concurrent.TimeUnit;
  * Unified delta observer — one logical observer reacts to added, changed,
  * AND removed entities each tick, across three component types.
  *
- * <p>With multi-target {@code @Filter}, japes now needs <em>five</em>
- * system registrations instead of nine:
+ * <p>With multi-target {@code @Filter}, japes needs <em>three</em>
+ * system registrations — one per delta category:
  * <ul>
  *   <li>1 {@code @Filter(Added, target = {State, Health, Mana})}</li>
  *   <li>1 {@code @Filter(Changed, target = {State, Health, Mana})}</li>
- *   <li>3 {@code RemovedComponents<T>} — still per-type (the removal
- *       log is per-component-type by design)</li>
+ *   <li>1 {@code @Filter(Removed, target = {State, Health, Mana})}
+ *       — driven by the removal log with last-value binding</li>
  * </ul>
  *
- * <p>The multi-target filters walk the <em>union</em> of the three
- * components' dirty lists and deduplicate per entity (BitSet in the
- * sparse path). This cuts scheduler overhead from 9 dispatches to 5.
+ * <p>The Added/Changed filters walk the union of dirty lists;
+ * Removed walks the removal log. All three deduplicate per entity.
+ * This cuts scheduler overhead from 9 dispatches to 3.
  *
  * <p>Counterpart: {@code ZayEsUnifiedDeltaBenchmark} in ecs-benchmark-zayes.
  */
@@ -43,8 +43,7 @@ public class UnifiedDeltaBenchmark {
     public record Mana(int points) {}
 
     public static final class Counters {
-        long added, changed;
-        long removedState, removedHealth, removedMana;
+        long added, changed, removed;
     }
 
     // --- Five system registrations (down from nine). ---
@@ -71,35 +70,18 @@ public class UnifiedDeltaBenchmark {
         }
     }
 
-    // RemovedComponents is still per-type — no multi-type variant yet.
-
-    public static final class RemovedStateObserver {
+    // One multi-target @Filter(Removed) observer replaces three
+    // RemovedComponents<T> systems. @Read params bind to the last-known
+    // values before removal (from the removal log for removed components,
+    // from the live entity for still-present components).
+    public static final class UnifiedRemovedObserver {
         final Counters c;
-        RemovedStateObserver(Counters c) { this.c = c; }
+        UnifiedRemovedObserver(Counters c) { this.c = c; }
 
         @System
-        void observe(RemovedComponents<State> gone) {
-            for (var r : gone) c.removedState++;
-        }
-    }
-
-    public static final class RemovedHealthObserver {
-        final Counters c;
-        RemovedHealthObserver(Counters c) { this.c = c; }
-
-        @System
-        void observe(RemovedComponents<Health> gone) {
-            for (var r : gone) c.removedHealth++;
-        }
-    }
-
-    public static final class RemovedManaObserver {
-        final Counters c;
-        RemovedManaObserver(Counters c) { this.c = c; }
-
-        @System
-        void observe(RemovedComponents<Mana> gone) {
-            for (var r : gone) c.removedMana++;
+        @Filter(value = Removed.class, target = {State.class, Health.class, Mana.class})
+        void observe(@Read State s, @Read Health h, @Read Mana m) {
+            c.removed++;
         }
     }
 
@@ -120,9 +102,7 @@ public class UnifiedDeltaBenchmark {
         world = World.builder()
             .addSystem(new UnifiedAddedObserver(counters))
             .addSystem(new UnifiedChangedObserver(counters))
-            .addSystem(new RemovedStateObserver(counters))
-            .addSystem(new RemovedHealthObserver(counters))
-            .addSystem(new RemovedManaObserver(counters))
+            .addSystem(new UnifiedRemovedObserver(counters))
             .build();
         handles = new ArrayList<>(entityCount);
         for (int i = 0; i < entityCount; i++) {
@@ -199,12 +179,10 @@ public class UnifiedDeltaBenchmark {
             world.despawn(handles.removeFirst());
         }
 
-        // 5 system dispatches: 1 Added + 1 Changed + 3 Removed.
+        // 3 system dispatches: 1 Added + 1 Changed + 1 Removed.
         world.tick();
         bh.consume(counters.added);
         bh.consume(counters.changed);
-        bh.consume(counters.removedState);
-        bh.consume(counters.removedHealth);
-        bh.consume(counters.removedMana);
+        bh.consume(counters.removed);
     }
 }

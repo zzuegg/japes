@@ -46,6 +46,7 @@ public final class World {
     // When present, preferred over the reflective processor above.
     private final Map<String, zzuegg.ecs.system.PairIterationRunner> pairIterationRunners = new HashMap<>();
     private final Map<String, zzuegg.ecs.system.ExclusiveRunner> exclusiveRunners = new HashMap<>();
+    private final Map<String, zzuegg.ecs.system.RemovedFilterProcessor> removedFilterProcessors = new HashMap<>();
     private final Set<String> disabledSystems = new HashSet<>();
     private final List<Commands> allCommandBuffers = new ArrayList<>();
     private final RemovalLog removalLog = new RemovalLog();
@@ -92,6 +93,7 @@ public final class World {
         pairIterationProcessors.clear();
         pairIterationRunners.clear();
         exclusiveRunners.clear();
+        removedFilterProcessors.clear();
         // Every rebuild re-resolves service args, which allocates fresh Commands
         // buffers. Drop the old ones so the list doesn't grow unbounded.
         allCommandBuffers.clear();
@@ -302,15 +304,44 @@ public final class World {
             return;
         }
 
-        // Build generated processor if enabled. Systems with change filters
-        // still need the SystemExecutionPlan path — the generated processors
-        // don't consult per-target ChangeTrackers. Entity-injected parameters
-        // are now supported by the BytecodeChunkProcessor and DirectProcessor
-        // tiers (GeneratedChunkProcessor tier-1 still bails via skipReason
-        // because its read-only fast path doesn't emit the entity load).
-        if (useGeneratedProcessors && !desc.isExclusive() && !desc.componentAccesses().isEmpty()) {
+        // Detect @Filter(Removed) early so we can skip chunk-processor
+        // generation (the entity lost its component — normal archetype
+        // matching won't find it).
+        boolean hasRemovedFilter = desc.changeFilters().stream()
+            .anyMatch(f -> f.filterType() == zzuegg.ecs.system.Removed.class);
+
+        if (useGeneratedProcessors && !desc.isExclusive() && !desc.componentAccesses().isEmpty()
+                && !hasRemovedFilter) {
             chunkProcessors.put(desc.name(),
                 ChunkProcessorGenerator.generate(desc, resolvedServiceArgs, useDefaultStorageFactory, plan));
+        }
+
+        // @Filter(Removed) was detected earlier (line ~310); create the processor.
+        if (hasRemovedFilter) {
+            var removedTargets = new java.util.ArrayList<zzuegg.ecs.component.ComponentId>();
+            for (var f : desc.changeFilters()) {
+                if (f.filterType() != zzuegg.ecs.system.Removed.class) continue;
+                for (var targetClass : f.targets()) {
+                    var tid = componentRegistry.getOrRegister(targetClass);
+                    removedTargets.add(tid);
+                    removalLog.registerConsumer(tid);
+                    trackedRemovedComponents.add(tid);
+                }
+            }
+            // Tell the plan it consumes these types so the end-of-tick
+            // removal-log GC includes this plan's watermark.
+            var removedClasses = new java.util.HashSet<Class<? extends Record>>();
+            for (var f : desc.changeFilters()) {
+                if (f.filterType() != zzuegg.ecs.system.Removed.class) continue;
+                removedClasses.addAll(f.targets());
+            }
+            plan.setConsumedRemovedComponents(removedClasses);
+
+            removedFilterProcessors.put(desc.name(),
+                new zzuegg.ecs.system.RemovedFilterProcessor(
+                    desc, plan, removalLog,
+                    removedTargets.toArray(zzuegg.ecs.component.ComponentId[]::new),
+                    this, resolvedServiceArgs, componentRegistry));
         }
 
         // Tier-1 @Exclusive: service-only systems generate a hidden
@@ -1223,6 +1254,21 @@ public final class World {
             } catch (Throwable e) {
                 throw new RuntimeException("Exclusive system failed: " + desc.name(), e);
             }
+            return;
+        }
+
+        // @Filter(Removed) systems: driven by the removal log, not
+        // archetype/chunk iteration.
+        var removedProc = removedFilterProcessors.get(desc.name());
+        if (removedProc != null) {
+            try {
+                removedProc.run(tick.current());
+            } catch (Throwable e) {
+                throw new RuntimeException("@Filter(Removed) failed: " + desc.name(), e);
+            }
+            // Advance watermark so the same entries aren't re-delivered.
+            var plan = systemPlans.get(desc.name());
+            if (plan != null) plan.markExecuted(tick.current());
             return;
         }
 
