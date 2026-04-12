@@ -32,6 +32,6 @@ public interface ComponentStorage<T extends Record> {
     }
 
     static Factory defaultFactory() {
-        return new SoAComponentStorage.SoAFactory();
+        return DefaultComponentStorage::new;
     }
 }
