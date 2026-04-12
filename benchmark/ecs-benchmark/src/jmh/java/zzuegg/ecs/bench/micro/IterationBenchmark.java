@@ -20,24 +20,37 @@ public class IterationBenchmark {
     record Position(float x, float y, float z) {}
     record Velocity(float dx, float dy, float dz) {}
 
-    // Read-only systems hand their components to a Blackhole so the JIT
-    // can't dead-code-eliminate the per-entity load. An earlier version of
-    // this benchmark had empty method bodies, which let the escape analyser
-    // prove the loaded record was unused and delete the whole iteration —
-    // especially under Valhalla, where the "51× speedup" numbers in the
-    // README's DCE caveat all came from here.
+    // Read-only systems consume individual FIELDS (not the whole record)
+    // via Blackhole. This prevents DCE on the loaded values while letting
+    // escape analysis scalar-replace the record object itself — which is
+    // what real game code does (nobody stores a raw Position in a
+    // collection inside a hot loop; they read p.x(), p.y(), p.z() and
+    // compute with the floats).
+    //
+    // An earlier version consumed the whole record: bh.consume(pos). That
+    // forced the record onto the heap and penalised SoA storage (which
+    // reconstructs the record per read). Field-level consumption matches
+    // the real usage pattern and measures the actual per-field access cost.
     static class SingleComponentSystem {
         public static Blackhole bh;
         @System
-        void iterate(@Read Position pos) { bh.consume(pos); }
+        void iterate(@Read Position pos) {
+            bh.consume(pos.x());
+            bh.consume(pos.y());
+            bh.consume(pos.z());
+        }
     }
 
     static class TwoComponentSystem {
         public static Blackhole bh;
         @System
         void iterate(@Read Position pos, @Read Velocity vel) {
-            bh.consume(pos);
-            bh.consume(vel);
+            bh.consume(pos.x());
+            bh.consume(pos.y());
+            bh.consume(pos.z());
+            bh.consume(vel.dx());
+            bh.consume(vel.dy());
+            bh.consume(vel.dz());
         }
     }
 

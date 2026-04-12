@@ -42,7 +42,10 @@ public class ArtemisIterationBenchmark {
 
         @Override
         protected void process(int id) {
-            if (bh != null) bh.consume(pm.get(id));
+            if (bh != null) {
+                var p = pm.get(id);
+                bh.consume(p.x); bh.consume(p.y); bh.consume(p.z);
+            }
         }
     }
 
@@ -56,8 +59,10 @@ public class ArtemisIterationBenchmark {
         @Override
         protected void process(int id) {
             if (bh != null) {
-                bh.consume(pm.get(id));
-                bh.consume(vm.get(id));
+                var p = pm.get(id);
+                var v = vm.get(id);
+                bh.consume(p.x); bh.consume(p.y); bh.consume(p.z);
+                bh.consume(v.dx); bh.consume(v.dy); bh.consume(v.dz);
             }
         }
     }

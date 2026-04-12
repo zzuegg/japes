@@ -54,15 +54,18 @@ public class ZayEsIterationBenchmark {
     @Benchmark
     public void iterateSingleComponent(Blackhole bh) {
         for (Entity entity : singleCompSet) {
-            bh.consume(entity.get(Position.class));
+            var p = entity.get(Position.class);
+            bh.consume(p.x()); bh.consume(p.y()); bh.consume(p.z());
         }
     }
 
     @Benchmark
     public void iterateTwoComponents(Blackhole bh) {
         for (Entity entity : twoCompSet) {
-            bh.consume(entity.get(Position.class));
-            bh.consume(entity.get(Velocity.class));
+            var p = entity.get(Position.class);
+            var v = entity.get(Velocity.class);
+            bh.consume(p.x()); bh.consume(p.y()); bh.consume(p.z());
+            bh.consume(v.dx()); bh.consume(v.dy()); bh.consume(v.dz());
         }
     }
 

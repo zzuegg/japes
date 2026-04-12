@@ -55,7 +55,8 @@ public class DominionIterationBenchmark {
     public void iterateSingleComponent(Blackhole bh) {
         var results = singleCompWorld.findEntitiesWith(Position.class);
         for (var r : results) {
-            bh.consume(r.comp());
+            var p = r.comp();
+            bh.consume(p.x); bh.consume(p.y); bh.consume(p.z);
         }
     }
 
@@ -63,8 +64,9 @@ public class DominionIterationBenchmark {
     public void iterateTwoComponents(Blackhole bh) {
         var results = twoCompWorld.findEntitiesWith(Position.class, Velocity.class);
         for (var r : results) {
-            bh.consume(r.comp1());
-            bh.consume(r.comp2());
+            var p = r.comp1(); var v = r.comp2();
+            bh.consume(p.x); bh.consume(p.y); bh.consume(p.z);
+            bh.consume(v.dx); bh.consume(v.dy); bh.consume(v.dz);
         }
     }
 

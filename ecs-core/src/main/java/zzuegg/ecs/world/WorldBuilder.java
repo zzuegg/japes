@@ -18,9 +18,10 @@ public final class WorldBuilder {
     ComponentStorage.Factory storageFactory;
     // True when the user is using the default storage factory — lets tier-1
     // safely assume every ComponentStorage is a DefaultComponentStorage and
-    // access the backing array directly via rawArray() instead of going
-    // through the interface dispatch. Flipped to false by storageFactory().
-    boolean useDefaultStorageFactory = true;
+    // access the backing array directly via rawArray(). Flipped to false
+    // by storageFactory() — which also enables the SoA tier-1 inline path
+    // for write-heavy workloads.
+    boolean useDefaultStorageFactory = false;
     boolean useGeneratedProcessors = true;
     int chunkSize = 1024;
 
