@@ -162,6 +162,30 @@ The remaining allocation in the unified-delta benchmark comes from structural mu
 
 The tier-1 generator now emits `if (mut.isChanged()) { flush + write-back }` instead of unconditionally flushing every entity. This avoids `flush()`, SoA decomposition, and storage writes for the 90% of entities that a selective mutator system doesn't modify.
 
+### The phi-merge killer: split current/pending fields
+
+The deepest EA blocker was invisible at the bytecode level — it lived in C2's intermediate representation.
+
+**The problem**: `Mut.set(newValue)` overwrote `this.current` with the new record. At the `isChanged()` guard after the user method, C2's IR had a **phi node**: `current` was either the original record (90% unchanged) or the new record (10% changed). `flush()` returned whichever `current` held. EA couldn't eliminate either record because it couldn't prove which value flowed through `flush()` → `checkcast` → accessor → SoA store.
+
+**How we found it**: removing `m.set()` from the benchmark mutators (making them read-only) dropped allocation from **1.07 MB to 434 KB** — proving the write path was responsible for 640 KB of escaped records. LogCompilation confirmed: everything was inlined (Mut constructor, get, set, flush, markChanged, appendDirtyUnchecked), Mut itself was EA'd, but the Mana record was not.
+
+**The fix**: split `current` into two fields — `current` (set once in the constructor, never overwritten) and `pending` (written by `set()`, null if unchanged). `get()` returns `pending` if changed, `current` otherwise. `flush()` returns `pending`.
+
+```java
+// Before: phi merge blocks EA
+public void set(T value) { this.current = value; changed = true; }
+public T flush() { return current; }  // current has 2 possible values → phi
+
+// After: no phi — each field holds exactly one value
+public void set(T value) { this.pending = value; changed = true; }
+public T flush() { return changed ? pending : current; }
+```
+
+No phi merge → EA independently proves: (1) the original record in `current` is dead after `get().field()` extracts the primitive, and (2) the new record in `pending` is dead after `flush()` decomposes it into SoA stores.
+
+**Impact**: unified-delta allocation dropped from **1.07 MB to 603 KB** (44% reduction). EA now eliminates 78% of all allocations (up from 61%).
+
 ## The optimization journey in numbers
 
 | Round | What | Write µs/op (10k) | vs Bevy |
@@ -197,6 +221,8 @@ Our current SoA approach achieves (1) at the library level. (2) is the remaining
 5. **Benchmark what real code does, not what's convenient.** `bh.consume(pos)` measures heap-reference survival. `bh.consume(pos.x())` measures field access. Real game code does the latter.
 
 6. **Graph-level EA is more capable than BCEA suggests.** C2's bytecode-level escape analysis (BCEA) has a 150-byte limit, but the graph-level EA that runs during C2 optimization handles much larger methods. Tested: methods >500 bytes with complex preambles still got full record elimination. Don't split methods just for BCEA — split for inlining and readability.
+
+7. **Avoid phi merges on allocation-bearing fields.** If a field can hold two different freshly-allocated objects depending on a branch (e.g., original vs. mutated value), EA can't eliminate either. Split the values into separate fields — one per allocation site — so each field holds exactly one value. The JIT tracks each independently and can prove each dead after use.
 
 ## Related
 
