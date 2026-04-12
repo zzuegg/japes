@@ -150,11 +150,13 @@ The system scheduler calls `processor.processAll(chunks, tick)` through a single
 
 **Partial fix**: inline the entity loop directly into `processAll()` instead of delegating to `process()`. C2 compiles each hidden class's `processAll` independently. Within each compilation, the user method call is monomorphic → inlined → EA can scalar-replace Mut. The entity-loop code is emitted by a shared emitter called from both `process()` and `processAll()`, avoiding duplication.
 
-### BCEA bytecode size limit (150 bytes)
+### BCEA bytecode size limit: a red herring
 
-C2's bytecode-level escape analysis (BCEA) only analyzes methods below **150 bytes**. Observer systems with multi-target `@Filter` + 3 `@Read` params generate `processAll` methods of ~293 bytes → BCEA skips them entirely → EA never runs → record allocations can't be eliminated.
+C2's bytecode-level escape analysis (BCEA) only analyzes methods below **150 bytes**. Our initial diagnosis blamed this for failing to eliminate observer record allocations in large `processAll` methods (~293 bytes).
 
-**Current state**: mutator Mut allocations are EA'd (processAll is smaller). Observer record allocations are not yet EA'd — reducing the filter preamble size below the BCEA limit is the next optimization target.
+**Experiment disproved this.** A focused JMH benchmark constructed methods >500 bytes with complex preambles (bitmap operations, array fills, dirty-slot computation) followed by 3-record allocation loops — identical to the observer shape. Result: **zero allocation in all variants**. C2's graph-level EA, which runs independently of BCEA, handles record elimination in large methods. The BCEA limit only affects the bytecode-level pre-analysis hints, not the actual elimination.
+
+The remaining allocation in the unified-delta benchmark comes from structural mutations (spawn, despawn, component strip/restore) that go through the `World` API's megamorphic `ComponentStorage` dispatch — not from the system iteration loops.
 
 ### isChanged guard on flush
 
@@ -194,7 +196,7 @@ Our current SoA approach achieves (1) at the library level. (2) is the remaining
 
 5. **Benchmark what real code does, not what's convenient.** `bh.consume(pos)` measures heap-reference survival. `bh.consume(pos.x())` measures field access. Real game code does the latter.
 
-6. **Keep hot methods below 150 bytes.** C2's bytecode-level escape analysis (BCEA) skips methods above this threshold. A method that's 200 bytes with perfect EA-friendly code gets zero EA benefit. Split large methods so the allocation-bearing inner loop is a separate small method the JIT inlines back.
+6. **Graph-level EA is more capable than BCEA suggests.** C2's bytecode-level escape analysis (BCEA) has a 150-byte limit, but the graph-level EA that runs during C2 optimization handles much larger methods. Tested: methods >500 bytes with complex preambles still got full record elimination. Don't split methods just for BCEA — split for inlining and readability.
 
 ## Related
 

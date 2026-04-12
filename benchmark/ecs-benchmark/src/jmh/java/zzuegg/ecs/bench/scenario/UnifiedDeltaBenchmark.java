@@ -186,7 +186,7 @@ public class UnifiedDeltaBenchmark {
         for (int i = 0; i < stripCount; i++) {
             var e = handles.get(stripCursor % handles.size());
             stripCursor++;
-            if (world.getComponent(e, Mana.class) != null) {
+            if (world.hasComponent(e, Mana.class)) {
                 world.removeComponent(e, Mana.class);
                 strippedEntities.add(e);
             }

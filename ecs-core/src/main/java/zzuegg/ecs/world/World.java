@@ -623,6 +623,14 @@ public final class World {
         return location.archetype().get(compId, location);
     }
 
+    public boolean hasComponent(zzuegg.ecs.entity.Entity entity, Class<? extends Record> type) {
+        if (!entityAllocator.isAlive(entity)) return false;
+        var location = getLocation(entity.index());
+        if (location == null) return false;
+        var compId = componentRegistry.getOrRegister(type);
+        return location.archetype().id().contains(compId);
+    }
+
     public <T> void setResource(T resource) {
         resourceStore.setDirect(resource.getClass(), resource);
     }
