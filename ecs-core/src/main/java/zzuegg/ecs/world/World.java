@@ -1395,9 +1395,7 @@ public final class World {
 
             var processor = chunkProcessors.get(desc.name());
             if (processor != null) {
-                for (var chunk : archetype.chunks()) {
-                    processor.process(chunk, currentTick);
-                }
+                processor.processAll(archetype.chunks(), currentTick);
             } else {
                 var plan = systemPlans.get(desc.name());
                 for (var chunk : archetype.chunks()) {
