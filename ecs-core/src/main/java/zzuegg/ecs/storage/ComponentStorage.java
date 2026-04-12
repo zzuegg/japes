@@ -10,6 +10,15 @@ public interface ComponentStorage<T extends Record> {
     Class<T> type();
 
     /**
+     * For SoA storages: returns the per-field primitive arrays as an
+     * {@code Object[]} (each element is e.g. {@code float[]},
+     * {@code int[]}). The tier-1 generator uses this to emit direct
+     * per-field array reads/writes, bypassing interface dispatch.
+     * Returns {@code null} for non-SoA storages.
+     */
+    default Object[] soaFieldArrays() { return null; }
+
+    /**
      * Storage factory. Not a @FunctionalInterface: because create() is
      * itself generic, a lambda cannot express the signature — only method
      * references (e.g., {@code DefaultComponentStorage::new}) work.
