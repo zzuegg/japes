@@ -18,12 +18,18 @@ import java.util.concurrent.TimeUnit;
  * <p>This is the workload shape Zay-ES is designed for: a single
  * {@code EntitySet} tracking {State, Health, Mana} gives you added /
  * changed / removed delta views from one {@code applyChanges()} call with
- * zero marginal cost per additional component type.
+ * zero marginal cost per additional component type.  Stripping a single
+ * component (e.g. Mana) causes the entity to leave the EntitySet
+ * automatically; restoring it causes re-entry.  This structural tracking
+ * is free in Zay-ES but requires explicit per-component system
+ * registrations in japes.
  *
- * <p>In japes the same logical observer requires <em>seven</em> separate
+ * <p>In japes the same logical observer requires <em>nine</em> separate
  * system registrations:
  * <ul>
- *   <li>1 {@code @Filter(Added)}  — for new entities</li>
+ *   <li>3 {@code @Filter(Added)}  — one per component, because
+ *       re-adding a stripped component is only visible to the filter
+ *       targeting that specific type</li>
  *   <li>3 {@code @Filter(Changed)} — one per component type (State,
  *       Health, Mana), since each component has its own dirty list</li>
  *   <li>3 {@code RemovedComponents<T>} — one per component type, each
@@ -36,12 +42,14 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Per tick the driver (outside systems):
  * <ol>
+ *   <li>Restores Mana on entities stripped last tick</li>
  *   <li>Spawns 1% new entities with {State, Health, Mana}</li>
  *   <li>Mutates 10% State, 10% Health, 10% Mana (offset cursors —
  *       30% of entities touched total)</li>
+ *   <li>Strips Mana from 2% of entities (component-only removal)</li>
  *   <li>Despawns 1% oldest entities</li>
  * </ol>
- * Then {@code world.tick()} runs all seven observer systems.
+ * Then {@code world.tick()} runs all nine observer systems.
  *
  * <p>Counterpart: {@code ZayEsUnifiedDeltaBenchmark} in ecs-benchmark-zayes.
  */
@@ -60,23 +68,48 @@ public class UnifiedDeltaBenchmark {
     // --- Counters shared across all observer systems. ---
 
     public static final class Counters {
-        long added, changedState, changedHealth, changedMana;
+        long addedState, addedHealth, addedMana;
+        long changedState, changedHealth, changedMana;
         long removedState, removedHealth, removedMana;
     }
 
-    // --- Seven system registrations for what Zay-ES does in one EntitySet. ---
+    // --- Nine system registrations for what Zay-ES does in one EntitySet. ---
 
-    // 1 × Added observer (all three components are spawned together,
-    //     so targeting any one of them catches every new entity).
+    // 3 × Added observers — one per component, because re-adding a
+    //     stripped component (e.g. Mana restored after removal) is only
+    //     visible to the @Filter(Added) targeting that exact type.
+    //     Zay-ES reports entity re-entry via getAddedEntities() for free.
 
-    public static final class AddedObserver {
+    public static final class AddedStateObserver {
         final Counters c;
-        AddedObserver(Counters c) { this.c = c; }
+        AddedStateObserver(Counters c) { this.c = c; }
 
         @System
         @Filter(value = Added.class, target = State.class)
         void observe(@Read State s) {
-            c.added++;
+            c.addedState++;
+        }
+    }
+
+    public static final class AddedHealthObserver {
+        final Counters c;
+        AddedHealthObserver(Counters c) { this.c = c; }
+
+        @System
+        @Filter(value = Added.class, target = Health.class)
+        void observe(@Read Health h) {
+            c.addedHealth++;
+        }
+    }
+
+    public static final class AddedManaObserver {
+        final Counters c;
+        AddedManaObserver(Counters c) { this.c = c; }
+
+        @System
+        @Filter(value = Added.class, target = Mana.class)
+        void observe(@Read Mana m) {
+            c.addedMana++;
         }
     }
 
@@ -118,7 +151,7 @@ public class UnifiedDeltaBenchmark {
     }
 
     // 3 × Removed observers — one per component type, each draining its
-    //     own section of the removal log.  Zay-ES reports entity removal
+    //     own section of the removal log.  Zay-ES reports entity exit
     //     once via getRemovedEntities() regardless of component count.
 
     public static final class RemovedStateObserver {
@@ -159,13 +192,17 @@ public class UnifiedDeltaBenchmark {
     World world;
     Counters counters;
     List<Entity> handles;
-    int stateCursor, healthCursor, manaCursor;
+    /** Entities whose Mana was stripped last tick — restored at the start of the next. */
+    List<Entity> strippedEntities;
+    int stateCursor, healthCursor, manaCursor, stripCursor;
 
     @Setup(Level.Iteration)
     public void setup() {
         counters = new Counters();
         world = World.builder()
-            .addSystem(new AddedObserver(counters))
+            .addSystem(new AddedStateObserver(counters))
+            .addSystem(new AddedHealthObserver(counters))
+            .addSystem(new AddedManaObserver(counters))
             .addSystem(new ChangedStateObserver(counters))
             .addSystem(new ChangedHealthObserver(counters))
             .addSystem(new ChangedManaObserver(counters))
@@ -182,9 +219,11 @@ public class UnifiedDeltaBenchmark {
         }
         // Prime one tick so the observer watermarks are past the initial spawn.
         world.tick();
+        strippedEntities = new ArrayList<>();
         stateCursor = 0;
-        healthCursor = entityCount / 3;
-        manaCursor = 2 * entityCount / 3;
+        healthCursor = entityCount / 4;
+        manaCursor = entityCount / 2;
+        stripCursor = 3 * entityCount / 4;
     }
 
     @TearDown(Level.Iteration)
@@ -198,6 +237,15 @@ public class UnifiedDeltaBenchmark {
         int addCount = Math.max(1, entityCount / 100);
         int changeCount = Math.max(1, entityCount / CHANGE_FRACTION);
         int removeCount = Math.max(1, entityCount / 100);
+        int stripCount = Math.max(1, entityCount / 50); // 2%
+
+        // 0. Restore Mana on entities stripped last tick.
+        //    Triggers @Filter(Added, Mana) — the entity re-gains the
+        //    component.  In Zay-ES this is automatic EntitySet re-entry.
+        for (var e : strippedEntities) {
+            world.addComponent(e, new Mana(0));
+        }
+        strippedEntities.clear();
 
         // 1. Spawn 1% new entities (all three components).
         for (int i = 0; i < addCount; i++) {
@@ -228,17 +276,34 @@ public class UnifiedDeltaBenchmark {
             if (cur != null) world.setComponent(e, new Mana(cur.points() + 1));
         }
 
-        // 3. Despawn 1% oldest.
+        // 3. Strip Mana from 2% of entities — component-only removal.
+        //    The entity stays alive with {State, Health}.  In Zay-ES the
+        //    entity automatically leaves the (State,Health,Mana) EntitySet
+        //    and appears in getRemovedEntities().  In japes this fires
+        //    RemovedComponents<Mana> only — the other two Removed drains
+        //    see nothing, but still pay the system-dispatch cost.
+        for (int i = 0; i < stripCount; i++) {
+            var e = handles.get(stripCursor % handles.size());
+            stripCursor++;
+            if (world.getComponent(e, Mana.class) != null) {
+                world.removeComponent(e, Mana.class);
+                strippedEntities.add(e);
+            }
+        }
+
+        // 4. Despawn 1% oldest.
         for (int i = 0; i < removeCount && !handles.isEmpty(); i++) {
             world.despawn(handles.removeFirst());
         }
 
-        // world.tick() runs all SEVEN observer systems — schedule-graph
-        // traversal, seven execution-plan slots, per-system watermarks,
+        // world.tick() runs all NINE observer systems — schedule-graph
+        // traversal, nine execution-plan slots, per-system watermarks,
         // three dirty-list walks, and three removal-log drains.
         // Zay-ES does the same work with one applyChanges() call.
         world.tick();
-        bh.consume(counters.added);
+        bh.consume(counters.addedState);
+        bh.consume(counters.addedHealth);
+        bh.consume(counters.addedMana);
         bh.consume(counters.changedState);
         bh.consume(counters.changedHealth);
         bh.consume(counters.changedMana);
