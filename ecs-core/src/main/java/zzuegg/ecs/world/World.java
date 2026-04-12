@@ -444,6 +444,11 @@ public final class World {
         return new WorldBuilder();
     }
 
+    @SafeVarargs
+    public final SpawnBuilder spawnBuilder(Class<? extends Record>... componentTypes) {
+        return new SpawnBuilder(this, componentTypes);
+    }
+
     public zzuegg.ecs.entity.Entity spawn(Record... components) {
         var entity = entityAllocator.allocate();
 
@@ -691,6 +696,11 @@ public final class World {
     public long currentTick() {
         return tick.current();
     }
+
+    // Package-private accessors for SpawnBuilder
+    ArchetypeGraph archetypeGraph() { return archetypeGraph; }
+    zzuegg.ecs.entity.EntityAllocator entityAllocator() { return entityAllocator; }
+    void setEntityLocation(int index, zzuegg.ecs.archetype.EntityLocation loc) { setLocation(index, loc); }
 
     /**
      * Package-of-framework accessor returning the

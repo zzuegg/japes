@@ -6,6 +6,7 @@ import zzuegg.ecs.component.Mut;
 import zzuegg.ecs.entity.Entity;
 import zzuegg.ecs.system.*;
 import zzuegg.ecs.system.System;
+import zzuegg.ecs.world.SpawnBuilder;
 import zzuegg.ecs.world.World;
 
 import java.util.ArrayList;
@@ -125,6 +126,7 @@ public class UnifiedDeltaBenchmark {
     int entityCount;
 
     World world;
+    SpawnBuilder spawner;
     Counters counters;
     List<Entity> handles;
     List<Entity> strippedEntities;
@@ -141,6 +143,7 @@ public class UnifiedDeltaBenchmark {
             .addSystem(new UnifiedChangedObserver(counters))
             .addSystem(new UnifiedRemovedObserver(counters))
             .build();
+        spawner = world.spawnBuilder(State.class, Health.class, Mana.class);
         handles = new ArrayList<>(entityCount);
         // Distribute values so ~10% meet each mutator's condition:
         //   Health: 90% in [100,900], 10% in [901,1000] → DamageOverTime fires
@@ -151,7 +154,7 @@ public class UnifiedDeltaBenchmark {
             int hp = (i % 10 == 0) ? 901 + rng.nextInt(100) : 100 + rng.nextInt(800);
             int mp = (i % 10 == 1) ? rng.nextInt(100) : 100 + rng.nextInt(400);
             int st = (i % 10 == 2) ? i * 10 : i * 10 + 1; // ~10% are multiples of 10
-            handles.add(world.spawn(new State(st), new Health(hp), new Mana(mp)));
+            handles.add(spawner.spawn(new State(st), new Health(hp), new Mana(mp)));
         }
         world.tick();
         strippedEntities = new ArrayList<>();
@@ -174,9 +177,9 @@ public class UnifiedDeltaBenchmark {
         }
         strippedEntities.clear();
 
-        // 1. Spawn 1% new entities.
+        // 1. Spawn 1% new entities via pre-resolved SpawnBuilder.
         for (int i = 0; i < addCount; i++) {
-            handles.add(world.spawn(
+            handles.add(spawner.spawn(
                 new State(n + i),
                 new Health(1_000),
                 new Mana(0)));
