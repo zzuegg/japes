@@ -33,12 +33,12 @@ All numbers from a single co-temporal sweep on the same machine (JDK 26, Bevy 0.
 | [PredatorPrey `@Pair`](predator-prey.md) | 500×2000 | 41.0 | 243.7 | **11.5** |
 | [PredatorPrey `@ForEachPair`](predator-prey.md) | 500×2000 | **27.6** | 243.7 | **11.5** |
 
-### Unified delta (ops/ms, higher is better)
+### Unified delta (µs/op, lower is better)
 
-| Benchmark | Entities | **japes** (5 systems) | Zay-ES (1 EntitySet) |
+| Benchmark | Entities | **japes** (3 systems) | Zay-ES (1 EntitySet) |
 |---|---:|---:|---:|
-| [UnifiedDelta](unified-delta.md) | 10k | 1.61 | **4.28** |
-| [UnifiedDelta](unified-delta.md) | 100k | 0.196 | **0.205** |
+| [UnifiedDelta](unified-delta.md) | 10k | 621 | **234** |
+| [UnifiedDelta](unified-delta.md) | 100k | 5,102 | **4,878** |
 
 ## Where japes wins
 

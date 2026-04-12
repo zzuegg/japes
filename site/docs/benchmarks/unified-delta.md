@@ -12,10 +12,10 @@ The unified delta workload tests a single logical observer reacting to added, ch
 
 ## Results
 
-| | **japes 5-system (multi-target @Filter)** | Zay-ES (1 EntitySet) |
+| | **japes 3-system (multi-target @Filter)** | Zay-ES (1 EntitySet) |
 |---|---:|---:|
-| **10k entities** | **621 µs / 1.61 ops/ms** | 234 µs / 4.28 ops/ms |
-| **100k entities** | **5,102 µs / 0.196 ops/ms** | 4,878 µs / 0.205 ops/ms |
+| **10k entities** | 621 µs | **234 µs** |
+| **100k entities** | 5,102 µs | **4,878 µs** |
 
 **Zay-ES beats japes at both 10k (2.66×) and 100k (1.05×).** The SoA storage
 default adds overhead to the unified delta workload because SoA decomposition
