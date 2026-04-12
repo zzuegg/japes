@@ -34,8 +34,11 @@ binding, so they never drop tier-1 by themselves.
 | `@Without(C.class)` | Exclude entities that carry `C`. Repeatable. | yes |
 | `@Where("expr")` | Per-entity predicate evaluated against component field values. Repeatable. | **no — drops to tier-2** |
 | `@Filter(value = Added.class, target = C.class)` | Only iterate entities whose `C` was added since the system's last run. | yes |
+| `@Filter(value = Added.class, target = {A.class, B.class})` | Iterate entities where ANY target was added (OR). Deduplicates per entity. | yes |
 | `@Filter(value = Changed.class, target = C.class)` | Only iterate entities whose `C` was written since the system's last run. | yes |
-| `@Filter(value = Removed.class, target = C.class)` | Deprecated spelling. Use `RemovedComponents<C>` instead. | **no — drops to tier-2** |
+| `@Filter(value = Changed.class, target = {A.class, B.class})` | Iterate entities where ANY target was changed (OR). Deduplicates per entity. | yes |
+| `@Filter(value = Removed.class, target = C.class)` | Fires per entity that lost `C`. `@Read` params bind to last-known values. | yes |
+| `@Filter(value = Removed.class, target = {A.class, B.class})` | Fires per entity that lost ANY target. Multi-type dedup + last-value binding. | yes |
 
 See [Query filters — @With / @Without](../tutorials/advanced/13-query-filters.md),
 [Field filters — @Where](../tutorials/advanced/14-where-filters.md),

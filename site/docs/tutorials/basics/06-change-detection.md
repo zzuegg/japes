@@ -179,36 +179,82 @@ observers)` are dropped and their bits cleared. A tracker with ten thousand
 dirty slots that every observer has already processed shrinks back to
 empty on the next tick, so the sparse iteration starts cheap again.
 
-## What about `Removed`?
+## Multi-target `@Filter`
 
-`@Filter(value = Removed.class, target = ...)` exists, but it is
-fundamentally different from Added/Changed:
+A single `@Filter` annotation can target multiple component types with OR semantics — the system fires once per entity where **any** of the targets changed:
 
-- Added/Changed live on the **entity that still has the component**, so the
-  tier-1 sparse iteration can visit its slot.
-- A removed entity **no longer has the component** — the slot is gone, and
-  the tier-1 iteration has nothing to iterate.
+```java
+@System
+@Filter(value = Changed.class, target = {Position.class, Velocity.class, Health.class})
+void onAnyChanged(@Read Position p, @Read Velocity v, @Read Health h) {
+    // fires if Position OR Velocity OR Health was mutated
+    // the entity is visited exactly once even if multiple components changed
+}
+```
 
-For that reason `@Filter(Removed.class)` works, but it drops the system to
-a slower tier-2 path and in most cases you are much better off using the
-`RemovedComponents<T>` service parameter, which gives you an iterator over
-`(Entity, lastValue)` pairs for every removal since you last looked.
+!!! tip "When to use multi-target"
 
-The entire removal story is covered in the next chapter.
+    Multi-target shines when one observer logically watches several component types and doesn't care which one triggered the change. Without it, you'd need N separate systems — one per component — each with its own scheduler dispatch overhead.
+
+The rules:
+
+- **Within one `@Filter` annotation**: targets are OR'd. Any match fires.
+- **Across multiple stacked `@Filter` annotations**: still AND'd (same as before).
+- **Deduplication**: an entity that changed on 2 of the 3 targets is visited exactly once.
+- **Tier-1 supported**: the generated chunk processor calls `MultiFilterHelper.unionDirtySlots` to merge the dirty lists, then iterates with inline `invokevirtual`.
+
+```java
+// OR within, AND across — fires for entities where
+// (Position OR Velocity changed) AND (Health was added)
+@System
+@Filter(value = Changed.class, target = {Position.class, Velocity.class})
+@Filter(value = Added.class, target = Health.class)
+void complexFilter(@Read Position p, @Read Velocity v, @Read Health h) { ... }
+```
+
+## `@Filter(Removed)` — reacting to deletions
+
+`@Filter(Removed)` is the third leg of the symmetric API. It fires once per entity that **lost** any target component since the last tick, with `@Read` params bound to the **last-known values** before removal:
+
+```java
+@System
+@Filter(value = Removed.class, target = {State.class, Health.class, Mana.class})
+void onRemoved(@Read State s, @Read Health h, @Read Mana m, Entity self) {
+    // s, h, m are the values BEFORE removal
+    // For a component that was stripped: last value from the removal log
+    // For components still live: current value from the entity
+    // For a fully despawned entity: all values from the removal log
+}
+```
+
+!!! tip "This replaced `RemovedComponents<T>` for multi-type observation"
+
+    Previously you needed 3 separate `RemovedComponents<T>` systems to watch 3 component types. Now one `@Filter(Removed, target = {A, B, C})` does the same work in one system dispatch with type-safe `@Read` binding.
+
+How it works under the hood:
+
+- The entity that lost a component is **no longer in a matching archetype** — normal chunk iteration can't find it.
+- Instead, `@Filter(Removed)` systems are dispatched via a dedicated `GeneratedRemovedFilterProcessor` that walks the **removal log** (not the dirty list).
+- The removal log captures `(entity, lastValue, tick)` at every `removeComponent` / `despawn` call.
+- Multi-target deduplication: a despawned entity with 3 components produces 3 log entries but only 1 observer call.
+- **Tier-1 supported**: the generated hidden class calls `RemovedFilterHelper.resolve()` for dedup + value resolution, then iterates with inline `invokevirtual`.
+
+`RemovedComponents<T>` still works and is simpler for single-type drains — see the [next chapter](07-removed-components.md).
 
 ## Quick recipe list
 
-| You want...                                                     | Use |
-|-----------------------------------------------------------------|------|
-| React the first tick after an entity with `Health` spawns       | `@Filter(value = Added.class, target = Health.class)` |
-| React every tick a `Position` was actually mutated              | `@Filter(value = Changed.class, target = Position.class)` |
-| React only when both `Position` and `Velocity` changed          | Two stacked `@Filter(Changed)` annotations |
-| React when a component was just **removed**                     | Skip `@Filter(Removed)` — use `RemovedComponents<T>` ([next chapter](07-removed-components.md)) |
+| You want... | Use |
+|---|---|
+| React the first tick after an entity with `Health` spawns | `@Filter(value = Added.class, target = Health.class)` |
+| React every tick a `Position` was actually mutated | `@Filter(value = Changed.class, target = Position.class)` |
+| React when ANY of several components changed | `@Filter(value = Changed.class, target = {A.class, B.class})` |
+| React only when both `Position` AND `Velocity` changed | Two stacked `@Filter(Changed)` annotations |
+| React when a component was just removed (with last values) | `@Filter(value = Removed.class, target = Health.class)` |
+| React when ANY of several components were removed | `@Filter(value = Removed.class, target = {A.class, B.class, C.class})` |
+| Simple per-type removal drain (no @Read binding) | `RemovedComponents<T>` ([next chapter](07-removed-components.md)) |
 
 ## What's next
 
-Added and Changed live on entities that still exist. Removals are a
-different beast — the entity may be gone entirely. japes handles them with
-a dedicated service parameter.
+`RemovedComponents<T>` is the simpler alternative for single-type removal drains — useful when you don't need `@Read` binding or multi-type observation.
 
 Continue to **[Removed Components](07-removed-components.md)**.

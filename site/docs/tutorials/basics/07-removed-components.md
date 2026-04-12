@@ -112,24 +112,25 @@ removal log for `Position` is never populated to begin with — the tracker
 notices there are zero consumers and `ChangeTracker.fullyUntracked` skips
 the bookkeeping entirely.
 
-## Why not `@Filter(Removed.class)`?
+## `@Filter(Removed)` vs `RemovedComponents<T>`
 
-`@Filter(value = Removed.class, target = X.class)` exists in the API. It
-reads naturally — "run this system on entities that lost their X" — and it
-works. But it is not the normal path, for two reasons:
+Both react to component removals. The choice depends on what you need:
 
-1. **There is no slot to iterate.** The fast tier-1 sparse iteration loop
-   visits a *chunk* and then a *slot* inside that chunk; a removed
-   component has neither. `@Filter(Removed)` therefore drops out of the
-   generated tier-1 path and runs on a slower tier-2 fallback.
-2. **You cannot read other components of that entity.** The entity is
-   gone — its `Position`, `Velocity`, everything else has been cleaned up.
-   So the useful shape is always "give me the (entity, lastValue) pair",
-   which is exactly what `RemovedComponents<T>` already returns.
+| | `RemovedComponents<T>` | `@Filter(Removed, target = ...)` |
+|---|---|---|
+| **Invocation model** | Called once per tick; you iterate the drain | Called once per removed entity (like Added/Changed) |
+| **`@Read` binding** | No — you get `Removal<T>(entity, lastValue)` | Yes — `@Read` params bind to last-known values |
+| **Multi-type** | One param per type | `target = {A.class, B.class, C.class}` — one system for N types |
+| **Tier-1** | N/A (service param, no iteration) | Yes — `GeneratedRemovedFilterProcessor` with `invokevirtual` |
+| **Best for** | Simple single-type drain, counting | Multi-type observation with typed value access |
 
-As a rule of thumb: if you want to react to a removal, declare
-`RemovedComponents<T>`. Save `@Filter(Removed)` for the rare case where you
-want the system to run at all only when a removal happened.
+!!! tip "When to pick which"
+
+    - **Just counting deaths?** `RemovedComponents<Health>` is simpler — iterate + count.
+    - **Need the Position a mob had when it died?** `@Filter(Removed, target = Health.class)` with `@Read Position p` gives you the live Position (if the entity is still alive) or the last value from the log (if despawned).
+    - **Watching 3+ component types for removal?** Multi-target `@Filter(Removed, target = {A, B, C})` collapses 3 systems into 1.
+
+See the [change-detection chapter](06-change-detection.md#filterremoved-reacting-to-deletions) for the full `@Filter(Removed)` API and examples.
 
 ## Worked example: reacting to lost health
 
