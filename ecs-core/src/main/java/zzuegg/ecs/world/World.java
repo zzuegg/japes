@@ -47,6 +47,7 @@ public final class World {
     private final Map<String, zzuegg.ecs.system.PairIterationRunner> pairIterationRunners = new HashMap<>();
     private final Map<String, zzuegg.ecs.system.ExclusiveRunner> exclusiveRunners = new HashMap<>();
     private final Map<String, zzuegg.ecs.system.RemovedFilterProcessor> removedFilterProcessors = new HashMap<>();
+    private final Map<String, Runnable> removedFilterRunners = new HashMap<>();
     private final Set<String> disabledSystems = new HashSet<>();
     private final List<Commands> allCommandBuffers = new ArrayList<>();
     private final RemovalLog removalLog = new RemovalLog();
@@ -94,6 +95,7 @@ public final class World {
         pairIterationRunners.clear();
         exclusiveRunners.clear();
         removedFilterProcessors.clear();
+        removedFilterRunners.clear();
         // Every rebuild re-resolves service args, which allocates fresh Commands
         // buffers. Drop the old ones so the list doesn't grow unbounded.
         allCommandBuffers.clear();
@@ -337,10 +339,45 @@ public final class World {
             }
             plan.setConsumedRemovedComponents(removedClasses);
 
+            var targetIdArr = removedTargets.toArray(zzuegg.ecs.component.ComponentId[]::new);
+
+            // Try tier-1 bytecode generation first.
+            if (useGeneratedProcessors) {
+                // Extract @Read param mapping (same as RemovedFilterProcessor does internally).
+                var accesses = desc.componentAccesses();
+                var readIdxs = new java.util.ArrayList<Integer>();
+                var readCids = new java.util.ArrayList<zzuegg.ecs.component.ComponentId>();
+                var readCls = new java.util.ArrayList<Class<? extends Record>>();
+                int ai = 0;
+                for (int pi = 0; pi < params.length; pi++) {
+                    if (params[pi].isAnnotationPresent(zzuegg.ecs.system.Read.class)) {
+                        var a = accesses.get(ai++);
+                        readIdxs.add(pi);
+                        readCids.add(a.componentId());
+                        readCls.add(a.type());
+                    } else if (params[pi].isAnnotationPresent(zzuegg.ecs.system.Write.class)) {
+                        ai++;
+                    }
+                }
+                int eIdx = -1;
+                for (int pi = 0; pi < params.length; pi++) {
+                    if (params[pi].getType() == zzuegg.ecs.entity.Entity.class) { eIdx = pi; break; }
+                }
+                var tier1 = zzuegg.ecs.system.GeneratedRemovedFilterProcessor.tryGenerate(
+                    desc, plan, removalLog, targetIdArr, this, resolvedServiceArgs,
+                    readCids.toArray(zzuegg.ecs.component.ComponentId[]::new),
+                    readCls.toArray(new Class[0]),
+                    readIdxs.stream().mapToInt(Integer::intValue).toArray(),
+                    eIdx);
+                if (tier1 != null) {
+                    removedFilterRunners.put(desc.name(), tier1);
+                }
+            }
+
+            // Tier-2 fallback (always created — used if tier-1 bails).
             removedFilterProcessors.put(desc.name(),
                 new zzuegg.ecs.system.RemovedFilterProcessor(
-                    desc, plan, removalLog,
-                    removedTargets.toArray(zzuegg.ecs.component.ComponentId[]::new),
+                    desc, plan, removalLog, targetIdArr,
                     this, resolvedServiceArgs, componentRegistry));
         }
 
@@ -1258,7 +1295,18 @@ public final class World {
         }
 
         // @Filter(Removed) systems: driven by the removal log, not
-        // archetype/chunk iteration.
+        // archetype/chunk iteration. Prefer tier-1 generated runner.
+        var removedRunner = removedFilterRunners.get(desc.name());
+        if (removedRunner != null) {
+            try {
+                removedRunner.run();
+            } catch (Throwable e) {
+                throw new RuntimeException("@Filter(Removed) tier-1 failed: " + desc.name(), e);
+            }
+            var plan = systemPlans.get(desc.name());
+            if (plan != null) plan.markExecuted(tick.current());
+            return;
+        }
         var removedProc = removedFilterProcessors.get(desc.name());
         if (removedProc != null) {
             try {
