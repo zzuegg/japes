@@ -308,16 +308,7 @@ public final class World {
         // are now supported by the BytecodeChunkProcessor and DirectProcessor
         // tiers (GeneratedChunkProcessor tier-1 still bails via skipReason
         // because its read-only fast path doesn't emit the entity load).
-        // Skip chunk-processor generation when the system has multi-target
-        // @Filter annotations — BytecodeChunkProcessor and DirectProcessor
-        // don't understand @Filter at all, so the dispatch must fall through
-        // to plan.processChunk() (which does). GeneratedChunkProcessor
-        // already bails via skipReason for multi-target filters; this guard
-        // prevents the generator from falling to a filter-unaware tier.
-        boolean hasMultiTargetFilter = desc.changeFilters().stream()
-            .anyMatch(f -> f.targets().size() > 1);
-        if (useGeneratedProcessors && !desc.isExclusive() && !desc.componentAccesses().isEmpty()
-                && !hasMultiTargetFilter) {
+        if (useGeneratedProcessors && !desc.isExclusive() && !desc.componentAccesses().isEmpty()) {
             chunkProcessors.put(desc.name(),
                 ChunkProcessorGenerator.generate(desc, resolvedServiceArgs, useDefaultStorageFactory, plan));
         }

@@ -85,9 +85,6 @@ public final class GeneratedChunkProcessor {
             if (f.filterType() != Added.class && f.filterType() != Changed.class) {
                 return "system uses @Filter(" + f.filterType().getSimpleName() + ") which is unsupported";
             }
-            if (f.targets().size() > 1) {
-                return "system uses multi-target @Filter (tier-2 only for now)";
-            }
         }
         return null;
     }
@@ -235,6 +232,15 @@ public final class GeneratedChunkProcessor {
         final boolean hasFilters = plan != null && plan.hasChangeFilters();
         final SystemExecutionPlan.ResolvedChangeFilter[] resolvedFilters =
             hasFilters ? plan.resolvedChangeFilters() : new SystemExecutionPlan.ResolvedChangeFilter[0];
+        // Multi-target: any @Filter group with > 1 target component.
+        boolean isMultiTarget = false;
+        int totalFilterTargets = 0;
+        for (var f : resolvedFilters) {
+            totalFilterTargets += f.targetIds().length;
+            if (f.targetIds().length > 1) isMultiTarget = true;
+        }
+        final boolean multiTargetFilter = isMultiTarget;
+        final int filterTargetCount = totalFilterTargets;
         var planClassDesc = ClassDesc.of("zzuegg.ecs.system.SystemExecutionPlan");
         var planLastSeenDesc = MethodTypeDesc.of(ConstantDescs.CD_long);
         var trackerDirtySlotsDesc = MethodTypeDesc.of(ClassDesc.ofDescriptor("[I"));
@@ -275,6 +281,12 @@ public final class GeneratedChunkProcessor {
             if (hasFilters) {
                 clb.withField("plan", planClassDesc, fb -> fb.withFlags(ACC_PUBLIC));
                 clb.withField("filterCids", compIdArrayDesc, fb -> fb.withFlags(ACC_PUBLIC));
+                if (multiTargetFilter) {
+                    // Reusable per-chunk buffers — allocated once, cleared per call.
+                    clb.withField("seenBitmap", ClassDesc.ofDescriptor("[J"), fb -> fb.withFlags(ACC_PUBLIC));
+                    clb.withField("resultBuf", ClassDesc.ofDescriptor("[I"), fb -> fb.withFlags(ACC_PUBLIC));
+                    clb.withField("filterTrackers", trackerArrayDesc, fb -> fb.withFlags(ACC_PUBLIC));
+                }
             }
 
             // Constructor
@@ -316,7 +328,10 @@ public final class GeneratedChunkProcessor {
                 int dirtyListVar = dirtyIdxVar + 1;
                 int dirtyCountVar = dirtyListVar + 1;
                 int firstFilterTrackerVar = dirtyCountVar + 1;
-                int lastSeenVar = firstFilterTrackerVar + resolvedFilters.length;
+                // For single-target: one tracker local per filter group (existing).
+                // For multi-target: one tracker local per individual target across all groups.
+                int filterTrackerLocals = multiTargetFilter ? filterTargetCount : resolvedFilters.length;
+                int lastSeenVar = firstFilterTrackerVar + filterTrackerLocals;
                 // lastSeen is a long → consumes 2 slots. Next free slot is
                 // lastSeenVar + 2 if hasFilters, else lastSeenVar (== lastSeenVar
                 // was never written). Keep it simple: reserve 2 slots always.
@@ -401,40 +416,87 @@ public final class GeneratedChunkProcessor {
                 // plan.lastSeenTick() in a local so the per-slot check is a
                 // plain long comparison.
                 if (hasFilters) {
-                    for (int fi = 0; fi < resolvedFilters.length; fi++) {
-                        var targetCid = resolvedFilters[fi].targetId();
-                        // Look up component's access index so we push the right
-                        // cids[] entry. If the target isn't among this system's
-                        // component params, we look it up on the chunk directly
-                        // using the filter's own ComponentId — generated via a
-                        // static method that constructs the id from a field on
-                        // the plan's descriptor. Simpler: we add a filterCids
-                        // field and store the resolved ids there.
-                        // For now: the plan exposes resolvedChangeFilters; we
-                        // use their targetId via a filterCids field.
-                        cb.aload(1); // chunk
-                        cb.aload(0); // this
-                        cb.getfield(genDesc, "filterCids", compIdArrayDesc);
-                        cb.ldc(fi);
-                        cb.aaload();
-                        cb.invokevirtual(chunkDesc, "changeTracker", chunkChangeTrackerDesc);
-                        cb.astore(firstFilterTrackerVar + fi);
-                    }
-                    // Primary filter's dirty list
-                    cb.aload(firstFilterTrackerVar);
-                    cb.invokevirtual(trackerDesc, "dirtySlots", trackerDirtySlotsDesc);
-                    cb.astore(dirtyListVar);
-                    cb.aload(firstFilterTrackerVar);
-                    cb.invokevirtual(trackerDesc, "dirtyCount", trackerDirtyCountDesc);
-                    cb.istore(dirtyCountVar);
-                    // lastSeen = plan.lastSeenTick()
+                    // lastSeen = plan.lastSeenTick()  (used by both paths)
                     cb.aload(0);
                     cb.getfield(genDesc, "plan", planClassDesc);
                     cb.invokevirtual(planClassDesc, "lastSeenTick", planLastSeenDesc);
                     cb.lstore(lastSeenVar);
-                    // dirtyIdx = 0
-                    cb.iconst_0();
-                    cb.istore(dirtyIdxVar);
+
+                    if (multiTargetFilter) {
+                        // Multi-target path: build a ChangeTracker[] per chunk,
+                        // clear the reusable bitmap, call the helper which fills
+                        // the reusable resultBuf. Zero per-chunk allocation.
+                        var helperDesc = ClassDesc.of("zzuegg.ecs.system.MultiFilterHelper");
+                        var longArrDesc = ClassDesc.ofDescriptor("[J");
+                        var intArrDesc = ClassDesc.ofDescriptor("[I");
+                        var unionDesc = MethodTypeDesc.of(
+                            ConstantDescs.CD_int,           // return: match count
+                            trackerArrayDesc,               // ChangeTracker[]
+                            ConstantDescs.CD_int,           // count
+                            ConstantDescs.CD_long,          // lastSeen
+                            ConstantDescs.CD_boolean,       // isAdded
+                            longArrDesc,                    // seenBitmap
+                            intArrDesc);                    // resultBuf
+                        // Fill the reusable filterTrackers[] from chunk + filterCids
+                        cb.aload(0);
+                        cb.getfield(genDesc, "filterTrackers", trackerArrayDesc);
+                        for (int ti = 0; ti < filterTargetCount; ti++) {
+                            cb.dup();
+                            cb.ldc(ti);
+                            cb.aload(1); // chunk
+                            cb.aload(0);
+                            cb.getfield(genDesc, "filterCids", compIdArrayDesc);
+                            cb.ldc(ti);
+                            cb.aaload();
+                            cb.invokevirtual(chunkDesc, "changeTracker", chunkChangeTrackerDesc);
+                            cb.aastore();
+                        }
+                        // stack: [ChangeTracker[]]
+                        cb.iload(countVar);           // count
+                        cb.lload(lastSeenVar);        // lastSeen
+                        boolean isAdded = resolvedFilters[0].kind() == SystemExecutionPlan.FilterKind.ADDED;
+                        cb.ldc(isAdded ? 1 : 0);
+                        // Clear seenBitmap: Arrays.fill(seenBitmap, 0L)
+                        cb.aload(0);
+                        cb.getfield(genDesc, "seenBitmap", longArrDesc);
+                        cb.dup();
+                        cb.lconst_0();
+                        cb.invokestatic(ClassDesc.of("java.util.Arrays"), "fill",
+                            MethodTypeDesc.of(ConstantDescs.CD_void, longArrDesc, ConstantDescs.CD_long));
+                        // stack: [ChangeTracker[], count, lastSeen, isAdded, seenBitmap]
+                        cb.aload(0);
+                        cb.getfield(genDesc, "resultBuf", intArrDesc);
+                        // stack: [..., seenBitmap, resultBuf]
+                        cb.invokestatic(helperDesc, "unionDirtySlots", unionDesc);
+                        // return value is match count → store as dirtyCount
+                        cb.istore(dirtyCountVar);
+                        // dirtyList = this.resultBuf (the helper wrote into it)
+                        cb.aload(0);
+                        cb.getfield(genDesc, "resultBuf", intArrDesc);
+                        cb.astore(dirtyListVar);
+                        cb.iconst_0();
+                        cb.istore(dirtyIdxVar);
+                    } else {
+                        // Single-target path: load one tracker per filter, use
+                        // the primary's dirty list directly (existing code).
+                        for (int fi = 0; fi < resolvedFilters.length; fi++) {
+                            cb.aload(1); // chunk
+                            cb.aload(0);
+                            cb.getfield(genDesc, "filterCids", compIdArrayDesc);
+                            cb.ldc(fi);
+                            cb.aaload();
+                            cb.invokevirtual(chunkDesc, "changeTracker", chunkChangeTrackerDesc);
+                            cb.astore(firstFilterTrackerVar + fi);
+                        }
+                        cb.aload(firstFilterTrackerVar);
+                        cb.invokevirtual(trackerDesc, "dirtySlots", trackerDirtySlotsDesc);
+                        cb.astore(dirtyListVar);
+                        cb.aload(firstFilterTrackerVar);
+                        cb.invokevirtual(trackerDesc, "dirtyCount", trackerDirtyCountDesc);
+                        cb.istore(dirtyCountVar);
+                        cb.iconst_0();
+                        cb.istore(dirtyIdxVar);
+                    }
                 } else {
                     // int slot = 0
                     cb.iconst_0();
@@ -500,22 +562,28 @@ public final class GeneratedChunkProcessor {
                     cb.iaload();
                     cb.istore(slotVar);
                     cb.iinc(dirtyIdxVar, 1);
-                    // if (slot >= count) continue  (swap-removed)
-                    cb.iload(slotVar);
-                    cb.iload(countVar);
-                    cb.if_icmpge(loopContinue);
-                    // Per-filter check: for each filter, isXxxSince(slot, lastSeen)
-                    for (int fi = 0; fi < resolvedFilters.length; fi++) {
-                        cb.aload(firstFilterTrackerVar + fi);
+                    if (multiTargetFilter) {
+                        // Multi-target: the helper already filtered + deduped.
+                        // No per-slot check needed — every slot in the array
+                        // is guaranteed to match. The helper also excluded
+                        // slots >= count, so no bounds check required.
+                    } else {
+                        // Single-target: bounds check + per-filter AND check.
                         cb.iload(slotVar);
-                        cb.lload(lastSeenVar);
-                        var kind = resolvedFilters[fi].kind();
-                        if (kind == SystemExecutionPlan.FilterKind.ADDED) {
-                            cb.invokevirtual(trackerDesc, "isAddedSince", trackerIsAddedSinceDesc);
-                        } else {
-                            cb.invokevirtual(trackerDesc, "isChangedSince", trackerIsChangedSinceDesc);
+                        cb.iload(countVar);
+                        cb.if_icmpge(loopContinue);
+                        for (int fi = 0; fi < resolvedFilters.length; fi++) {
+                            cb.aload(firstFilterTrackerVar + fi);
+                            cb.iload(slotVar);
+                            cb.lload(lastSeenVar);
+                            var kind = resolvedFilters[fi].kind();
+                            if (kind == SystemExecutionPlan.FilterKind.ADDED) {
+                                cb.invokevirtual(trackerDesc, "isAddedSince", trackerIsAddedSinceDesc);
+                            } else {
+                                cb.invokevirtual(trackerDesc, "isChangedSince", trackerIsChangedSinceDesc);
+                            }
+                            cb.ifeq(loopContinue);
                         }
-                        cb.ifeq(loopContinue);
                     }
                 } else {
                     cb.iload(slotVar);
@@ -679,11 +747,21 @@ public final class GeneratedChunkProcessor {
 
         if (hasFilters) {
             clazz.getField("plan").set(instance, plan);
-            var filterCids = new ComponentId[resolvedFilters.length];
-            for (int fi = 0; fi < resolvedFilters.length; fi++) {
-                filterCids[fi] = resolvedFilters[fi].targetId();
+            // Flatten all target ComponentIds across all filter groups
+            // into a single array. Multi-target @Filter groups contribute
+            // multiple entries; single-target groups contribute one.
+            var allIds = new java.util.ArrayList<ComponentId>();
+            for (var f : resolvedFilters) {
+                for (var tid : f.targetIds()) allIds.add(tid);
             }
-            clazz.getField("filterCids").set(instance, filterCids);
+            clazz.getField("filterCids").set(instance, allIds.toArray(ComponentId[]::new));
+            if (multiTargetFilter) {
+                int maxChunkSize = 1024;
+                clazz.getField("seenBitmap").set(instance, new long[(maxChunkSize + 63) >>> 6]);
+                clazz.getField("resultBuf").set(instance, new int[maxChunkSize]);
+                clazz.getField("filterTrackers").set(instance,
+                    new zzuegg.ecs.change.ChangeTracker[filterTargetCount]);
+            }
         }
 
         return (ChunkProcessor) instance;
