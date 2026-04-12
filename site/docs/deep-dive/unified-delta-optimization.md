@@ -16,8 +16,8 @@ title: "Optimization log: multi-target @Filter"
 | 3 | Zero-allocation helper (reusable buffers) | 3.62 | **+7%** | [Round 3](#round-3--zero-allocation-helper) |
 | 4 | Flat topological order in executor | 3.44 | noise | [Round 4](#round-4--flat-topological-order-in-the-executor) |
 | 5 | `@Filter(Removed)` with last-value binding | 3.34 | −2% | [Round 5](#round-5--filterremoved-with-last-value-binding) |
-| 6 | Tier-1 bytecode gen for Removed | 3.37 | noise | [Round 6](#round-6--tier-1-bytecode-generation-for-filterremoved) |
-| 7 | `ArchetypeId` flat array backing | **3.42** | +1.5% | [Round 7](#round-7--archetypeid-flat-array-backing) |
+| 6 | Tier-1 bytecode gen for Removed | 3.37 | noise | [Round 6](#round-6-tier-1-bytecode-generation-for-filterremoved) |
+| 7 | `ArchetypeId` flat array backing | **3.42** | +1.5% | [Round 7](#round-7-archetypeid-flat-array-backing) |
 
 **Net result**: 9 systems → 3 systems, 3.41 → **3.42 ops/ms** at 10k (no regression), all three `@Filter` categories on tier-1. japes beats Zay-ES at 100k by **1.30×**; Zay-ES leads at 10k by 1.25×.
 
