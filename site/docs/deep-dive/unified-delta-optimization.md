@@ -130,16 +130,36 @@ Profiling after round 3 showed ~13% of CPU in scheduler infrastructure: `Schedul
 
 The final piece: `@Filter(Removed, target = {S, H, M})` completes the symmetric API. Instead of 3 separate `RemovedComponents<T>` systems, one `@Filter(Removed)` observer fires once per entity that lost any target component, with `@Read` params bound to the last-known values (from the removal log for removed components, from the live entity for still-present ones).
 
-This is a fundamentally different dispatch path — the entity that lost a component is no longer in a matching archetype, so normal chunk iteration can't find it. `RemovedFilterProcessor` walks the removal log directly.
+This is a fundamentally different dispatch path — the entity that lost a component is no longer in a matching archetype, so normal chunk iteration can't find it. The processor walks the removal log directly.
 
 **Bug found during implementation**: the removal log GC check (`consumedRemovedComponents` on the plan) wasn't set for `@Filter(Removed)` systems, so the log grew unbounded. Without the fix, the benchmark ran at **0.73 ops/ms** (5× regression). With the fix: **3.34 ops/ms**.
 
+**Tier-1 was added in round 6** (below) — `GeneratedRemovedFilterProcessor` emits a hidden class that calls `RemovedFilterHelper.resolve()` for dedup + value resolution into reusable buffers, then iterates with inline `invokevirtual` to the user method.
+
 | | 9-system | 5-system | **3-system** | Zay-ES |
 |---|---:|---:|---:|---:|
-| **10k** | 3.41 | 3.62 | **3.34** | 4.27 |
-| **100k** | 0.276 | 0.263 | **0.257** | 0.198 |
+| **10k** | 3.41 | 3.62 | **3.37** | 4.28 |
+| **100k** | 0.276 | 0.263 | **0.266** | 0.205 |
 
-The 3-system version is ~8% slower than 5-system at 10k because `RemovedFilterProcessor` is tier-2 (reflective, `LinkedHashMap` dedup, `SystemInvoker.invoke` per entity). Tier-1 generation for this path would close the gap.
+## Round 6 — tier-1 bytecode generation for `@Filter(Removed)`
+
+`GeneratedRemovedFilterProcessor` emits a hidden class per `@Filter(Removed)` system. The generated `run()` method:
+
+1. Calls the static `RemovedFilterHelper.resolve()` which walks the removal log for all target types, deduplicates per entity via `LinkedHashMap`, resolves `@Read` values (removal log for removed components, live entity for still-present ones), and fills reusable `Entity[]` + `Object[]` output buffers.
+2. Iterates the result with inline casts + `invokevirtual` to the user method — no `SystemInvoker`, no reflection.
+3. Service params are hoisted to locals in the preamble, same as the Added/Changed tier-1 path.
+
+**Result**: within noise (3.37 vs 3.34 ops/ms at 10k) — the profile showed the removed processor was <1% of CPU even on tier-2. The tier-1 path exists for correctness and for workloads where removal is hotter.
+
+## Round 7 — `ArchetypeId` flat array backing
+
+Replaced `ArchetypeId`'s `TreeSet<ComponentId>` with a sorted `ComponentId[]`. Every operation (contains, hashCode, equals, iteration) is now array-based: cache-linear, no pointer chasing, no `TreeMap.Entry` overhead. `TreeMap.getFirstEntry` was consistently 4-5% of CPU in profiles — this eliminates it.
+
+**Result**: across-the-board improvement on all benchmarks:
+
+- Unified delta 10k: 3.34 → **3.42 ops/ms** (+2%)
+- Predator/prey 500×2000: 32.0 → **31.4 µs** (−2.5%)
+- Write-heavy benchmarks (iterateWithWrite, NBody, ParticleScenario) all gained 30-35% from the accumulated session changes.
 
 ## Related
 
