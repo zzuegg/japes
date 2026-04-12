@@ -14,10 +14,10 @@ benchmark/bevy-benchmark/target/
 # MkDocs local build output (deployed via .github/workflows/docs.yml).
 site/build/
 
-# JMH per-benchmark result directories — left behind by -prof jfr.
-zzuegg.ecs.bench.scenario.*/
+# JMH per-benchmark result directories + JFR profiles.
+zzuegg.ecs.bench.*/
+*.jfr
 
 # Python venv some contributors use for local mkdocs builds.
 .venv/
 venv/
-zzuegg.ecs.bench.*/
