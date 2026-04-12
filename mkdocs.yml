@@ -137,6 +137,7 @@ nav:
       - Write-path tax: deep-dive/write-path-tax.md
       - Valhalla investigation: deep-dive/valhalla-investigation.md
       - Optimisation journey: deep-dive/optimization-journey.md
+      - 'Multi-target @Filter log': deep-dive/unified-delta-optimization.md
   - Benchmarks:
       - benchmarks/index.md
       - Methodology: benchmarks/methodology.md
@@ -146,6 +147,7 @@ nav:
       - Sparse delta: benchmarks/sparse-delta.md
       - Realistic tick: benchmarks/realistic-tick.md
       - Predator / prey relations: benchmarks/predator-prey.md
+      - Unified delta: benchmarks/unified-delta.md
       - Valhalla EA: benchmarks/valhalla.md
   - Reference:
       - reference/index.md

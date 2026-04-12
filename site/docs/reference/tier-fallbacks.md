@@ -294,7 +294,8 @@ the system name.
 | Static method | pair | yes | make it non-static |
 | Uses `@Where` | chunk | yes | move predicate into method body |
 | Uses `@Filter(Removed)` | chunk | yes | use `RemovedComponents<T>` service param |
-| Uses `@Filter(Added/Changed)` | chunk | no (tier-1 supports) | — |
+| Uses `@Filter(Added/Changed)` — single target | chunk | no (tier-1 supports) | — |
+| Uses `@Filter(Added/Changed)` — multi-target | chunk | no (tier-1 supports via `MultiFilterHelper`) | — |
 | No component params on non-exclusive | chunk | yes | mark `@Exclusive` |
 | `@FromTarget @Write` | parser (all tiers) | **rejected at parse time** | write to source or split system |
 | Any service type | — | **never a blocker** | — |
