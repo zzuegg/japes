@@ -13,7 +13,7 @@ public final class Mut<T extends Record> {
     private boolean changed;
 
     public Mut(T value, int slot, ChangeTracker tracker, long tick, boolean valueTracked) {
-        this.original = value;
+        if (valueTracked) this.original = value;
         this.current = value;
         this.slot = slot;
         this.tracker = tracker;

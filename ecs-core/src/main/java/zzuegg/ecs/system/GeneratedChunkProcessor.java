@@ -577,14 +577,11 @@ public final class GeneratedChunkProcessor {
                     cb.checkcast(params[i].getType().describeConstable().orElseThrow());
                     cb.astore(serviceLocal[i]);
                 }
-                for (int i = 0; i < paramCount; i++) {
-                    if (mutLocal[i] < 0) continue;
-                    cb.aload(0);
-                    cb.getfield(genDesc, "muts", mutArrayDesc);
-                    cb.ldc(i);
-                    cb.aaload();
-                    cb.astore(mutLocal[i]);
-                }
+                // Note: mutLocal[i] is NOT pre-loaded from this.muts[i].
+                // The entity loop creates a fresh Mut per entity. Pre-loading
+                // the heap-resident muts[i] would poison the local's type
+                // profile at the loop-header merge point (heap object + fresh
+                // allocation in the same local), potentially blocking EA.
                 // Hoist chunk.entityArray() so per-slot Entity access
                 // is a plain aaload on a local Entity[] rather than an
                 // invokevirtual through Chunk.entity(int).
