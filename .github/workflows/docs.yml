@@ -9,6 +9,7 @@ on:
     paths:
       - 'site/**'
       - 'mkdocs.yml'
+      - 'requirements.txt'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
@@ -36,12 +37,7 @@ jobs:
           cache: pip
 
       - name: Install MkDocs Material
-        run: |
-          pip install --upgrade pip
-          pip install \
-            mkdocs-material \
-            pymdown-extensions \
-            mkdocs-minify-plugin
+        run: pip install -r requirements.txt
 
       - name: Build site
         run: mkdocs build --strict
