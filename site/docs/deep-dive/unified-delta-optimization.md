@@ -118,6 +118,14 @@ The 10k gap to Zay-ES (1.18×) is the remaining cost of 5 system dispatches + sc
 
 4. **Dirty-list pruning must cover all targets.** The World end-of-tick prune used `f.targetId()` (first target only) to decide which component to prune. Multi-target filters left the other targets' dirty lists unpruned, causing stale entries to accumulate across ticks and inflate the union iteration set. Fixed by looping over all `f.targetIds()`.
 
+## Round 4 — flat topological order in the executor
+
+Profiling after round 3 showed ~13% of CPU in scheduler infrastructure: `ScheduleGraph.complete()` HashMap lookups + `TreeMap.getFirstEntry` from `ArchetypeId` iteration during archetype graph lookups.
+
+**Change**: `ScheduleGraph.flatOrder()` computes a topological sort once via Kahn's algorithm and caches the result as a flat `SystemNode[]`. The `SingleThreadedExecutor` now iterates this array instead of running the `readySystems()` / `complete()` DAG loop per tick. Eliminates per-tick `ArrayList` allocation, `HashMap.getOrDefault` lookups, and `boolean[]` scans.
+
+**Result**: within noise on both benchmarks (3.44 vs 3.62 ops/ms at 10k — the error bars overlap). The scheduler overhead was only ~5 µs per tick for 5-system workloads. The win is structural: zero per-tick allocation in the executor, guaranteed O(1) execution order lookup regardless of DAG complexity, and cleaner code. Bigger workloads with more systems will see a larger absolute win.
+
 ## Related
 
 - [Multi-target @Filter tutorial](../tutorials/basics/06-change-detection.md)
