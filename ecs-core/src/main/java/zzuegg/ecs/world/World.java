@@ -59,12 +59,14 @@ public final class World {
     private final Set<ComponentId> trackedChangeFilterComponents = new HashSet<>();
     private final boolean useGeneratedProcessors;
     private final boolean useDefaultStorageFactory;
+    private final boolean useSoAStorage;
 
     World(WorldBuilder builder) {
         this.archetypeGraph = new ArchetypeGraph(componentRegistry, builder.chunkSize, builder.storageFactory);
         this.executor = builder.executor;
         this.useGeneratedProcessors = builder.useGeneratedProcessors;
         this.useDefaultStorageFactory = builder.useDefaultStorageFactory;
+        this.useSoAStorage = builder.storageFactory instanceof zzuegg.ecs.storage.SoAComponentStorage.SoAFactory;
         this.stages = new HashMap<>(builder.stages);
 
         for (var resource : builder.resources) {
@@ -315,7 +317,7 @@ public final class World {
         if (useGeneratedProcessors && !desc.isExclusive() && !desc.componentAccesses().isEmpty()
                 && !hasRemovedFilter) {
             chunkProcessors.put(desc.name(),
-                ChunkProcessorGenerator.generate(desc, resolvedServiceArgs, useDefaultStorageFactory, plan));
+                ChunkProcessorGenerator.generate(desc, resolvedServiceArgs, useDefaultStorageFactory, plan, useSoAStorage));
         }
 
         // @Filter(Removed) was detected earlier (line ~310); create the processor.

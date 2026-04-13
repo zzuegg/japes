@@ -242,11 +242,17 @@ public final class GeneratedChunkProcessor {
     public static ChunkProcessor tryGenerate(SystemDescriptor desc, Object[] serviceArgs,
                                              boolean useDefaultStorageFactory,
                                              SystemExecutionPlan plan) {
+        return tryGenerate(desc, serviceArgs, useDefaultStorageFactory, plan, false);
+    }
+
+    public static ChunkProcessor tryGenerate(SystemDescriptor desc, Object[] serviceArgs,
+                                             boolean useDefaultStorageFactory,
+                                             SystemExecutionPlan plan,
+                                             boolean useSoAStorage) {
         if (skipReason(desc) != null) return null;
-        // Change filters need the plan reference for lastSeenTick.
         if (!desc.changeFilters().isEmpty() && plan == null) return null;
         try {
-            return generateWithBytecode(desc, serviceArgs, useDefaultStorageFactory, plan);
+            return generateWithBytecode(desc, serviceArgs, useDefaultStorageFactory, plan, useSoAStorage);
         } catch (Exception e) {
             // Fall back to invokeExact path. The invokeExact fallback cannot
             // handle Mut/Entity/service parameters — if any such param exists,
@@ -284,7 +290,8 @@ public final class GeneratedChunkProcessor {
 
     private static ChunkProcessor generateWithBytecode(SystemDescriptor desc, Object[] serviceArgs,
                                                         boolean useDefaultStorageFactory,
-                                                        SystemExecutionPlan plan) throws Exception {
+                                                        SystemExecutionPlan plan,
+                                                        boolean useSoAStorage) throws Exception {
         var method = desc.method();
         var accesses = desc.componentAccesses();
         int paramCount = method.getParameterCount();
@@ -325,7 +332,7 @@ public final class GeneratedChunkProcessor {
         boolean[] isSoA = new boolean[paramCount];
         java.lang.reflect.RecordComponent[][] soaComponents = new java.lang.reflect.RecordComponent[paramCount][];
         boolean anySoA = false;
-        if (!useDefaultStorageFactory) {
+        if (useSoAStorage) {
             for (int i = 0; i < paramCount; i++) {
                 if ((kinds[i] == ParamKind.READ || kinds[i] == ParamKind.WRITE)
                     && componentTypes[i] != null

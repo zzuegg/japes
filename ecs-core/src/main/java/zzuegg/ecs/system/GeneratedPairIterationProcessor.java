@@ -166,7 +166,20 @@ public final class GeneratedPairIterationProcessor {
             }
         }
 
+        // Generate HiddenMut subclasses for SoA SOURCE_WRITE params.
+        GeneratedChunkProcessor.HiddenMutInfo[] hiddenMutInfos =
+            new GeneratedChunkProcessor.HiddenMutInfo[paramCount];
         var systemLookup = MethodHandles.privateLookupIn(method.getDeclaringClass(), MethodHandles.lookup());
+        for (int i = 0; i < paramCount; i++) {
+            if (kinds[i] == ParamKind.SOURCE_WRITE && isSoA[i]) {
+                try {
+                    hiddenMutInfos[i] = GeneratedChunkProcessor.generateHiddenMut(
+                        systemLookup, (Class<? extends Record>) paramRecordClass[i], desc.name());
+                } catch (Exception e) {
+                    // Fall back to plain Mut
+                }
+            }
+        }
         var systemClassDesc = method.getDeclaringClass().describeConstable().orElseThrow();
 
         // ------- JVM-level descriptors -------
@@ -260,7 +273,7 @@ public final class GeneratedPairIterationProcessor {
                     locChunkIdx, locSlotIdx, archChunks, chunkStorage,
                     chunkTracker, storageGet, storageSet,
                     mutFlush,
-                    isSoA, soaComps));
+                    isSoA, soaComps, hiddenMutInfos));
         });
 
         // Define hidden class + populate fields.
@@ -332,7 +345,8 @@ public final class GeneratedPairIterationProcessor {
             MethodTypeDesc chunkStorage, MethodTypeDesc chunkTracker,
             MethodTypeDesc storageGet, MethodTypeDesc storageSet,
             MethodTypeDesc mutFlush,
-            boolean[] isSoA, java.lang.reflect.RecordComponent[][] soaComps) {
+            boolean[] isSoA, java.lang.reflect.RecordComponent[][] soaComps,
+            GeneratedChunkProcessor.HiddenMutInfo[] hiddenMutInfos) {
 
         // ------- local variable layout -------
         // 0  this
@@ -710,23 +724,50 @@ public final class GeneratedPairIterationProcessor {
         );
         for (int i = 0; i < paramCount; i++) {
             if (kinds[i] != ParamKind.SOURCE_WRITE) continue;
-            cb.new_(mutDesc);
-            cb.dup();
-            // value: storage.get(srcSlot) or SoA reconstruct
-            if (isSoA[i]) {
-                emitSoAGet(cb, srcSlotVar, soaComps[i],
-                    soaFieldLocals[i], paramRecordClass[i]);
+            if (hiddenMutInfos[i] != null) {
+                // HiddenMut: stores primitives directly from SoA arrays.
+                var hmi = hiddenMutInfos[i];
+                var hmDesc = hmi.classDesc();
+                var hmRc = hmi.components();
+                cb.new_(hmDesc);
+                cb.dup();
+                cb.invokespecial(hmDesc, "<init>",
+                    MethodTypeDesc.of(ConstantDescs.CD_void));
+                // Populate cur_ fields from SoA arrays
+                for (int f = 0; f < hmRc.length; f++) {
+                    cb.dup();
+                    cb.aload(soaFieldLocals[i][f]);
+                    cb.iload(srcSlotVar);
+                    zzuegg.ecs.storage.SoAComponentStorage.emitArrayLoad(cb, hmRc[f].getType());
+                    var fDesc = (ClassDesc) hmRc[f].getType().describeConstable().orElseThrow();
+                    cb.putfield(hmDesc, "cur_" + hmRc[f].getName(), fDesc);
+                }
+                // Set slot, tracker, tick
+                cb.dup(); cb.iload(srcSlotVar);
+                cb.putfield(mutDesc, "slot", ConstantDescs.CD_int);
+                cb.dup(); cb.aload(srcWriteTrackerLocal[i]);
+                cb.putfield(mutDesc, "tracker", trackerDesc);
+                cb.dup(); cb.lload(1);
+                cb.putfield(mutDesc, "tick", ConstantDescs.CD_long);
+                cb.astore(srcWriteMutLocal[i]);
             } else {
-                cb.aload(srcWriteStorageLocal[i]);
+                cb.new_(mutDesc);
+                cb.dup();
+                if (isSoA[i]) {
+                    emitSoAGet(cb, srcSlotVar, soaComps[i],
+                        soaFieldLocals[i], paramRecordClass[i]);
+                } else {
+                    cb.aload(srcWriteStorageLocal[i]);
+                    cb.iload(srcSlotVar);
+                    cb.invokeinterface(storageDesc, "get", storageGet);
+                }
                 cb.iload(srcSlotVar);
-                cb.invokeinterface(storageDesc, "get", storageGet);
+                cb.aload(srcWriteTrackerLocal[i]);
+                cb.lload(1);
+                cb.iconst_0();
+                cb.invokespecial(mutDesc, "<init>", mutInitDesc);
+                cb.astore(srcWriteMutLocal[i]);
             }
-            cb.iload(srcSlotVar);                // slot
-            cb.aload(srcWriteTrackerLocal[i]);   // tracker
-            cb.lload(1);                         // tick
-            cb.iconst_0();                       // valueTracked = false
-            cb.invokespecial(mutDesc, "<init>", mutInitDesc);
-            cb.astore(srcWriteMutLocal[i]);
         }
 
         // --------------- inner loop setup ---------------
@@ -881,7 +922,29 @@ public final class GeneratedPairIterationProcessor {
             cb.invokevirtual(mutDesc, "isChanged", mutIsChanged);
             cb.ifeq(skipFlush);
 
-            if (isSoA[i]) {
+            if (hiddenMutInfos[i] != null) {
+                // HiddenMut: read pnd_ primitives directly, call markChanged.
+                var hmi = hiddenMutInfos[i];
+                var hmDesc = hmi.classDesc();
+                var hmRc = hmi.components();
+                for (int f = 0; f < hmRc.length; f++) {
+                    cb.aload(soaFieldLocals[i][f]);
+                    cb.iload(srcSlotVar);
+                    cb.aload(srcWriteMutLocal[i]);
+                    var fDesc = (ClassDesc) hmRc[f].getType().describeConstable().orElseThrow();
+                    cb.getfield(hmDesc, "pnd_" + hmRc[f].getName(), fDesc);
+                    zzuegg.ecs.storage.SoAComponentStorage.emitArrayStore(cb, hmRc[f].getType());
+                }
+                // markChanged
+                cb.aload(srcWriteMutLocal[i]);
+                cb.getfield(mutDesc, "tracker", trackerDesc);
+                cb.aload(srcWriteMutLocal[i]);
+                cb.getfield(mutDesc, "slot", ConstantDescs.CD_int);
+                cb.aload(srcWriteMutLocal[i]);
+                cb.getfield(mutDesc, "tick", ConstantDescs.CD_long);
+                cb.invokevirtual(trackerDesc, "markChanged",
+                    MethodTypeDesc.of(ConstantDescs.CD_void, ConstantDescs.CD_int, ConstantDescs.CD_long));
+            } else if (isSoA[i]) {
                 cb.aload(srcWriteMutLocal[i]);
                 cb.invokevirtual(mutDesc, "flush", mutFlush);
                 emitSoASet(cb, srcSlotVar, tempRecordVar,
