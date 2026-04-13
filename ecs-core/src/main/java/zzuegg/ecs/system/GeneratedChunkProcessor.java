@@ -23,6 +23,12 @@ public final class GeneratedChunkProcessor {
 
     private static final java.util.concurrent.atomic.AtomicLong COUNTER = new java.util.concurrent.atomic.AtomicLong();
 
+    /**
+     * Opt-out for the JIT profile warmup. Set {@code -Dzzuegg.ecs.noWarmup=true}
+     * to disable in tests where static side effects from warmup matter.
+     */
+    static final boolean WARMUP_DISABLED = Boolean.getBoolean("zzuegg.ecs.noWarmup");
+
     private GeneratedChunkProcessor() {}
 
     /**
@@ -1299,7 +1305,99 @@ public final class GeneratedChunkProcessor {
             }
         }
 
+        // Pre-warm the system method's branch profile so C1 records
+        // the write path as hot. Without this, C2 refuses to inline
+        // set() on cold branches at mid-range entity counts (400-2500),
+        // defeating EA. Skip for systems with services (no valid service
+        // objects available during generation) or filters.
+        if (hasWrites && !hasServices && !hasFilters && !WARMUP_DISABLED) {
+            warmupSystemMethod(desc, accesses, kinds, hiddenMutInfos);
+        }
+
         return (ChunkProcessor) instance;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void warmupSystemMethod(SystemDescriptor desc,
+                                           java.util.List<zzuegg.ecs.query.ComponentAccess> accesses,
+                                           ParamKind[] kinds,
+                                           HiddenMutInfo[] hiddenMutInfos) {
+        try {
+            var method = desc.method();
+            int paramCount = method.getParameterCount();
+            boolean isStatic = java.lang.reflect.Modifier.isStatic(method.getModifiers());
+            Object warmupInst = null;
+            if (!isStatic) {
+                var ctor = method.getDeclaringClass().getDeclaredConstructor();
+                ctor.setAccessible(true);
+                warmupInst = ctor.newInstance();
+            }
+            Record[] zeroRecords = new Record[paramCount];
+            int compIdx = 0;
+            for (int i = 0; i < paramCount; i++) {
+                if (kinds[i] == ParamKind.READ || kinds[i] == ParamKind.WRITE) {
+                    zeroRecords[i] = createZeroRecord(accesses.get(compIdx).type());
+                    if (zeroRecords[i] == null) return;
+                    compIdx++;
+                }
+            }
+            var lookup = MethodHandles.privateLookupIn(method.getDeclaringClass(), MethodHandles.lookup());
+            var mh = lookup.unreflect(method);
+            var dummyTracker = new zzuegg.ecs.change.ChangeTracker(1);
+            for (int w = 0; w < 10_000; w++) {
+                Object[] args;
+                int argIdx;
+                if (isStatic) { args = new Object[paramCount]; argIdx = 0; }
+                else { args = new Object[paramCount + 1]; args[0] = warmupInst; argIdx = 1; }
+                for (int i = 0; i < paramCount; i++) {
+                    switch (kinds[i]) {
+                        case READ -> args[argIdx++] = zeroRecords[i];
+                        case WRITE -> {
+                            Mut mut;
+                            if (hiddenMutInfos[i] != null) {
+                                try { mut = (Mut) hiddenMutInfos[i].mutClass().getDeclaredConstructor().newInstance(); }
+                                catch (Exception e) { mut = new Mut(zeroRecords[i], 0, dummyTracker, 1L, false); }
+                            } else {
+                                mut = new Mut(zeroRecords[i], 0, dummyTracker, 1L, false);
+                            }
+                            args[argIdx++] = mut;
+                        }
+                        case ENTITY -> args[argIdx++] = zzuegg.ecs.entity.Entity.of(0, 0);
+                        case SERVICE -> args[argIdx++] = null;
+                    }
+                }
+                try { mh.invokeWithArguments(args); } catch (Throwable ignored) { break; }
+            }
+        } catch (Exception ignored) { /* best-effort */ }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Record createZeroRecord(Class<? extends Record> type) {
+        try {
+            var rc = type.getRecordComponents();
+            var paramTypes = new Class<?>[rc.length];
+            var args = new Object[rc.length];
+            for (int i = 0; i < rc.length; i++) {
+                var pt = rc[i].getType();
+                paramTypes[i] = pt;
+                if (pt == boolean.class) args[i] = false;
+                else if (pt == byte.class) args[i] = (byte) 0;
+                else if (pt == short.class) args[i] = (short) 0;
+                else if (pt == int.class) args[i] = 0;
+                else if (pt == long.class) args[i] = 0L;
+                else if (pt == float.class) args[i] = 0.0f;
+                else if (pt == double.class) args[i] = 0.0d;
+                else if (pt == char.class) args[i] = '\0';
+                else if (pt.isRecord()) {
+                    var nested = createZeroRecord((Class<? extends Record>) pt);
+                    if (nested == null) return null;
+                    args[i] = nested;
+                } else return null;
+            }
+            var ctor = type.getDeclaredConstructor(paramTypes);
+            ctor.setAccessible(true);
+            return (Record) ctor.newInstance(args);
+        } catch (Exception e) { return null; }
     }
 
     /**

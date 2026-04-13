@@ -25,7 +25,7 @@ subprojects {
 
     tasks.withType<Test> {
         useJUnitPlatform()
-        jvmArgs("--enable-preview")
+        jvmArgs("--enable-preview", "-Dzzuegg.ecs.noWarmup=true")
     }
 
     tasks.withType<JavaExec> {
