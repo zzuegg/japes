@@ -736,15 +736,15 @@ public final class GeneratedPairIterationProcessor {
                 cb.dup();
                 cb.invokespecial(hmDesc, "<init>",
                     MethodTypeDesc.of(ConstantDescs.CD_void));
-                // Populate cur_ fields from SoA arrays (widened to long)
+                // Populate cur_ fields from SoA arrays (native types)
                 for (int f = 0; f < hmRc.size(); f++) {
                     var ff = hmRc.get(f);
                     cb.dup();
                     cb.aload(soaFieldLocals[i][f]);
                     cb.iload(srcSlotVar);
                     zzuegg.ecs.storage.SoAComponentStorage.emitArrayLoad(cb, ff.type());
-                    GeneratedChunkProcessor.emitWidenToLong(cb, ff.type());
-                    cb.putfield(hmDesc, "cur_" + ff.flatName(), ConstantDescs.CD_long);
+                    cb.putfield(hmDesc, "cur_" + ff.flatName(),
+                        ff.type().describeConstable().orElseThrow());
                 }
                 // Set slot, tracker, tick
                 cb.dup(); cb.iload(srcSlotVar);
@@ -927,26 +927,18 @@ public final class GeneratedPairIterationProcessor {
             cb.ifeq(skipFlush);
 
             if (hiddenMutInfos[i] != null) {
-                // HiddenMut: read pending Record, decompose into SoA arrays.
+                // HiddenMut: set() wrote directly into native-typed cur_ fields.
+                // Write cur_ fields to SoA arrays (no narrowing needed).
                 var hmi = hiddenMutInfos[i];
                 var hmRc = hmi.flatFields();
-                var recDesc = (ClassDesc) paramRecordClass[i].describeConstable().orElseThrow();
-                // Read pending once, cast, store in temp local.
-                cb.aload(srcWriteMutLocal[i]);
-                cb.getfield(mutDesc, "pending", recordDesc);
-                cb.checkcast(recDesc);
-                cb.astore(tempRecordVar);
+                var hmDesc = hmi.classDesc();
                 for (int f = 0; f < hmRc.size(); f++) {
                     var ff = hmRc.get(f);
+                    var fieldDesc = (ClassDesc) ff.type().describeConstable().orElseThrow();
                     cb.aload(soaFieldLocals[i][f]);
                     cb.iload(srcSlotVar);
-                    cb.aload(tempRecordVar);
-                    // Navigate accessor chain for nested records
-                    for (var rc : ff.accessors()) {
-                        var ownerCd = (ClassDesc) rc.getDeclaringRecord().describeConstable().orElseThrow();
-                        var retCd = (ClassDesc) rc.getType().describeConstable().orElseThrow();
-                        cb.invokevirtual(ownerCd, rc.getName(), MethodTypeDesc.of(retCd));
-                    }
+                    cb.aload(srcWriteMutLocal[i]);
+                    cb.getfield(hmDesc, "cur_" + ff.flatName(), fieldDesc);
                     zzuegg.ecs.storage.SoAComponentStorage.emitArrayStore(cb, ff.type());
                 }
                 // markChanged

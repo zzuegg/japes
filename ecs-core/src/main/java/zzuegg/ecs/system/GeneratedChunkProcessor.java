@@ -68,9 +68,13 @@ public final class GeneratedChunkProcessor {
      * eliminating the Record allocation needed for the Mut constructor's
      * "current" value.
      *
-     * <p>Overrides get(), isChanged(), and flush(). get() reconstructs the
-     * (possibly nested) Record on the fly from cur_ fields. set() is NOT
-     * overridden — base Mut.set() stores the Record in `pending`.
+     * <p>Overrides get(), set(), isChanged(), and flush(). get() always
+     * reconstructs the Record from cur_ fields. set() decomposes the Record
+     * directly into native-typed cur_ fields without storing in `pending`,
+     * so the Record never escapes and C2 can fully scalarize it. For records
+     * with 1-3 fields, set() is a single method under MaxInlineSize (35 bytes).
+     * For 4+ fields, set() delegates to a private decompose$() helper via
+     * invokespecial, keeping both methods under 35 bytes.
      */
     @SuppressWarnings("unchecked")
     static HiddenMutInfo generateHiddenMut(MethodHandles.Lookup systemLookup,
@@ -95,17 +99,20 @@ public final class GeneratedChunkProcessor {
             + "_" + sfx + "_" + COUNTER.incrementAndGet();
         var genCd = ClassDesc.of(className);
 
-        // EA fix: all cur_ fields are stored as long, regardless of the
-        // original type. This gives C2 a uniform field layout so scalar
-        // replacement succeeds even for records with mixed primitive types.
-        var storedFieldDesc = ConstantDescs.CD_long;
+        // cur_ fields use their native primitive types. The set() override
+        // decomposes the Record directly into these fields via a private
+        // decompose$ helper, keeping both methods under MaxInlineSize (35 bytes)
+        // so C2 inlines them unconditionally and can scalarize the Record.
+        // Previously all fields were uniform long, but that made set() too
+        // large (51 bytes) to inline via MaxInlineSize.
 
         byte[] bytes = ClassFile.of().build(genCd, clb -> {
             clb.withFlags(ACC_PUBLIC);
             clb.withSuperclass(mutCd);
-            // Flattened cur_ fields — one per primitive leaf
+            // Flattened cur_ fields — one per primitive leaf, native type
             for (var ff : flatFields) {
-                clb.withField("cur_" + ff.flatName(), storedFieldDesc,
+                clb.withField("cur_" + ff.flatName(),
+                    ff.type().describeConstable().orElseThrow(),
                     fb -> fb.withFlags(ACC_PUBLIC));
             }
             clb.withMethodBody("<init>", MethodTypeDesc.of(ConstantDescs.CD_void),
@@ -114,22 +121,11 @@ public final class GeneratedChunkProcessor {
                     cb.invokespecial(mutCd, "<init>", MethodTypeDesc.of(ConstantDescs.CD_void));
                     cb.return_();
                 });
-            // get() -> Record: reconstruct from cur_ fields when !changed,
-            // or return the pending Record when changed.
+            // get() -> Record: always reconstruct from cur_ fields. After
+            // set(), cur_ holds the new values; before, the originals.
             clb.withMethodBody("get", MethodTypeDesc.of(recordCd), ACC_PUBLIC, cb -> {
-                var usePending = cb.newLabel();
-                var end = cb.newLabel();
-                cb.aload(0);
-                cb.getfield(mutCd, "changed", ConstantDescs.CD_boolean);
-                cb.ifne(usePending);
-                // !changed: reconstruct from cur_ fields (narrowed from long)
-                emitMutRecordReconstruction(cb, componentType, flatFields, new int[]{0},
-                    genCd, storedFieldDesc);
-                cb.goto_(end);
-                cb.labelBinding(usePending);
-                cb.aload(0);
-                cb.getfield(mutCd, "pending", recordCd);
-                cb.labelBinding(end);
+                emitMutRecordReconstructionNative(cb, componentType, flatFields,
+                    new int[]{0}, genCd);
                 cb.areturn();
             });
 
@@ -140,14 +136,65 @@ public final class GeneratedChunkProcessor {
                     cb.getfield(mutCd, "changed", ConstantDescs.CD_boolean);
                     cb.ireturn();
                 });
-            // flush() -> Record: return pending if changed, else reconstruct
+            // Estimate set() bytecode size: 5 (changed) + 5 (checkcast+astore)
+            // + 8*N (per field: aload+aload+invoke+putfield) + 1 (return).
+            // For N<=3 fields: 11 + 8*N <= 35 bytes → fits MaxInlineSize.
+            // For N>=4 fields: split into set() + private decompose$().
+            final int setEstimate = 11 + 8 * flatFields.size();
+            if (setEstimate > 35) {
+                // Two-method split: decompose$() does the field writes,
+                // set() delegates via invokespecial. Both under 35 bytes.
+                clb.withMethodBody("decompose$", MethodTypeDesc.of(ConstantDescs.CD_void, recCd),
+                    ACC_PRIVATE, cb -> {
+                        for (var ff : flatFields) {
+                            cb.aload(0);
+                            cb.aload(1);
+                            emitAccessorChainOnStack(cb, componentType, ff.accessors());
+                            cb.putfield(genCd, "cur_" + ff.flatName(),
+                                ff.type().describeConstable().orElseThrow());
+                        }
+                        cb.return_();
+                    });
+                clb.withMethodBody("set", MethodTypeDesc.of(ConstantDescs.CD_void, recordCd),
+                    ACC_PUBLIC, cb -> {
+                        cb.aload(0);
+                        cb.iconst_1();
+                        cb.putfield(mutCd, "changed", ConstantDescs.CD_boolean);
+                        cb.aload(0);
+                        cb.aload(1);
+                        cb.checkcast(recCd);
+                        cb.invokespecial(genCd, "decompose$",
+                            MethodTypeDesc.of(ConstantDescs.CD_void, recCd));
+                        cb.return_();
+                    });
+            } else {
+                // Single set() method — all field writes inline.
+                clb.withMethodBody("set", MethodTypeDesc.of(ConstantDescs.CD_void, recordCd),
+                    ACC_PUBLIC, cb -> {
+                        cb.aload(0);
+                        cb.iconst_1();
+                        cb.putfield(mutCd, "changed", ConstantDescs.CD_boolean);
+                        cb.aload(1);
+                        cb.checkcast(recCd);
+                        cb.astore(2);
+                        for (var ff : flatFields) {
+                            cb.aload(0);
+                            cb.aload(2);
+                            emitAccessorChainOnStack(cb, componentType, ff.accessors());
+                            cb.putfield(genCd, "cur_" + ff.flatName(),
+                                ff.type().describeConstable().orElseThrow());
+                        }
+                        cb.return_();
+                    });
+            }
+            // flush() -> Record: reconstruct from cur_ fields + markChanged
             clb.withMethodBody("flush", MethodTypeDesc.of(recordCd), ACC_PUBLIC, cb -> {
                 var changedPath = cb.newLabel();
                 cb.aload(0);
                 cb.getfield(mutCd, "changed", ConstantDescs.CD_boolean);
                 cb.ifne(changedPath);
-                emitMutRecordReconstruction(cb, componentType, flatFields, new int[]{0},
-                    genCd, storedFieldDesc);
+                emitMutRecordReconstructionNative(cb, componentType, flatFields,
+                    new int[]{0}, genCd);
                 cb.areturn();
                 cb.labelBinding(changedPath);
                 cb.aload(0); cb.getfield(mutCd, "tracker", trackerCd);
@@ -155,8 +202,8 @@ public final class GeneratedChunkProcessor {
                 cb.aload(0); cb.getfield(mutCd, "tick", ConstantDescs.CD_long);
                 cb.invokevirtual(trackerCd, "markChanged",
                     MethodTypeDesc.of(ConstantDescs.CD_void, ConstantDescs.CD_int, ConstantDescs.CD_long));
-                cb.aload(0);
-                cb.getfield(mutCd, "pending", recordCd);
+                emitMutRecordReconstructionNative(cb, componentType, flatFields,
+                    new int[]{0}, genCd);
                 cb.areturn();
             });
         });
@@ -167,17 +214,15 @@ public final class GeneratedChunkProcessor {
 
     /**
      * Emit bytecode to reconstruct a (possibly nested) record from a HiddenMut's
-     * cur_ fields. Loads each field with getfield + narrowFromLong.
-     *
-     * @param flatIdx mutable counter into flatFields
+     * native-typed cur_ fields. No narrowing needed — fields are already the
+     * correct primitive type.
      */
-    private static void emitMutRecordReconstruction(
+    private static void emitMutRecordReconstructionNative(
             java.lang.classfile.CodeBuilder cb,
             Class<?> recordType,
             java.util.List<zzuegg.ecs.storage.RecordFlattener.FlatField> flatFields,
             int[] flatIdx,
-            ClassDesc genCd,
-            ClassDesc storedFieldDesc) {
+            ClassDesc genCd) {
         var recCd = recordType.describeConstable().orElseThrow();
         var comps = recordType.getRecordComponents();
         var ctorPs = new ClassDesc[comps.length];
@@ -190,12 +235,11 @@ public final class GeneratedChunkProcessor {
             if (comp.getType().isPrimitive()) {
                 var ff = flatFields.get(flatIdx[0]++);
                 cb.aload(0); // this (Mut instance)
-                cb.getfield(genCd, "cur_" + ff.flatName(), storedFieldDesc);
-                emitNarrowFromLong(cb, ff.type());
+                cb.getfield(genCd, "cur_" + ff.flatName(),
+                    ff.type().describeConstable().orElseThrow());
             } else {
-                // Nested record — recurse
-                emitMutRecordReconstruction(cb, comp.getType(), flatFields, flatIdx,
-                    genCd, storedFieldDesc);
+                emitMutRecordReconstructionNative(cb, comp.getType(), flatFields, flatIdx,
+                    genCd);
             }
         }
         cb.invokespecial(recCd, "<init>", MethodTypeDesc.of(ConstantDescs.CD_void, ctorPs));
@@ -960,8 +1004,8 @@ public final class GeneratedChunkProcessor {
                                     cb.aload(soaFieldLocals[i][f]);
                                     cb.iload(slotVar);
                                     zzuegg.ecs.storage.SoAComponentStorage.emitArrayLoad(cb, hmFf.get(f).type());
-                                    emitWidenToLong(cb, hmFf.get(f).type());
-                                    cb.putfield(hmDesc, "cur_" + hmFf.get(f).flatName(), ConstantDescs.CD_long);
+                                    cb.putfield(hmDesc, "cur_" + hmFf.get(f).flatName(),
+                                        hmFf.get(f).type().describeConstable().orElseThrow());
                                 }
                                 cb.dup();
                                 cb.iload(slotVar);
@@ -1047,48 +1091,44 @@ public final class GeneratedChunkProcessor {
                     if (hiddenMutInfos[i] != null) {
                         var hmi = hiddenMutInfos[i];
                         var hmFf = hmi.flatFields();
-                        var recDesc = componentTypes[i].describeConstable().orElseThrow();
                         var hmDesc = hmi.classDesc();
-                        var storedFieldDesc = ConstantDescs.CD_long;
+
+                        // set() already decomposed the Record into native-typed
+                        // cur_ fields via the inlined decompose$ helper. The
+                        // Record never escapes — C2 can fully scalarize it.
 
                         if (paramValueTracked[i]) {
-                            // @ValueTracked: compare pending Record's flattened fields
-                            // against cur_ fields (primitive comparison).
+                            // @ValueTracked: compare cur_ (new) against SoA (old).
+                            // Both are native primitives — use type-appropriate compare.
                             var doFlush = cb.newLabel();
-                            cb.aload(mutLocal[i]);
-                            cb.getfield(mutDesc, "pending", recordDesc);
-                            cb.checkcast(recDesc);
-                            cb.astore(tempValueVar);
                             for (int f = 0; f < hmFf.size(); f++) {
                                 var ff = hmFf.get(f);
-                                // Navigate accessor chain on pending record
-                                cb.aload(tempValueVar);
-                                emitAccessorChainOnStack(cb, componentTypes[i], ff.accessors());
-                                // Load cur_ field
+                                var fieldDesc = ff.type().describeConstable().orElseThrow();
+                                // Load old value from SoA
+                                cb.aload(soaFieldLocals[i][f]);
+                                cb.iload(slotVar);
+                                zzuegg.ecs.storage.SoAComponentStorage.emitArrayLoad(cb, ff.type());
+                                // Load new value from cur_
                                 cb.aload(mutLocal[i]);
-                                cb.getfield(hmDesc, "cur_" + ff.flatName(), storedFieldDesc);
-                                emitNarrowFromLong(cb, ff.type());
+                                cb.getfield(hmDesc, "cur_" + ff.flatName(), fieldDesc);
                                 emitPrimitiveNotEqual(cb, ff.type(), doFlush);
                             }
                             cb.goto_(skipFlush);
                             cb.labelBinding(doFlush);
                         }
 
-                        // markChanged + decompose pending into SoA via accessor chains
+                        // markChanged + write cur_ fields to SoA arrays (native types).
                         cb.aload(firstTrackerVar + i);
                         cb.iload(slotVar);
                         cb.lload(tickVar);
                         cb.invokevirtual(trackerDesc, "markChanged", markChangedDesc);
-                        cb.aload(mutLocal[i]);
-                        cb.getfield(mutDesc, "pending", recordDesc);
-                        cb.checkcast(recDesc);
-                        cb.astore(tempValueVar);
                         for (int f = 0; f < hmFf.size(); f++) {
                             var ff = hmFf.get(f);
+                            var fieldDesc = ff.type().describeConstable().orElseThrow();
                             cb.aload(soaFieldLocals[i][f]);
                             cb.iload(slotVar);
-                            cb.aload(tempValueVar);
-                            emitAccessorChainOnStack(cb, componentTypes[i], ff.accessors());
+                            cb.aload(mutLocal[i]);
+                            cb.getfield(hmDesc, "cur_" + ff.flatName(), fieldDesc);
                             zzuegg.ecs.storage.SoAComponentStorage.emitArrayStore(cb, ff.type());
                         }
                     } else {
