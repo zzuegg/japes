@@ -15,7 +15,7 @@ The unified delta workload tests a single logical observer reacting to added, ch
 | | **japes** (6 systems) | Zay-ES (1 EntitySet) |
 |---|---:|---:|
 | **10k entities** | **660 µs** | 1,067 µs |
-| **100k entities** | **5,102 µs** | 13,889 µs |
+| **100k entities** | **4,854 µs** | 13,889 µs |
 
 **japes beats Zay-ES at both 10k (1.62×) and 100k (2.72×).** Both frameworks iterate all entities per component type, evaluate a game-logic condition (HP > 900, mana < 100, state % 10 == 0), and write only the ~10% that trigger. japes mutator systems read component values through tier-1 SoA primitive array loads; Zay-ES goes through `data.getComponent()` per entity (HashMap lookup). The SoA advantage grows with entity count because sequential array access scales better than per-entity HashMap probes.
 

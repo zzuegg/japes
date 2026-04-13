@@ -186,16 +186,37 @@ No phi merge → EA independently proves: (1) the original record in `current` i
 
 **Impact**: unified-delta allocation dropped from **1.07 MB to 603 KB** (44% reduction). EA now eliminates 78% of all allocations (up from 61%).
 
-### The 600 KB floor: what EA can't reach
+### The 600 KB floor — and how we broke through it
 
-After the phi-merge fix, we tested **10 different approaches** to eliminate the remaining ~350 KB of record allocations (inline flush, eliminate pending, primitive payload, unconditional decompose before guard, null pending after extract, primitive field on Mut, hidden Mut subclass, diagnostic set variants, void flushChanged, unconditional SoA write). All converged on the same ~600 KB floor.
+After the phi-merge fix, we tested **10 different approaches** in parallel git worktrees: inline flush, eliminate pending, primitive payload, unconditional decompose, null pending, primitive Mut field, hidden Mut subclass, diagnostic variants, void flushChanged, unconditional write. Nine converged on ~600 KB.
 
-The remaining allocation breaks down as:
+**Two found the breakthrough: generated Mut subclass with primitive fields.**
 
-- **~250 KB structural**: `EntityLocation` records from archetype migration (spawn/despawn/addComponent/removeComponent), `HashMap.Node` from archetype graph operations, `RemovalLog.Entry` from despawn. These objects genuinely escape into framework data structures — they're stored in `ArrayList`, `HashMap`, or `RemovalLog` and survive across ticks.
-- **~350 KB JIT residual**: Records that EA handles in most compilations but not all, due to C2 compilation non-determinism (OSR transitions, deoptimization/recompilation cycles, bimorphic `soaFieldArrays()` profiles from JMH iteration rebuilds).
+The root cause of the 600 KB floor: the Mut constructor created a Record (`new Health(soaHp[slot])`) for every entity in every write system — 10,000 × 3 systems × ~20 bytes = 600 KB. EA couldn't eliminate these because they flowed through `get()`'s `changed ? pending : current` phi. The phi-merge fix helped the *write* path but not the *read* path — the original record lived through the conditional in `get()`.
 
-This is irreducible without Valhalla value types (which would eliminate the `Record` type boundary that forces materialization) or a fundamentally different `Mut` API that avoids `Record` references entirely.
+**The fix**: generate a `Mut` subclass per component type via `Lookup.defineClass()` that stores current/pending values as **primitive fields** (`cur_hp`, `pnd_hp`) instead of Record references:
+
+- `get()` reconstructs a Record from primitives on demand — immediately decomposed by user code → EA eliminates it
+- `set()` decomposes the Record into primitives immediately — the user's `new Health(hp-1)` dies right after decomposition → EA eliminates it
+- The entity loop populates primitive fields directly from SoA arrays — **no Record ever created** for the initial value
+- The flush path reads primitive fields directly into SoA arrays — no Record intermediary
+
+Each system's call site sees only its specific Mut subclass → monomorphic → JIT devirtualizes and inlines → EA sees the full chain.
+
+**Impact**: allocation dropped from **603 KB to 297 KB** (51% reduction). EA now eliminates **89%** of all allocations (verified: 2.77 MB with EA off → 297 KB with EA on).
+
+### The 297 KB structural floor (verified via JFR)
+
+The remaining 297 KB is purely structural — objects that genuinely escape into framework data structures:
+
+- **~120 KB**: `HashMap.Node[]`, `int[]`, `long[]` from archetype graph operations during spawn/despawn/strip
+- **~60 KB**: Records from `Chunk.get()` in the despawn removal log (stored in `RemovalLog` across ticks)
+- **~40 KB**: `EntityLocation` records from archetype migration
+- **~35 KB**: `RemovalLog.Entry` objects from despawn
+- **~25 KB**: Records from `addComponent`/`removeComponent` migration paths
+- **~17 KB**: Observer record reconstruction residual + HiddenMut EA residual from JIT warmup
+
+Zero allocation samples from the mutator system `set()` path — the generated primitive Mut eliminates them completely.
 
 ## The optimization journey in numbers
 
