@@ -858,11 +858,23 @@ public final class GeneratedChunkProcessor {
                     cb.checkcast(params[i].getType().describeConstable().orElseThrow());
                     cb.astore(serviceLocal[i]);
                 }
-                // Note: mutLocal[i] is NOT pre-loaded from this.muts[i].
-                // The entity loop creates a fresh Mut per entity. Pre-loading
-                // the heap-resident muts[i] would poison the local's type
-                // profile at the loop-header merge point (heap object + fresh
-                // allocation in the same local), potentially blocking EA.
+                // For HiddenMut WRITE params: allocate ONE instance before
+                // the loop and reuse it per entity. JFR profiling shows that
+                // C2 fails to scalar-replace the per-entity `new HiddenMut()`
+                // in practice (the Mut escapes through the invokevirtual to
+                // the system body), so reusing a single instance eliminates
+                // the allocation entirely — at the cost of giving up on EA
+                // for the Mut (which wasn't working anyway).
+                for (int i = 0; i < paramCount; i++) {
+                    if (kinds[i] == ParamKind.WRITE && hiddenMutInfos[i] != null) {
+                        var hmi = hiddenMutInfos[i];
+                        cb.new_(hmi.classDesc());
+                        cb.dup();
+                        cb.invokespecial(hmi.classDesc(), "<init>",
+                            MethodTypeDesc.of(ConstantDescs.CD_void));
+                        cb.astore(mutLocal[i]);
+                    }
+                }
                 // Hoist chunk.entityArray() so per-slot Entity access
                 // is a plain aaload on a local Entity[] rather than an
                 // invokevirtual through Chunk.entity(int).
@@ -946,33 +958,35 @@ public final class GeneratedChunkProcessor {
                         }
                         case WRITE -> {
                             if (hiddenMutInfos[i] != null) {
-                                // Specialised Mut subclass: stores primitives
-                                // directly from SoA arrays, no record alloc.
+                                // Reuse the pre-allocated HiddenMut: reset all
+                                // cur_ fields, slot, tracker, tick, changed, and
+                                // pending per entity. Zero allocation per entity.
                                 var hmi = hiddenMutInfos[i];
                                 var hmDesc = hmi.classDesc();
                                 var hmFf = hmi.flatFields();
-                                cb.new_(hmDesc);
-                                cb.dup();
-                                cb.invokespecial(hmDesc, "<init>",
-                                    MethodTypeDesc.of(ConstantDescs.CD_void));
                                 for (int f = 0; f < hmFf.size(); f++) {
-                                    cb.dup();
+                                    cb.aload(mutLocal[i]);
                                     cb.aload(soaFieldLocals[i][f]);
                                     cb.iload(slotVar);
                                     zzuegg.ecs.storage.SoAComponentStorage.emitArrayLoad(cb, hmFf.get(f).type());
                                     emitWidenToLong(cb, hmFf.get(f).type());
                                     cb.putfield(hmDesc, "cur_" + hmFf.get(f).flatName(), ConstantDescs.CD_long);
                                 }
-                                cb.dup();
+                                cb.aload(mutLocal[i]);
                                 cb.iload(slotVar);
                                 cb.putfield(mutDesc, "slot", ConstantDescs.CD_int);
-                                cb.dup();
+                                cb.aload(mutLocal[i]);
                                 cb.aload(firstTrackerVar + i);
                                 cb.putfield(mutDesc, "tracker", trackerDesc);
-                                cb.dup();
+                                cb.aload(mutLocal[i]);
                                 cb.lload(tickVar);
                                 cb.putfield(mutDesc, "tick", ConstantDescs.CD_long);
-                                cb.astore(mutLocal[i]);
+                                cb.aload(mutLocal[i]);
+                                cb.iconst_0();
+                                cb.putfield(mutDesc, "changed", ConstantDescs.CD_boolean);
+                                cb.aload(mutLocal[i]);
+                                cb.aconst_null();
+                                cb.putfield(mutDesc, "pending", recordDesc);
                                 cb.aload(mutLocal[i]);
                             } else {
                                 // Regular Mut path (non-SoA or @ValueTracked).
