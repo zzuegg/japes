@@ -66,7 +66,8 @@ public final class World {
         this.executor = builder.executor;
         this.useGeneratedProcessors = builder.useGeneratedProcessors;
         this.useDefaultStorageFactory = builder.useDefaultStorageFactory;
-        this.useSoAStorage = builder.storageFactory instanceof zzuegg.ecs.storage.SoAComponentStorage.SoAFactory;
+        this.useSoAStorage = builder.storageFactory instanceof zzuegg.ecs.storage.SoAComponentStorage.SoAFactory
+            || builder.storageFactory instanceof zzuegg.ecs.storage.SoAComponentStorage.SoAPromotingFactory;
         this.stages = new HashMap<>(builder.stages);
 
         for (var resource : builder.resources) {

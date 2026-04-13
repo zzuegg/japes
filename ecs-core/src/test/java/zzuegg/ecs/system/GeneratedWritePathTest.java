@@ -141,4 +141,66 @@ class GeneratedWritePathTest {
         assertNull(GeneratedChunkProcessor.skipReason(desc),
             "tier-1 must accept a pure-write system");
     }
+
+    // ---- DefaultComponentStorage (non-SoA) write path ----
+
+    record PrimForced(float x, float y) {}
+    record Counter(int tick) {}
+
+    public static class PrimForcedWriter {
+        @System
+        void run(@Read Counter c, @Write Mut<PrimForced> pf) {
+            if (c.tick() % 2 == 0) {
+                pf.set(new PrimForced(c.tick() + 0.5f, c.tick() - 0.5f));
+            }
+        }
+    }
+
+    @Test
+    void generatedWritePathWithDefaultComponentStorage() {
+        // All-primitive record forced to DefaultComponentStorage. The HiddenMut
+        // optimisation should still apply, decomposing into primitives in set()
+        // and reconstructing on flush.
+        var world = World.builder()
+            .storageFactory(zzuegg.ecs.storage.DefaultComponentStorage::new)
+            .addSystem(PrimForcedWriter.class)
+            .build();
+
+        var e0 = world.spawn(new Counter(0), new PrimForced(0, 0));
+        var e1 = world.spawn(new Counter(1), new PrimForced(10, 20));
+        var e2 = world.spawn(new Counter(2), new PrimForced(30, 40));
+
+        world.tick();
+
+        // Counter 0: 0 % 2 == 0 → mutated
+        assertEquals(new PrimForced(0.5f, -0.5f), world.getComponent(e0, PrimForced.class));
+        // Counter 1: 1 % 2 != 0 → unchanged
+        assertEquals(new PrimForced(10, 20), world.getComponent(e1, PrimForced.class));
+        // Counter 2: 2 % 2 == 0 → mutated
+        assertEquals(new PrimForced(2.5f, 1.5f), world.getComponent(e2, PrimForced.class));
+    }
+
+    public static class PrimForcedReadWriter {
+        @System
+        void run(@Write Mut<PrimForced> pf) {
+            var cur = pf.get();
+            pf.set(new PrimForced(cur.x() + 1, cur.y() + 1));
+        }
+    }
+
+    @Test
+    void generatedWritePathWithDefaultComponentStorageGetThenSet() {
+        // Tests the get() path of HiddenMut with DefaultComponentStorage:
+        // cur_ fields must be correctly populated from the Object[] backed record.
+        var world = World.builder()
+            .storageFactory(zzuegg.ecs.storage.DefaultComponentStorage::new)
+            .addSystem(PrimForcedReadWriter.class)
+            .build();
+
+        var e = world.spawn(new PrimForced(5, 10));
+        world.tick();
+        assertEquals(new PrimForced(6, 11), world.getComponent(e, PrimForced.class));
+        world.tick();
+        assertEquals(new PrimForced(7, 12), world.getComponent(e, PrimForced.class));
+    }
 }

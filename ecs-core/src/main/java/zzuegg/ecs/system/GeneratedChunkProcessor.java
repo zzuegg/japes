@@ -95,6 +95,8 @@ public final class GeneratedChunkProcessor {
             + "_" + sfx + "_" + COUNTER.incrementAndGet();
         var genCd = ClassDesc.of(className);
 
+        // Original field type descriptors — used for record constructor calls
+        // and accessor return types.
         ClassDesc[] fDescs = new ClassDesc[rc.length];
         ClassDesc[] ctorPs = new ClassDesc[rc.length];
         for (int fi = 0; fi < rc.length; fi++) {
@@ -103,14 +105,27 @@ public final class GeneratedChunkProcessor {
         }
         var recCtorMtd = MethodTypeDesc.of(ConstantDescs.CD_void, ctorPs);
 
+        // EA fix: all cur_ fields are stored as long, regardless of the
+        // original type. This gives C2 a uniform field layout so scalar
+        // replacement succeeds even for records with mixed primitive types
+        // (e.g. boolean + int + float + double). Widening happens on store
+        // (cur_ load from SoA), narrowing on read (get reconstruction).
+        //
+        // CRITICAL: set() is NOT overridden. The base Mut.set() (11 bytes)
+        // stores the Record in `pending` and flips `changed`. This keeps
+        // set() under C2's MaxInlineSize (35 bytes), ensuring it always
+        // inlines. Without inlining, the Mut escapes and EA fails.
+        // The pnd_ fields are gone — the generated flush path in processAll
+        // reads from `pending` (a Record ref) and decomposes into SoA arrays.
+        var storedFieldDesc = ConstantDescs.CD_long;
+
         byte[] bytes = ClassFile.of().build(genCd, clb -> {
             clb.withFlags(ACC_PUBLIC);
             clb.withSuperclass(mutCd);
+            // Only cur_ fields — no pnd_ fields needed.
             for (int fi = 0; fi < rc.length; fi++) {
                 final int idx = fi;
-                clb.withField("cur_" + rc[idx].getName(), fDescs[idx],
-                    fb -> fb.withFlags(ACC_PUBLIC));
-                clb.withField("pnd_" + rc[idx].getName(), fDescs[idx],
+                clb.withField("cur_" + rc[idx].getName(), storedFieldDesc,
                     fb -> fb.withFlags(ACC_PUBLIC));
             }
             clb.withMethodBody("<init>", MethodTypeDesc.of(ConstantDescs.CD_void),
@@ -119,42 +134,35 @@ public final class GeneratedChunkProcessor {
                     cb.invokespecial(mutCd, "<init>", MethodTypeDesc.of(ConstantDescs.CD_void));
                     cb.return_();
                 });
-            // get() -> Record: reconstruct from cur_ or pnd_ fields
+            // get() -> Record: reconstruct from cur_ fields when !changed,
+            // or return the pending Record when changed. The pending Record
+            // was stored by base Mut.set() and is already the right type.
             clb.withMethodBody("get", MethodTypeDesc.of(recordCd), ACC_PUBLIC, cb -> {
                 var usePending = cb.newLabel();
                 var end = cb.newLabel();
                 cb.aload(0);
                 cb.getfield(mutCd, "changed", ConstantDescs.CD_boolean);
                 cb.ifne(usePending);
+                // !changed: reconstruct from cur_ fields (narrowed from long)
                 cb.new_(recCd); cb.dup();
                 for (int fi = 0; fi < rc.length; fi++) {
                     cb.aload(0);
-                    cb.getfield(genCd, "cur_" + rc[fi].getName(), fDescs[fi]);
+                    cb.getfield(genCd, "cur_" + rc[fi].getName(), storedFieldDesc);
+                    emitNarrowFromLong(cb, rc[fi].getType());
                 }
                 cb.invokespecial(recCd, "<init>", recCtorMtd);
                 cb.goto_(end);
                 cb.labelBinding(usePending);
-                cb.new_(recCd); cb.dup();
-                for (int fi = 0; fi < rc.length; fi++) {
-                    cb.aload(0);
-                    cb.getfield(genCd, "pnd_" + rc[fi].getName(), fDescs[fi]);
-                }
-                cb.invokespecial(recCd, "<init>", recCtorMtd);
+                // changed: return the pending Record (stored by base Mut.set())
+                cb.aload(0);
+                cb.getfield(mutCd, "pending", recordCd);
                 cb.labelBinding(end);
                 cb.areturn();
             });
-            // set(Record) -> void: decompose into pnd_ fields
-            clb.withMethodBody("set", MethodTypeDesc.of(ConstantDescs.CD_void, recordCd),
-                ACC_PUBLIC, cb -> {
-                    for (int fi = 0; fi < rc.length; fi++) {
-                        cb.aload(0); cb.aload(1); cb.checkcast(recCd);
-                        cb.invokevirtual(recCd, rc[fi].getName(), MethodTypeDesc.of(fDescs[fi]));
-                        cb.putfield(genCd, "pnd_" + rc[fi].getName(), fDescs[fi]);
-                    }
-                    cb.aload(0); cb.iconst_1();
-                    cb.putfield(mutCd, "changed", ConstantDescs.CD_boolean);
-                    cb.return_();
-                });
+            // set() is NOT overridden — base Mut.set() is used (11 bytes,
+            // always inlines). It stores the Record in `pending` and sets
+            // `changed = true`.
+
             // isChanged() -> boolean
             clb.withMethodBody("isChanged", MethodTypeDesc.of(ConstantDescs.CD_boolean),
                 ACC_PUBLIC, cb -> {
@@ -162,7 +170,10 @@ public final class GeneratedChunkProcessor {
                     cb.getfield(mutCd, "changed", ConstantDescs.CD_boolean);
                     cb.ireturn();
                 });
-            // flush() -> Record
+            // flush() -> Record: return pending if changed, else reconstruct
+            // from cur_ fields. The generated processAll code uses inline
+            // flush that reads pending directly, so this method is only called
+            // from non-inlined fallback paths.
             clb.withMethodBody("flush", MethodTypeDesc.of(recordCd), ACC_PUBLIC, cb -> {
                 var changedPath = cb.newLabel();
                 cb.aload(0);
@@ -171,7 +182,8 @@ public final class GeneratedChunkProcessor {
                 cb.new_(recCd); cb.dup();
                 for (int fi = 0; fi < rc.length; fi++) {
                     cb.aload(0);
-                    cb.getfield(genCd, "cur_" + rc[fi].getName(), fDescs[fi]);
+                    cb.getfield(genCd, "cur_" + rc[fi].getName(), storedFieldDesc);
+                    emitNarrowFromLong(cb, rc[fi].getType());
                 }
                 cb.invokespecial(recCd, "<init>", recCtorMtd);
                 cb.areturn();
@@ -181,12 +193,9 @@ public final class GeneratedChunkProcessor {
                 cb.aload(0); cb.getfield(mutCd, "tick", ConstantDescs.CD_long);
                 cb.invokevirtual(trackerCd, "markChanged",
                     MethodTypeDesc.of(ConstantDescs.CD_void, ConstantDescs.CD_int, ConstantDescs.CD_long));
-                cb.new_(recCd); cb.dup();
-                for (int fi = 0; fi < rc.length; fi++) {
-                    cb.aload(0);
-                    cb.getfield(genCd, "pnd_" + rc[fi].getName(), fDescs[fi]);
-                }
-                cb.invokespecial(recCd, "<init>", recCtorMtd);
+                // Return the pending Record as-is (already the right type)
+                cb.aload(0);
+                cb.getfield(mutCd, "pending", recordCd);
                 cb.areturn();
             });
         });
@@ -195,6 +204,52 @@ public final class GeneratedChunkProcessor {
         return new HiddenMutInfo(mutClass, genCd, rc);
     }
 
+    /**
+     * Emit bytecode to widen a primitive value on the JVM operand stack to {@code long}.
+     * Preserves exact bit patterns for floating-point types via raw-bits conversion.
+     * <ul>
+     *   <li>boolean, byte, short, char, int &rarr; {@code i2l}</li>
+     *   <li>float &rarr; {@code Float.floatToRawIntBits} then {@code i2l}</li>
+     *   <li>double &rarr; {@code Double.doubleToRawLongBits}</li>
+     *   <li>long &rarr; no-op</li>
+     * </ul>
+     */
+    static void emitWidenToLong(java.lang.classfile.CodeBuilder cb, Class<?> type) {
+        if (type == long.class) {
+            // already long — nothing to do
+        } else if (type == double.class) {
+            cb.invokestatic(ClassDesc.of("java.lang.Double"), "doubleToRawLongBits",
+                MethodTypeDesc.of(ConstantDescs.CD_long, ConstantDescs.CD_double));
+        } else if (type == float.class) {
+            cb.invokestatic(ClassDesc.of("java.lang.Float"), "floatToRawIntBits",
+                MethodTypeDesc.of(ConstantDescs.CD_int, ConstantDescs.CD_float));
+            cb.i2l();
+        } else {
+            // boolean, byte, short, char, int — all occupy one int slot on the stack
+            cb.i2l();
+        }
+    }
+
+    /**
+     * Emit bytecode to narrow a {@code long} on the JVM operand stack back to the
+     * original primitive type. Inverse of {@link #emitWidenToLong}.
+     */
+    static void emitNarrowFromLong(java.lang.classfile.CodeBuilder cb, Class<?> type) {
+        if (type == long.class) {
+            // already long — nothing to do
+        } else if (type == double.class) {
+            cb.invokestatic(ClassDesc.of("java.lang.Double"), "longBitsToDouble",
+                MethodTypeDesc.of(ConstantDescs.CD_double, ConstantDescs.CD_long));
+        } else if (type == float.class) {
+            cb.l2i();
+            cb.invokestatic(ClassDesc.of("java.lang.Float"), "intBitsToFloat",
+                MethodTypeDesc.of(ConstantDescs.CD_float, ConstantDescs.CD_int));
+        } else {
+            // boolean, byte, short, char, int — l2i is sufficient
+            // (record constructors take int for boolean/byte/short/char)
+            cb.l2i();
+        }
+    }
 
     /**
      * Package-private skip-reason introspection. Returns {@code null} if this
@@ -203,6 +258,17 @@ public final class GeneratedChunkProcessor {
      * diagnostics, a {@code -Dzzuegg.ecs.logGenerated} flag) can explain why
      * the slower fallback path was picked without digging through code.
      */
+    /**
+     * Emit a branch to {@code target} if the two primitive values on
+     * top of the stack are NOT equal. Consumes both values.
+     */
+    static void emitPrimitiveNotEqual(java.lang.classfile.CodeBuilder cb, Class<?> type, java.lang.classfile.Label target) {
+        if (type == float.class) { cb.fcmpl(); cb.ifne(target); }
+        else if (type == double.class) { cb.dcmpl(); cb.ifne(target); }
+        else if (type == long.class) { cb.lcmp(); cb.ifne(target); }
+        else { cb.if_icmpne(target); } // int, boolean, byte, short, char
+    }
+
     static String skipReason(SystemDescriptor desc) {
         var method = desc.method();
         var params = method.getParameters();
@@ -347,15 +413,18 @@ public final class GeneratedChunkProcessor {
 
         var systemLookup = MethodHandles.privateLookupIn(method.getDeclaringClass(), MethodHandles.lookup());
 
-        // Generate specialised Mut subclasses for SoA WRITE params (excluding
-        // @ValueTracked which needs the original-equality check in base Mut).
+        // Generate specialised Mut subclasses for ALL SoA WRITE params,
+        // including @ValueTracked. The flush path handles valueTracked by
+        // comparing cur_ fields against the pending Record's fields using
+        // primitive comparison — no Record.equals() virtual dispatch needed.
         HiddenMutInfo[] hiddenMutInfos = new HiddenMutInfo[paramCount];
+        boolean[] paramValueTracked = new boolean[paramCount];
         for (int i = 0; i < paramCount; i++) {
-            if (kinds[i] == ParamKind.WRITE && isSoA[i]
-                && !componentTypes[i].isAnnotationPresent(
-                    zzuegg.ecs.component.ValueTracked.class)) {
+            if (kinds[i] == ParamKind.WRITE && isSoA[i]) {
                 hiddenMutInfos[i] = generateHiddenMut(systemLookup,
                     (Class<? extends Record>) componentTypes[i], desc.name());
+                paramValueTracked[i] = componentTypes[i].isAnnotationPresent(
+                    zzuegg.ecs.component.ValueTracked.class);
             }
         }
 
@@ -851,8 +920,8 @@ public final class GeneratedChunkProcessor {
                                     cb.aload(soaFieldLocals[i][f]);
                                     cb.iload(slotVar);
                                     zzuegg.ecs.storage.SoAComponentStorage.emitArrayLoad(cb, hmRc[f].getType());
-                                    var fDesc = hmRc[f].getType().describeConstable().orElseThrow();
-                                    cb.putfield(hmDesc, "cur_" + hmRc[f].getName(), fDesc);
+                                    emitWidenToLong(cb, hmRc[f].getType());
+                                    cb.putfield(hmDesc, "cur_" + hmRc[f].getName(), ConstantDescs.CD_long);
                                 }
                                 cb.dup();
                                 cb.iload(slotVar);
@@ -947,22 +1016,51 @@ public final class GeneratedChunkProcessor {
                     cb.ifeq(skipFlush); // skip if !isChanged
 
                     if (hiddenMutInfos[i] != null) {
-                        // Hidden Mut: inline flush -- read pnd_ primitives
-                        // directly into SoA arrays, no Record needed.
                         var hmi = hiddenMutInfos[i];
-                        var hmDesc = hmi.classDesc();
                         var hmRc = hmi.components();
+                        var recDesc = componentTypes[i].describeConstable().orElseThrow();
+                        var hmDesc = hmi.classDesc();
+                        var storedFieldDesc = ConstantDescs.CD_long;
+
+                        if (paramValueTracked[i]) {
+                            // @ValueTracked: compare pending Record fields against
+                            // cur_ fields (primitive comparison, no Record.equals).
+                            // If all fields match, suppress the change (skip flush).
+                            var doFlush = cb.newLabel();
+                            cb.aload(mutLocal[i]);
+                            cb.getfield(mutDesc, "pending", recordDesc);
+                            cb.checkcast(recDesc);
+                            cb.astore(tempValueVar);
+                            for (int f = 0; f < hmRc.length; f++) {
+                                cb.aload(tempValueVar);
+                                var fDesc = hmRc[f].getType().describeConstable().orElseThrow();
+                                cb.invokevirtual(recDesc, hmRc[f].getName(), MethodTypeDesc.of(fDesc));
+                                cb.aload(mutLocal[i]);
+                                cb.getfield(hmDesc, "cur_" + hmRc[f].getName(), storedFieldDesc);
+                                emitNarrowFromLong(cb, hmRc[f].getType());
+                                emitPrimitiveNotEqual(cb, hmRc[f].getType(), doFlush);
+                            }
+                            // All fields matched → suppress change
+                            cb.goto_(skipFlush);
+                            cb.labelBinding(doFlush);
+                        }
+
+                        // markChanged + decompose pending into SoA
                         cb.aload(firstTrackerVar + i);
                         cb.iload(slotVar);
                         cb.lload(tickVar);
                         cb.invokevirtual(trackerDesc, "markChanged", markChangedDesc);
+                        // Read pending once, cast, store in tempValueVar.
+                        cb.aload(mutLocal[i]);
+                        cb.getfield(mutDesc, "pending", recordDesc);
+                        cb.checkcast(recDesc);
+                        cb.astore(tempValueVar);
                         for (int f = 0; f < hmRc.length; f++) {
                             cb.aload(soaFieldLocals[i][f]);
                             cb.iload(slotVar);
-                            cb.aload(mutLocal[i]);
-                            cb.checkcast(hmDesc);
+                            cb.aload(tempValueVar);
                             var fDesc = hmRc[f].getType().describeConstable().orElseThrow();
-                            cb.getfield(hmDesc, "pnd_" + hmRc[f].getName(), fDesc);
+                            cb.invokevirtual(recDesc, hmRc[f].getName(), MethodTypeDesc.of(fDesc));
                             zzuegg.ecs.storage.SoAComponentStorage.emitArrayStore(cb, hmRc[f].getType());
                         }
                     } else {

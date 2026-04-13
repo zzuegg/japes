@@ -291,4 +291,28 @@ public final class SoAComponentStorage {
             return new DefaultComponentStorage<>(type, capacity);
         }
     }
+
+    /**
+     * Wraps a user-supplied factory: auto-promotes SoA-eligible records
+     * (all-primitive fields) to SoA storage for better EA / scalar
+     * replacement, while delegating non-eligible records to the wrapped
+     * factory. This avoids the 32x allocation penalty of Object[] storage
+     * for all-primitive records that the user's factory would otherwise
+     * store in {@link DefaultComponentStorage}.
+     */
+    public static final class SoAPromotingFactory implements ComponentStorage.Factory {
+        private final ComponentStorage.Factory delegate;
+
+        public SoAPromotingFactory(ComponentStorage.Factory delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public <T extends Record> ComponentStorage<T> create(Class<T> type, int capacity) {
+            if (isEligible(type)) {
+                return SoAComponentStorage.create(type, capacity);
+            }
+            return delegate.create(type, capacity);
+        }
+    }
 }

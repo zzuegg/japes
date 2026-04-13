@@ -87,6 +87,11 @@ public final class WorldBuilder {
         }
         if (storageFactory == null) {
             storageFactory = ComponentStorage.defaultFactory();
+        } else if (!(storageFactory instanceof zzuegg.ecs.storage.SoAComponentStorage.SoAFactory)) {
+            // Wrap the custom factory: auto-promote SoA-eligible records
+            // (all-primitive fields) to SoA storage for better EA, while
+            // delegating non-eligible records to the user's factory.
+            storageFactory = new zzuegg.ecs.storage.SoAComponentStorage.SoAPromotingFactory(storageFactory);
         }
         return new World(this);
     }

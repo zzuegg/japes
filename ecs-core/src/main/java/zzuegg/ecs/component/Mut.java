@@ -6,7 +6,9 @@ public class Mut<T extends Record> {
 
     private T original;
     private T current;       // set once in constructor, never overwritten
-    private T pending;       // written by set(), null if unchanged
+    // Widened to public so generated HiddenMut subclasses can read pending
+    // in their get() override without needing to call super.get().
+    public T pending;       // written by set(), null if unchanged
     // Widened to public so generated hidden-class Mut subclasses in other
     // packages can putfield these directly. Not part of the public API.
     public int slot;
