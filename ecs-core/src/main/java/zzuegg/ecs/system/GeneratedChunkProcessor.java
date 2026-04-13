@@ -858,22 +858,36 @@ public final class GeneratedChunkProcessor {
                     cb.checkcast(params[i].getType().describeConstable().orElseThrow());
                     cb.astore(serviceLocal[i]);
                 }
-                // For HiddenMut WRITE params: allocate ONE instance before
-                // the loop and reuse it per entity. JFR profiling shows that
-                // C2 fails to scalar-replace the per-entity `new HiddenMut()`
-                // in practice (the Mut escapes through the invokevirtual to
-                // the system body), so reusing a single instance eliminates
-                // the allocation entirely — at the cost of giving up on EA
-                // for the Mut (which wasn't working anyway).
+                // For WRITE params: allocate ONE Mut/HiddenMut instance
+                // before the loop and reuse it per entity. JFR profiling
+                // shows C2 fails to scalar-replace the per-entity `new Mut()`
+                // because the Mut escapes through invokevirtual to the system
+                // body. Reusing a single instance eliminates the allocation.
                 for (int i = 0; i < paramCount; i++) {
-                    if (kinds[i] == ParamKind.WRITE && hiddenMutInfos[i] != null) {
+                    if (kinds[i] != ParamKind.WRITE) continue;
+                    if (hiddenMutInfos[i] != null) {
                         var hmi = hiddenMutInfos[i];
                         cb.new_(hmi.classDesc());
                         cb.dup();
                         cb.invokespecial(hmi.classDesc(), "<init>",
                             MethodTypeDesc.of(ConstantDescs.CD_void));
-                        cb.astore(mutLocal[i]);
+                    } else {
+                        boolean vt = componentTypes[i].isAnnotationPresent(
+                            zzuegg.ecs.component.ValueTracked.class);
+                        cb.new_(mutDesc);
+                        cb.dup();
+                        cb.aconst_null();           // value (placeholder)
+                        cb.iconst_0();              // slot
+                        cb.aconst_null();           // tracker
+                        cb.lconst_0();              // tick
+                        cb.ldc(vt ? 1 : 0);        // valueTracked
+                        cb.invokespecial(mutDesc, "<init>", MethodTypeDesc.of(
+                            ConstantDescs.CD_void,
+                            recordDesc, ConstantDescs.CD_int,
+                            trackerDesc, ConstantDescs.CD_long,
+                            ConstantDescs.CD_boolean));
                     }
+                    cb.astore(mutLocal[i]);
                 }
                 // Hoist chunk.entityArray() so per-slot Entity access
                 // is a plain aaload on a local Entity[] rather than an
@@ -989,17 +1003,9 @@ public final class GeneratedChunkProcessor {
                                 cb.putfield(mutDesc, "pending", recordDesc);
                                 cb.aload(mutLocal[i]);
                             } else {
-                                // Regular Mut path (non-SoA or @ValueTracked).
-                                var mutInitDesc = MethodTypeDesc.of(
-                                    ConstantDescs.CD_void,
-                                    recordDesc,              // value
-                                    ConstantDescs.CD_int,    // slot
-                                    trackerDesc,             // tracker
-                                    ConstantDescs.CD_long,   // tick
-                                    ConstantDescs.CD_boolean  // valueTracked
-                                );
-                                cb.new_(mutDesc);
-                                cb.dup();
+                                // Regular Mut path: reuse the pre-allocated
+                                // Mut via reset(value, slot, tracker, tick).
+                                cb.aload(mutLocal[i]);
                                 if (isSoA[i]) {
                                     emitSoARecordReconstruction(cb, componentTypes[i],
                                         soaFlatFields[i], new int[]{0}, soaFieldLocals[i], slotVar);
@@ -1015,11 +1021,10 @@ public final class GeneratedChunkProcessor {
                                 cb.iload(slotVar);               // slot
                                 cb.aload(firstTrackerVar + i);   // tracker
                                 cb.lload(tickVar);               // tick
-                                boolean vt = componentTypes[i].isAnnotationPresent(
-                                    zzuegg.ecs.component.ValueTracked.class);
-                                cb.ldc(vt ? 1 : 0);             // valueTracked
-                                cb.invokespecial(mutDesc, "<init>", mutInitDesc);
-                                cb.astore(mutLocal[i]);
+                                cb.invokevirtual(mutDesc, "reset",
+                                    MethodTypeDesc.of(ConstantDescs.CD_void,
+                                        recordDesc, ConstantDescs.CD_int,
+                                        trackerDesc, ConstantDescs.CD_long));
                                 cb.aload(mutLocal[i]);
                             }
                         }
