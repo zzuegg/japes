@@ -52,6 +52,7 @@ public class UnifiedDeltaBenchmark {
 
     public static final class Counters {
         long added, changed, removed;
+        long stateSum; // consume component values to match Zay-ES observer work
     }
 
     // --- Mutator systems: game-logic conditionals, ~10% write rate. ---
@@ -97,6 +98,7 @@ public class UnifiedDeltaBenchmark {
         @Filter(value = Added.class, target = {State.class, Health.class, Mana.class})
         void observe(@Read State s, @Read Health h, @Read Mana m) {
             c.added++;
+            c.stateSum += s.value(); // consume component value like Zay-ES does
         }
     }
 
@@ -108,6 +110,7 @@ public class UnifiedDeltaBenchmark {
         @Filter(value = Changed.class, target = {State.class, Health.class, Mana.class})
         void observe(@Read State s, @Read Health h, @Read Mana m) {
             c.changed++;
+            c.stateSum += s.value();
         }
     }
 
@@ -119,6 +122,7 @@ public class UnifiedDeltaBenchmark {
         @Filter(value = Removed.class, target = {State.class, Health.class, Mana.class})
         void observe(@Read State s, @Read Health h, @Read Mana m) {
             c.removed++;
+            c.stateSum += s.value();
         }
     }
 
@@ -207,5 +211,6 @@ public class UnifiedDeltaBenchmark {
         bh.consume(counters.added);
         bh.consume(counters.changed);
         bh.consume(counters.removed);
+        bh.consume(counters.stateSum);
     }
 }
