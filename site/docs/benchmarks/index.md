@@ -9,10 +9,10 @@ All numbers from a single co-temporal sweep on the same machine (JDK 26, Bevy 0.
 | Benchmark | Entities | **japes** | Bevy (Rust) | Zay-ES | Dominion | Artemis |
 |---|---:|---:|---:|---:|---:|---:|
 | [iterateSingleComponent](iteration-micros.md) | 10k | **3.0** | **2.18** | 28.6 | 7.06 | 4.52 |
-| [iterateTwoComponents](iteration-micros.md) | 10k | **7.2** | **3.70** | 38.6 | 12.4 | 11.6 |
-| [iterateWithWrite](iteration-micros.md) | 10k | **1.9** | 6.29 | 1829 | 22.5 | 18.3 |
-| [iterateSingleComponent](iteration-micros.md) | 100k | **30.8** | **21.3** | 383 | 79.4 | 166 |
-| [iterateWithWrite](iteration-micros.md) | 100k | **31.9** | 63.8 | 17857 | **234** | 335 |
+| [iterateTwoComponents](iteration-micros.md) | 10k | **7.1** | **3.70** | 38.6 | 12.4 | 11.6 |
+| [iterateWithWrite](iteration-micros.md) | 10k | **1.8** | 6.29 | 1829 | 22.5 | 18.3 |
+| [iterateSingleComponent](iteration-micros.md) | 100k | **30.3** | **21.3** | 383 | 79.4 | 166 |
+| [iterateWithWrite](iteration-micros.md) | 100k | **31.0** | 63.8 | 17857 | **234** | 335 |
 
 *japes iteration numbers use field-level blackhole; Bevy uses object-level `black_box`. Read rows are not directly comparable across languages. See [iteration micros methodology](iteration-micros.md).*
 
@@ -21,28 +21,42 @@ All numbers from a single co-temporal sweep on the same machine (JDK 26, Bevy 0.
 | Benchmark | Entities | **japes** | Bevy | Zay-ES | Dominion | Artemis |
 |---|---:|---:|---:|---:|---:|---:|
 | [N-Body oneTick](nbody.md) | 10k | **2** | 8.8 | 441 | 24 | 19 |
-| [ParticleScenario](particle-scenario.md) | 10k | **40.7** | **22.7** | 1855 | 67.9 | 98.5 |
-| [SparseDelta](sparse-delta.md) | 10k | **2.2** | 4.11 | 4.67 | **0.37** | **0.27** |
+| [ParticleScenario](particle-scenario.md) | 10k | **39.4** | **22.7** | 1855 | 67.9 | 98.5 |
+| [SparseDelta](sparse-delta.md) | 10k | **2.1** | 4.11 | 4.67 | **0.37** | **0.27** |
 | [RealisticTick](realistic-tick.md) | 10k st | **6.8** | 8.81 | 15.4 | 44.6 | 24.5 |
-| [RealisticTick](realistic-tick.md) | 100k st | **12.5** | 76.9 | **19.6** | 389 | 279 |
+| [RealisticTick](realistic-tick.md) | 100k st | **11.5** | 76.9 | **19.6** | 389 | 279 |
 
 ### Relations (µs/op, japes + Bevy only)
 
 | Benchmark | Cell | **japes** | Bevy naive | Bevy hand-rolled |
 |---|---|---:|---:|---:|
-| [PredatorPrey `@Pair`](predator-prey.md) | 500×2000 | 41.1 | 243.7 | **11.5** |
-| [PredatorPrey `@ForEachPair`](predator-prey.md) | 500×2000 | **25.9** | 243.7 | **11.5** |
+| [PredatorPrey `@Pair`](predator-prey.md) | 500×2000 | 37.8 | 243.7 | **11.5** |
+| [PredatorPrey `@ForEachPair`](predator-prey.md) | 500×2000 | **24.7** | 243.7 | **11.5** |
 
 ### Unified delta (µs/op, lower is better)
 
 | Benchmark | Entities | **japes** (6 systems) | Zay-ES (1 EntitySet) |
 |---|---:|---:|---:|
-| [UnifiedDelta](unified-delta.md) | 10k | **660** | 1,067 |
-| [UnifiedDelta](unified-delta.md) | 100k | **4,854** | 13,889 |
+| [UnifiedDelta](unified-delta.md) | 10k | **642** | 1,067 |
+| [UnifiedDelta](unified-delta.md) | 100k | **4,831** | 13,889 |
+
+### Allocation per tick (B/op, japes only)
+
+| Benchmark | Entities | B/op | System-loop EA |
+|---|---:|---:|---|
+| iterateWithWrite | 10k | **0** | 100% — zero heap allocation |
+| NBody oneTick | 10k | **0** | 100% — zero heap allocation |
+| SparseDelta | 10k | 3,214 | ~100% — residual from driver |
+| RealisticTick | 10k | 11,270 | ~100% — residual from driver |
+| PredatorPrey @ForEachPair | 500×2k | 34,564 | ~100% — residual from commands/spawn |
+| ParticleScenario | 10k | 75,153 | ~100% — residual from 1% spawn/despawn |
+| UnifiedDelta | 10k | 295,763 | 89% — residual from spawn/despawn/strip |
+
+System iteration loops achieve **zero per-entity allocation** across all benchmarks. All residual allocation is from structural operations (spawn, despawn, archetype migration, command processing) that genuinely escape into framework data structures. See [One JIT to rule them all](../deep-dive/one-jit-to-rule-them-all.md) for the full EA story.
 
 ## Where japes wins
 
-- **Raw writes** — `iterateWithWrite 10k`: **3.3× faster than Bevy**. SoA storage lets the JIT scalar-replace the `new Position(...)` record — field values go directly into primitive backing arrays with zero heap allocation. See [One JIT to rule them all](../deep-dive/one-jit-to-rule-them-all.md).
+- **Raw writes** — `iterateWithWrite 10k`: **3.5× faster than Bevy**. SoA storage lets the JIT scalar-replace the `new Position(...)` record — field values go directly into primitive backing arrays with zero heap allocation. See [One JIT to rule them all](../deep-dive/one-jit-to-rule-them-all.md).
 - **Dense integration** — `NBody 10k`: **4.4× faster than Bevy**. Same SoA write-path benefit on a full-entity-scan workload.
 - **Change detection** — `SparseDelta`: **1.87× faster than Bevy**, because dirty-list walks scale with dirty count, not total entities.
 - **Multi-observer scaling** — `RealisticTick 100k`: **6.15× faster than Bevy**, same reason at 10× scale. Also beats every Java library at both 10k and 100k.

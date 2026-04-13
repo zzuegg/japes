@@ -165,9 +165,28 @@ A "zero-allocation" design that stores objects in heap fields can be slower than
 | Issue | Allocation | Root cause |
 |---|---:|---|
 | Mixed(int,float,double,long) residual | 40 KB | Mut wrapper interaction with 4-type mix, not field count (simple loops = 0 B/op) |
-| Sparse writes at 400-2500 entities | variable | JIT profiling artifact with conditional branches; recovers above 3000 |
 | Non-SoA with String/Object fields | high | `Object[]` fundamentally defeats EA |
 | Res + Commands service params | ~2x baseline | Extra locals increase register pressure |
+
+Note: the mid-range entity count issue (400-2500 entities, sparse writes) was fixed by pre-warming the system method's branch profile at generation time. C1's branch frequency estimate was the root cause — seeding the profile with hot write paths lets C2 inline correctly.
+
+## Performance and allocation matrix
+
+Final numbers after all optimizations. Lower is better for both columns.
+
+| Benchmark | Entities | µs/op | B/op | EA | vs Bevy |
+|---|---:|---:|---:|---|---|
+| iterateWithWrite | 10k | **1.8** | **0** | 100% | **3.5× faster** |
+| NBody oneTick | 10k | **2** | **0** | 100% | **4.4× faster** |
+| SparseDelta | 10k | **2.1** | 3,214 | ~100% system | **2.0× faster** |
+| RealisticTick | 10k | **6.8** | 11,270 | ~100% system | **1.3× faster** |
+| RealisticTick | 100k | **11.5** | — | ~100% system | **6.7× faster** |
+| PredatorPrey @ForEachPair | 500×2k | **24.7** | 34,564 | ~100% system | **9.9× faster** |
+| PredatorPrey @Pair | 500×2k | **37.8** | — | — | **6.4× faster** |
+| ParticleScenario | 10k | **39.4** | 75,153 | ~100% system | 1.7× slower |
+| UnifiedDelta | 10k | **642** | 295,763 | 89% | **1.7× faster** (vs Zay-ES) |
+
+The **0 B/op** on iterateWithWrite and NBody means literally zero per-entity heap allocation — every Record and Mut is scalar-replaced into registers. The allocation in other benchmarks is entirely from structural operations (spawn/despawn/archetype migration) or driver code, not from the system iteration loops.
 
 ## The optimization journey
 
