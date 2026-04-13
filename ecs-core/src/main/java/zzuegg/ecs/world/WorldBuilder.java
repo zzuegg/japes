@@ -23,6 +23,7 @@ public final class WorldBuilder {
     // for write-heavy workloads.
     boolean useDefaultStorageFactory = false;
     boolean useGeneratedProcessors = true;
+    boolean autoPromoteSoA = false;
     int chunkSize = 1024;
 
     WorldBuilder() {
@@ -73,6 +74,20 @@ public final class WorldBuilder {
         return this;
     }
 
+    /**
+     * When enabled, primitive-only records are automatically stored in
+     * SoA (struct-of-arrays) storage even when a custom storage factory
+     * is set. This enables escape analysis on the write path for those
+     * records while still using the custom factory for records with
+     * reference fields.
+     *
+     * <p>Off by default — the custom factory is used as-is.
+     */
+    public WorldBuilder autoPromoteSoA(boolean enabled) {
+        this.autoPromoteSoA = enabled;
+        return this;
+    }
+
     public WorldBuilder storageFactory(ComponentStorage.Factory factory) {
         this.storageFactory = factory;
         // A custom factory might return something that isn't a
@@ -87,10 +102,8 @@ public final class WorldBuilder {
         }
         if (storageFactory == null) {
             storageFactory = ComponentStorage.defaultFactory();
-        } else if (!(storageFactory instanceof zzuegg.ecs.storage.SoAComponentStorage.SoAFactory)) {
-            // Wrap the custom factory: auto-promote SoA-eligible records
-            // (all-primitive fields) to SoA storage for better EA, while
-            // delegating non-eligible records to the user's factory.
+        } else if (autoPromoteSoA
+                && !(storageFactory instanceof zzuegg.ecs.storage.SoAComponentStorage.SoAFactory)) {
             storageFactory = new zzuegg.ecs.storage.SoAComponentStorage.SoAPromotingFactory(storageFactory);
         }
         return new World(this);
