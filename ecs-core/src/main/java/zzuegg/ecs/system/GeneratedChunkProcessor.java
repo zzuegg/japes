@@ -56,6 +56,147 @@ public final class GeneratedChunkProcessor {
     }
 
     /**
+     * Result of generating a specialised Mut subclass for a specific component type.
+     */
+    record HiddenMutInfo(Class<?> mutClass, ClassDesc classDesc,
+                         java.lang.reflect.RecordComponent[] components) {}
+
+    /**
+     * Generate a Mut subclass specialised for a specific all-primitive record type.
+     * The subclass stores current and pending values as primitive fields instead of
+     * Record references, eliminating the Record allocation that would otherwise be
+     * needed for the Mut constructor's "current" value.
+     *
+     * <p>Overrides get(), set(), flush(), and isChanged(). get() reconstructs a
+     * Record on the fly from cur_ fields; set() decomposes the Record into pnd_
+     * fields immediately. Both patterns are immediate create-and-decompose that
+     * EA can scalar-replace, so no heap Record survives.
+     */
+    @SuppressWarnings("unchecked")
+    static HiddenMutInfo generateHiddenMut(MethodHandles.Lookup systemLookup,
+                                           Class<? extends Record> componentType,
+                                           String uniqueSuffix) throws Exception {
+        var rc = componentType.getRecordComponents();
+        var mutCd = ClassDesc.of("zzuegg.ecs.component.Mut");
+        var recordCd = ClassDesc.of("java.lang.Record");
+        var trackerCd = ClassDesc.of("zzuegg.ecs.change.ChangeTracker");
+        var recCd = componentType.describeConstable().orElseThrow();
+
+        String pkg = systemLookup.lookupClass().getPackageName();
+        String pfx = (pkg == null || pkg.isEmpty()) ? "" : pkg + ".";
+        var sfx = new StringBuilder(uniqueSuffix.length());
+        for (int si = 0; si < uniqueSuffix.length(); si++) {
+            char c = uniqueSuffix.charAt(si);
+            boolean ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+                || (c >= '0' && c <= '9' && si > 0);
+            sfx.append(ok ? c : '_');
+        }
+        String className = pfx + "HiddenMut_" + componentType.getSimpleName()
+            + "_" + sfx + "_" + COUNTER.incrementAndGet();
+        var genCd = ClassDesc.of(className);
+
+        ClassDesc[] fDescs = new ClassDesc[rc.length];
+        ClassDesc[] ctorPs = new ClassDesc[rc.length];
+        for (int fi = 0; fi < rc.length; fi++) {
+            fDescs[fi] = rc[fi].getType().describeConstable().orElseThrow();
+            ctorPs[fi] = fDescs[fi];
+        }
+        var recCtorMtd = MethodTypeDesc.of(ConstantDescs.CD_void, ctorPs);
+
+        byte[] bytes = ClassFile.of().build(genCd, clb -> {
+            clb.withFlags(ACC_PUBLIC);
+            clb.withSuperclass(mutCd);
+            for (int fi = 0; fi < rc.length; fi++) {
+                final int idx = fi;
+                clb.withField("cur_" + rc[idx].getName(), fDescs[idx],
+                    fb -> fb.withFlags(ACC_PUBLIC));
+                clb.withField("pnd_" + rc[idx].getName(), fDescs[idx],
+                    fb -> fb.withFlags(ACC_PUBLIC));
+            }
+            clb.withMethodBody("<init>", MethodTypeDesc.of(ConstantDescs.CD_void),
+                ACC_PUBLIC, cb -> {
+                    cb.aload(0);
+                    cb.invokespecial(mutCd, "<init>", MethodTypeDesc.of(ConstantDescs.CD_void));
+                    cb.return_();
+                });
+            // get() -> Record: reconstruct from cur_ or pnd_ fields
+            clb.withMethodBody("get", MethodTypeDesc.of(recordCd), ACC_PUBLIC, cb -> {
+                var usePending = cb.newLabel();
+                var end = cb.newLabel();
+                cb.aload(0);
+                cb.getfield(mutCd, "changed", ConstantDescs.CD_boolean);
+                cb.ifne(usePending);
+                cb.new_(recCd); cb.dup();
+                for (int fi = 0; fi < rc.length; fi++) {
+                    cb.aload(0);
+                    cb.getfield(genCd, "cur_" + rc[fi].getName(), fDescs[fi]);
+                }
+                cb.invokespecial(recCd, "<init>", recCtorMtd);
+                cb.goto_(end);
+                cb.labelBinding(usePending);
+                cb.new_(recCd); cb.dup();
+                for (int fi = 0; fi < rc.length; fi++) {
+                    cb.aload(0);
+                    cb.getfield(genCd, "pnd_" + rc[fi].getName(), fDescs[fi]);
+                }
+                cb.invokespecial(recCd, "<init>", recCtorMtd);
+                cb.labelBinding(end);
+                cb.areturn();
+            });
+            // set(Record) -> void: decompose into pnd_ fields
+            clb.withMethodBody("set", MethodTypeDesc.of(ConstantDescs.CD_void, recordCd),
+                ACC_PUBLIC, cb -> {
+                    for (int fi = 0; fi < rc.length; fi++) {
+                        cb.aload(0); cb.aload(1); cb.checkcast(recCd);
+                        cb.invokevirtual(recCd, rc[fi].getName(), MethodTypeDesc.of(fDescs[fi]));
+                        cb.putfield(genCd, "pnd_" + rc[fi].getName(), fDescs[fi]);
+                    }
+                    cb.aload(0); cb.iconst_1();
+                    cb.putfield(mutCd, "changed", ConstantDescs.CD_boolean);
+                    cb.return_();
+                });
+            // isChanged() -> boolean
+            clb.withMethodBody("isChanged", MethodTypeDesc.of(ConstantDescs.CD_boolean),
+                ACC_PUBLIC, cb -> {
+                    cb.aload(0);
+                    cb.getfield(mutCd, "changed", ConstantDescs.CD_boolean);
+                    cb.ireturn();
+                });
+            // flush() -> Record
+            clb.withMethodBody("flush", MethodTypeDesc.of(recordCd), ACC_PUBLIC, cb -> {
+                var changedPath = cb.newLabel();
+                cb.aload(0);
+                cb.getfield(mutCd, "changed", ConstantDescs.CD_boolean);
+                cb.ifne(changedPath);
+                cb.new_(recCd); cb.dup();
+                for (int fi = 0; fi < rc.length; fi++) {
+                    cb.aload(0);
+                    cb.getfield(genCd, "cur_" + rc[fi].getName(), fDescs[fi]);
+                }
+                cb.invokespecial(recCd, "<init>", recCtorMtd);
+                cb.areturn();
+                cb.labelBinding(changedPath);
+                cb.aload(0); cb.getfield(mutCd, "tracker", trackerCd);
+                cb.aload(0); cb.getfield(mutCd, "slot", ConstantDescs.CD_int);
+                cb.aload(0); cb.getfield(mutCd, "tick", ConstantDescs.CD_long);
+                cb.invokevirtual(trackerCd, "markChanged",
+                    MethodTypeDesc.of(ConstantDescs.CD_void, ConstantDescs.CD_int, ConstantDescs.CD_long));
+                cb.new_(recCd); cb.dup();
+                for (int fi = 0; fi < rc.length; fi++) {
+                    cb.aload(0);
+                    cb.getfield(genCd, "pnd_" + rc[fi].getName(), fDescs[fi]);
+                }
+                cb.invokespecial(recCd, "<init>", recCtorMtd);
+                cb.areturn();
+            });
+        });
+
+        var mutClass = systemLookup.defineClass(bytes);
+        return new HiddenMutInfo(mutClass, genCd, rc);
+    }
+
+
+    /**
      * Package-private skip-reason introspection. Returns {@code null} if this
      * processor tier can handle the system; otherwise a human-readable reason
      * the system was rejected. Kept on this class so callers (e.g. future
@@ -198,6 +339,18 @@ public final class GeneratedChunkProcessor {
         }
 
         var systemLookup = MethodHandles.privateLookupIn(method.getDeclaringClass(), MethodHandles.lookup());
+
+        // Generate specialised Mut subclasses for SoA WRITE params (excluding
+        // @ValueTracked which needs the original-equality check in base Mut).
+        HiddenMutInfo[] hiddenMutInfos = new HiddenMutInfo[paramCount];
+        for (int i = 0; i < paramCount; i++) {
+            if (kinds[i] == ParamKind.WRITE && isSoA[i]
+                && !componentTypes[i].isAnnotationPresent(
+                    zzuegg.ecs.component.ValueTracked.class)) {
+                hiddenMutInfos[i] = generateHiddenMut(systemLookup,
+                    (Class<? extends Record>) componentTypes[i], desc.name());
+            }
+        }
 
         var systemClassDesc = method.getDeclaringClass().describeConstable().orElseThrow();
         var storageDesc = ClassDesc.of("zzuegg.ecs.storage.ComponentStorage");
@@ -676,48 +829,80 @@ public final class GeneratedChunkProcessor {
                             }
                         }
                         case WRITE -> {
-                            // Fresh Mut per entity — enables escape analysis.
-                            var mutInitDesc = MethodTypeDesc.of(
-                                ConstantDescs.CD_void,
-                                recordDesc,              // value
-                                ConstantDescs.CD_int,    // slot
-                                trackerDesc,             // tracker
-                                ConstantDescs.CD_long,   // tick
-                                ConstantDescs.CD_boolean  // valueTracked
-                            );
-                            cb.new_(mutDesc);
-                            cb.dup();
-                            // value from storage — SoA reconstructs the record
-                            if (isSoA[i]) {
-                                var recDesc = componentTypes[i].describeConstable().orElseThrow();
-                                cb.new_(recDesc);
+                            if (hiddenMutInfos[i] != null) {
+                                // Specialised Mut subclass: stores primitives
+                                // directly from SoA arrays, no record alloc.
+                                var hmi = hiddenMutInfos[i];
+                                var hmDesc = hmi.classDesc();
+                                var hmRc = hmi.components();
+                                cb.new_(hmDesc);
                                 cb.dup();
-                                var rc = soaComponents[i];
-                                var ctorParams = new ClassDesc[rc.length];
-                                for (int f = 0; f < rc.length; f++) {
-                                    ctorParams[f] = rc[f].getType().describeConstable().orElseThrow();
+                                cb.invokespecial(hmDesc, "<init>",
+                                    MethodTypeDesc.of(ConstantDescs.CD_void));
+                                for (int f = 0; f < hmRc.length; f++) {
+                                    cb.dup();
                                     cb.aload(soaFieldLocals[i][f]);
                                     cb.iload(slotVar);
-                                    zzuegg.ecs.storage.SoAComponentStorage.emitArrayLoad(cb, rc[f].getType());
+                                    zzuegg.ecs.storage.SoAComponentStorage.emitArrayLoad(cb, hmRc[f].getType());
+                                    var fDesc = hmRc[f].getType().describeConstable().orElseThrow();
+                                    cb.putfield(hmDesc, "cur_" + hmRc[f].getName(), fDesc);
                                 }
-                                cb.invokespecial(recDesc, "<init>",
-                                    MethodTypeDesc.of(ConstantDescs.CD_void, ctorParams));
-                            } else if (useDefaultStorageFactory) {
-                                cb.aload(firstStorageVar + i);
+                                cb.dup();
                                 cb.iload(slotVar);
-                                cb.aaload();
+                                cb.putfield(mutDesc, "slot", ConstantDescs.CD_int);
+                                cb.dup();
+                                cb.aload(firstTrackerVar + i);
+                                cb.putfield(mutDesc, "tracker", trackerDesc);
+                                cb.dup();
+                                cb.lload(tickVar);
+                                cb.putfield(mutDesc, "tick", ConstantDescs.CD_long);
+                                cb.astore(mutLocal[i]);
+                                cb.aload(mutLocal[i]);
                             } else {
-                                cb.aload(firstStorageVar + i);
-                                cb.iload(slotVar);
-                                cb.invokeinterface(storageDesc, "get", storageGetDesc);
+                                // Regular Mut path (non-SoA or @ValueTracked).
+                                var mutInitDesc = MethodTypeDesc.of(
+                                    ConstantDescs.CD_void,
+                                    recordDesc,              // value
+                                    ConstantDescs.CD_int,    // slot
+                                    trackerDesc,             // tracker
+                                    ConstantDescs.CD_long,   // tick
+                                    ConstantDescs.CD_boolean  // valueTracked
+                                );
+                                cb.new_(mutDesc);
+                                cb.dup();
+                                if (isSoA[i]) {
+                                    var recDesc = componentTypes[i].describeConstable().orElseThrow();
+                                    cb.new_(recDesc);
+                                    cb.dup();
+                                    var rc = soaComponents[i];
+                                    var ctorParams = new ClassDesc[rc.length];
+                                    for (int f = 0; f < rc.length; f++) {
+                                        ctorParams[f] = rc[f].getType().describeConstable().orElseThrow();
+                                        cb.aload(soaFieldLocals[i][f]);
+                                        cb.iload(slotVar);
+                                        zzuegg.ecs.storage.SoAComponentStorage.emitArrayLoad(cb, rc[f].getType());
+                                    }
+                                    cb.invokespecial(recDesc, "<init>",
+                                        MethodTypeDesc.of(ConstantDescs.CD_void, ctorParams));
+                                } else if (useDefaultStorageFactory) {
+                                    cb.aload(firstStorageVar + i);
+                                    cb.iload(slotVar);
+                                    cb.aaload();
+                                } else {
+                                    cb.aload(firstStorageVar + i);
+                                    cb.iload(slotVar);
+                                    cb.invokeinterface(storageDesc, "get", storageGetDesc);
+                                }
+                                cb.iload(slotVar);               // slot
+                                cb.aload(firstTrackerVar + i);   // tracker
+                                cb.lload(tickVar);               // tick
+                                boolean vt = componentTypes[i].isAnnotationPresent(
+                                    zzuegg.ecs.component.ValueTracked.class);
+                                cb.ldc(vt ? 1 : 0);             // valueTracked
+                                cb.invokespecial(mutDesc, "<init>", mutInitDesc);
+                                cb.astore(mutLocal[i]);
+                                cb.aload(mutLocal[i]);
                             }
-                            cb.iload(slotVar);               // slot
-                            cb.aload(firstTrackerVar + i);   // tracker
-                            cb.lload(tickVar);               // tick
-                            cb.iconst_0();                   // valueTracked = false
-                            cb.invokespecial(mutDesc, "<init>", mutInitDesc);
-                            cb.astore(mutLocal[i]);
-                            cb.aload(mutLocal[i]);
                         }
                         case ENTITY -> {
                             // entities[slot] via the hoisted raw Entity[]
@@ -742,11 +927,11 @@ public final class GeneratedChunkProcessor {
                 }
 
                 // Post-call: for each write param, check isChanged() then
-                // flush + write back. Skipping unchanged entities avoids
-                // flush(), SoA decomposition, and storage writes for entities
-                // that the user method didn't mutate — critical when systems
-                // iterate all entities but only write a fraction.
+                // flush + write back. Hidden Mut path bypasses flush() and
+                // reads pnd_ primitives directly into SoA arrays.
                 var mutIsChangedDesc = MethodTypeDesc.of(ConstantDescs.CD_boolean);
+                var markChangedDesc = MethodTypeDesc.of(ConstantDescs.CD_void,
+                    ConstantDescs.CD_int, ConstantDescs.CD_long);
                 for (int i = 0; i < paramCount; i++) {
                     if (kinds[i] != ParamKind.WRITE) continue;
                     var skipFlush = cb.newLabel();
@@ -754,33 +939,53 @@ public final class GeneratedChunkProcessor {
                     cb.invokevirtual(mutDesc, "isChanged", mutIsChangedDesc);
                     cb.ifeq(skipFlush); // skip if !isChanged
 
-                    cb.aload(mutLocal[i]);
-                    cb.invokevirtual(mutDesc, "flush", mutFlushDesc);
-                    cb.astore(tempValueVar);
+                    if (hiddenMutInfos[i] != null) {
+                        // Hidden Mut: inline flush -- read pnd_ primitives
+                        // directly into SoA arrays, no Record needed.
+                        var hmi = hiddenMutInfos[i];
+                        var hmDesc = hmi.classDesc();
+                        var hmRc = hmi.components();
+                        cb.aload(firstTrackerVar + i);
+                        cb.iload(slotVar);
+                        cb.lload(tickVar);
+                        cb.invokevirtual(trackerDesc, "markChanged", markChangedDesc);
+                        for (int f = 0; f < hmRc.length; f++) {
+                            cb.aload(soaFieldLocals[i][f]);
+                            cb.iload(slotVar);
+                            cb.aload(mutLocal[i]);
+                            cb.checkcast(hmDesc);
+                            var fDesc = hmRc[f].getType().describeConstable().orElseThrow();
+                            cb.getfield(hmDesc, "pnd_" + hmRc[f].getName(), fDesc);
+                            zzuegg.ecs.storage.SoAComponentStorage.emitArrayStore(cb, hmRc[f].getType());
+                        }
+                    } else {
+                        cb.aload(mutLocal[i]);
+                        cb.invokevirtual(mutDesc, "flush", mutFlushDesc);
+                        cb.astore(tempValueVar);
 
-                    if (isSoA[i]) {
-                        // SoA: decompose the record into per-field array stores.
-                        var recDesc = componentTypes[i].describeConstable().orElseThrow();
-                        var rc = soaComponents[i];
-                        for (int f = 0; f < rc.length; f++) {
-                            cb.aload(soaFieldLocals[i][f]); // field array
+                        if (isSoA[i]) {
+                            var recDesc = componentTypes[i].describeConstable().orElseThrow();
+                            var rc = soaComponents[i];
+                            for (int f = 0; f < rc.length; f++) {
+                                cb.aload(soaFieldLocals[i][f]);
+                                cb.iload(slotVar);
+                                cb.aload(tempValueVar);
+                                cb.checkcast(recDesc);
+                                cb.invokevirtual(recDesc, rc[f].getName(),
+                                    MethodTypeDesc.of(rc[f].getType().describeConstable().orElseThrow()));
+                                zzuegg.ecs.storage.SoAComponentStorage.emitArrayStore(cb, rc[f].getType());
+                            }
+                            } else if (useDefaultStorageFactory) {
+                            cb.aload(firstStorageVar + i);
                             cb.iload(slotVar);
                             cb.aload(tempValueVar);
-                            cb.checkcast(recDesc);
-                            cb.invokevirtual(recDesc, rc[f].getName(),
-                                MethodTypeDesc.of(rc[f].getType().describeConstable().orElseThrow()));
-                            zzuegg.ecs.storage.SoAComponentStorage.emitArrayStore(cb, rc[f].getType());
+                            cb.aastore();
+                        } else {
+                            cb.aload(firstStorageVar + i);
+                            cb.iload(slotVar);
+                            cb.aload(tempValueVar);
+                            cb.invokeinterface(storageDesc, "set", storageSetDesc);
                         }
-                    } else if (useDefaultStorageFactory) {
-                        cb.aload(firstStorageVar + i);
-                        cb.iload(slotVar);
-                        cb.aload(tempValueVar);
-                        cb.aastore();
-                    } else {
-                        cb.aload(firstStorageVar + i);
-                        cb.iload(slotVar);
-                        cb.aload(tempValueVar);
-                        cb.invokeinterface(storageDesc, "set", storageSetDesc);
                     }
                     cb.labelBinding(skipFlush);
                 }

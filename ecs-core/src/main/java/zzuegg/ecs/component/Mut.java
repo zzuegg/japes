@@ -2,25 +2,33 @@ package zzuegg.ecs.component;
 
 import zzuegg.ecs.change.ChangeTracker;
 
-public final class Mut<T extends Record> {
+public class Mut<T extends Record> {
 
     private T original;
     private T current;       // set once in constructor, never overwritten
     private T pending;       // written by set(), null if unchanged
-    private int slot;
-    private ChangeTracker tracker;
-    private long tick;
+    // Widened to public so generated hidden-class Mut subclasses in other
+    // packages can putfield these directly. Not part of the public API.
+    public int slot;
+    public ChangeTracker tracker;
+    public long tick;
     private final boolean valueTracked;
-    private boolean changed;
+    public boolean changed;
 
     public Mut(T value, int slot, ChangeTracker tracker, long tick, boolean valueTracked) {
         if (valueTracked) this.original = value;
         this.current = value;
-        // pending stays null — no write needed
+        // pending stays null -- no write needed
         this.slot = slot;
         this.tracker = tracker;
         this.tick = tick;
         this.valueTracked = valueTracked;
+        this.changed = false;
+    }
+
+    /** Protected no-arg constructor for generated specialised subclasses. */
+    protected Mut() {
+        this.valueTracked = false;
         this.changed = false;
     }
 
