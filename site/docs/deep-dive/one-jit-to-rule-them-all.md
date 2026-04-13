@@ -218,6 +218,53 @@ The remaining 297 KB is purely structural — objects that genuinely escape into
 
 Zero allocation samples from the mutator system `set()` path — the generated primitive Mut eliminates them completely.
 
+## EA stress testing: what works and what doesn't
+
+We ran **10 parallel stress-test benchmarks** covering every EA dimension. Key results:
+
+### What EA handles perfectly (0 B/op per entity)
+
+| Pattern | Allocation | EA rate |
+|---|---:|---:|
+| 2-4 @Write params per system | 0 B | >99.99% |
+| 6-field records (all same type) | 0 B | >99.99% |
+| get() after set(), loops, double-set | 0 B | >99.99% |
+| @ForEachPair with all write patterns | 0 B | >99.99% |
+| 1-20 systems (linear scaling, 0 B/system) | 0 B | 100% |
+| Entity counts 100 to 1,000,000 (dense writes) | 0 B | 100% |
+| @ValueTracked with different values | 0 B | >99.99% |
+
+### What we fixed
+
+| Issue | Before | After | Fix |
+|---|---:|---:|---|
+| Mixed-type records (bool+int) | 560 KB | **0 B** | Uniform long cur\_ fields |
+| Mixed-type records (int+float+double+long) | 1.0 MB | **40 KB** | Same (JVM limit on 4-type mix) |
+| @ValueTracked same-value + observer | 16 KB | **200 B** | Primitive field comparison in flush |
+| Non-SoA with all-primitive records | 26 KB | **1.2 KB** | SoAPromotingFactory auto-promotes |
+| Per-tick framework overhead | 80 B/system | **0 B** | Cached lambdas, index loops, raw lists |
+
+### Known limits
+
+| Issue | Allocation | Root cause |
+|---|---:|---|
+| Sparse writes at 400-2500 entities | 56×N B | JIT profiling artifact — C2 branch profile at mid-range counts defeats EA. Recovers above 3000. Dense writes unaffected. |
+| Mixed(int,float,double,long) residual | 40 KB | User's `new Mixed(...)` has genuinely mixed 32/64-bit field widths that C2 can't scalar-replace — JVM limitation. |
+| Non-SoA with String/Object fields | 26-75 KB | Object[] backing fundamentally defeats EA. Records with reference fields can't use SoA. |
+| Res + Commands service params | ~1.4 KB | Extra locals increase register pressure, occasionally preventing EA. |
+
+### Nested records: zero-cost composition
+
+Records containing other records are now SoA-eligible. `RecordFlattener` recursively flattens the field tree:
+
+```java
+record Vec3(float x, float y, float z) {}
+record Transform(Vec3 pos, Vec3 vel) {}
+// → flattened into 6 SoA arrays: pos_x[], pos_y[], pos_z[], vel_x[], vel_y[], vel_z[]
+// → HiddenMut: cur_pos_x, cur_pos_y, cur_pos_z, cur_vel_x, ...
+// → EA: zero per-entity allocation, identical to flat 6-field record
+```
+
 ## The optimization journey in numbers
 
 | Round | What | Write µs/op (10k) | vs Bevy |
@@ -255,6 +302,10 @@ Our current SoA approach achieves (1) at the library level. (2) is the remaining
 6. **Graph-level EA is more capable than BCEA suggests.** C2's bytecode-level escape analysis (BCEA) has a 150-byte limit, but the graph-level EA that runs during C2 optimization handles much larger methods. Tested: methods >500 bytes with complex preambles still got full record elimination. Don't split methods just for BCEA — split for inlining and readability.
 
 7. **Avoid phi merges on allocation-bearing fields.** If a field can hold two different freshly-allocated objects depending on a branch (e.g., original vs. mutated value), EA can't eliminate either. Split the values into separate fields — one per allocation site — so each field holds exactly one value. The JIT tracks each independently and can prove each dead after use.
+
+8. **Uniform field widths enable scalar replacement.** A class with `boolean`, `int`, `float`, and `long` fields has 4 different JVM slot widths. C2's EA struggles with heterogeneous layouts. Storing everything as `long` with bit-preserving widening (`Float.floatToRawIntBits`, `Double.doubleToRawLongBits`) gives uniform layout that EA handles trivially. Tested: `Flags(boolean, boolean, int)` went from 560 KB to 0 B by widening cur\_ fields to long.
+
+9. **Zero overhead means zero.** Every per-tick allocation source matters. `String.substring` in a name check, `Collections.unmodifiableList` wrappers, `this::methodRef` lambdas, `ArrayList` iterators from for-each loops — each is 16-48 bytes that add up across systems. Caching, index-based loops, and raw list returns eliminated 80 B/system/tick → 0 B. NBody went from 80 B/op to literally 0.006 B/op.
 
 ## Related
 
