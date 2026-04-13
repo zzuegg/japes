@@ -60,6 +60,17 @@ public final class World {
     private final boolean useGeneratedProcessors;
     private final boolean useDefaultStorageFactory;
     private final boolean useSoAStorage;
+    // Cached method reference to avoid allocating a lambda capture every tick
+    // when executeStage() passes it to executor.execute().
+    private final java.util.function.Consumer<ScheduleGraph.SystemNode> executeSystemRef = this::executeSystem;
+    // Pre-computed simple names for system descriptors whose qualified name
+    // contains a dot. Avoids a String.substring allocation on every
+    // executeSystem call (~80 B/system/tick).
+    private final Map<String, String> systemSimpleNames = new HashMap<>();
+    // Cached singleton sets for the dirty-list prune path. Avoids
+    // allocating a new ImmutableCollections$Set12 via Set.of(compId) per
+    // tracked component per tick.
+    private final Map<ComponentId, Set<ComponentId>> singletonSets = new HashMap<>();
 
     World(WorldBuilder builder) {
         this.archetypeGraph = new ArchetypeGraph(componentRegistry, builder.chunkSize, builder.storageFactory);
@@ -106,12 +117,20 @@ public final class World {
         removalLog.clearConsumers();
         trackedRemovedComponents.clear();
         trackedChangeFilterComponents.clear();
+        systemSimpleNames.clear();
         this.schedule = new Schedule(allDescriptors, stages);
 
         for (var entry : schedule.orderedStages()) {
             entry.getValue().buildInvokers();
             for (var node : entry.getValue().nodes()) {
                 buildExecutionPlan(node.descriptor());
+                // Pre-compute simple name for the disabled-system check so
+                // executeSystem() never has to call String.substring().
+                var qname = node.descriptor().name();
+                int dot = qname.lastIndexOf('.');
+                if (dot >= 0) {
+                    systemSimpleNames.put(qname, qname.substring(dot + 1));
+                }
             }
         }
 
@@ -1032,8 +1051,9 @@ public final class World {
         tick.advance();
         eventRegistry.swapAll();
 
-        for (var entry : schedule.orderedStages()) {
-            executeStage(entry.getValue());
+        var stages = schedule.orderedStages();
+        for (int i = 0, n = stages.size(); i < n; i++) {
+            executeStage(stages.get(i).getValue());
         }
 
         // End-of-tick GC for the removal log: for each tracked component, drop
@@ -1110,9 +1130,12 @@ public final class World {
                     }
                 }
                 if (minWatermark == Long.MAX_VALUE) continue;
-                var matching = archetypeGraph.findMatching(Set.of(compId));
+                var matching = archetypeGraph.findMatching(
+                    singletonSets.computeIfAbsent(compId, Set::of));
                 for (var archetype : matching) {
-                    for (var chunk : archetype.chunks()) {
+                    var chunkList = archetype.chunks();
+                    for (int ci = 0, cn = chunkList.size(); ci < cn; ci++) {
+                        var chunk = chunkList.get(ci);
                         var tracker = chunk.changeTracker(compId);
                         if (tracker != null) tracker.pruneDirtyList(minWatermark);
                     }
@@ -1247,12 +1270,13 @@ public final class World {
     }
 
     private void executeStage(ScheduleGraph graph) {
-        executor.execute(graph, this::executeSystem);
+        executor.execute(graph, executeSystemRef);
         flushPendingCommands();
     }
 
     private void flushPendingCommands() {
-        for (var cmds : allCommandBuffers) {
+        for (int i = 0, n = allCommandBuffers.size(); i < n; i++) {
+            var cmds = allCommandBuffers.get(i);
             if (!cmds.isEmpty()) {
                 zzuegg.ecs.command.CommandProcessor.process(cmds.drain(), this);
             }
@@ -1274,11 +1298,9 @@ public final class World {
         if (disabledSystems.contains(desc.name())) {
             return;
         }
-        if (desc.name().contains(".")) {
-            var simpleName = desc.name().substring(desc.name().lastIndexOf('.') + 1);
-            if (disabledSystems.contains(simpleName)) {
-                return;
-            }
+        var simpleName = systemSimpleNames.get(desc.name());
+        if (simpleName != null && disabledSystems.contains(simpleName)) {
+            return;
         }
 
         // Check RunIf condition
@@ -1408,7 +1430,8 @@ public final class World {
         }
 
         var currentTick = tick.current();
-        for (var archetype : matchingArchetypes) {
+        for (int ai = 0, an = matchingArchetypes.size(); ai < an; ai++) {
+            var archetype = matchingArchetypes.get(ai);
             boolean skip = false;
             for (var withoutId : withoutIds) {
                 if (archetype.id().contains(withoutId)) {
@@ -1423,8 +1446,9 @@ public final class World {
                 processor.processAll(archetype.chunks(), currentTick);
             } else {
                 var plan = systemPlans.get(desc.name());
-                for (var chunk : archetype.chunks()) {
-                    plan.processChunk(chunk, invoker, currentTick);
+                var chunkList = archetype.chunks();
+                for (int ci = 0, cn = chunkList.size(); ci < cn; ci++) {
+                    plan.processChunk(chunkList.get(ci), invoker, currentTick);
                 }
             }
         }

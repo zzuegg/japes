@@ -97,8 +97,14 @@ public final class Archetype {
         return chunks.size();
     }
 
+    /**
+     * Returns the internal chunk list directly. Callers must not mutate it.
+     * This avoids allocating a {@code Collections.unmodifiableList} wrapper
+     * on every call — critical because this is invoked per system per
+     * archetype per tick.
+     */
     public List<Chunk> chunks() {
-        return Collections.unmodifiableList(chunks);
+        return chunks;
     }
 
     public ArchetypeId id() {
