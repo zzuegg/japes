@@ -79,6 +79,8 @@ public class Mut<T extends Record> {
             changed = false;
             return current;
         }
+        changed = false;
+        current = pending;
         tracker.markChanged(slot, tick);
         return pending;
     }

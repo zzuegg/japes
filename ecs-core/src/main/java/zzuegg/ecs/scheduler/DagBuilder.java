@@ -78,7 +78,11 @@ public final class DagBuilder {
 
         // Fall back to simple-name resolution; throw if it would bind ambiguously.
         var candidates = simpleNameCandidates.get(reference);
-        if (candidates == null || candidates.isEmpty()) return null;
+        if (candidates == null || candidates.isEmpty()) {
+            throw new IllegalArgumentException(
+                "System '" + referrer + "' declares " + direction + " = \"" + reference
+                    + "\" but no system with that name exists");
+        }
         if (candidates.size() > 1) {
             var options = new ArrayList<String>();
             for (var idx : candidates) options.add(descriptors.get(idx).name());

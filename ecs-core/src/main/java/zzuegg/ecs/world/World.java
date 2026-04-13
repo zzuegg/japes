@@ -942,6 +942,15 @@ public final class World {
         var oldArchetype = oldLocation.archetype();
 
         var newArchetypeId = archetypeGraph.addEdge(oldArchetype.id(), compId);
+
+        // No-op guard: entity already has this component → overwrite in place.
+        if (newArchetypeId.equals(oldArchetype.id())) {
+            oldArchetype.set(compId, oldLocation, component);
+            var chunk = oldArchetype.chunks().get(oldLocation.chunkIndex());
+            chunk.changeTracker(compId).markChanged(oldLocation.slotIndex(), tick.current());
+            return;
+        }
+
         var newArchetype = archetypeGraph.getOrCreate(newArchetypeId);
 
         var newLocation = newArchetype.add(entity);
@@ -952,9 +961,7 @@ public final class World {
         int newSlot = newLocation.slotIndex();
 
         for (var existingCompId : oldArchetype.id().components()) {
-            // Copy directly between storages — no record reconstruction.
             oldChunk.copyComponentTo(existingCompId, oldSlot, newChunk, newSlot);
-            // Preserve added/changed history across the archetype migration.
             var src = oldChunk.changeTracker(existingCompId);
             var dst = newChunk.changeTracker(existingCompId);
             dst.markAdded(newSlot, src.addedTick(oldSlot));
@@ -962,7 +969,6 @@ public final class World {
         }
 
         newArchetype.set(compId, newLocation, component);
-        // The newly added component is "added at the current tick" so @Added filters fire.
         newChunk.changeTracker(compId).markAdded(newSlot, tick.current());
 
         var swapped = oldArchetype.remove(oldLocation);
@@ -988,6 +994,12 @@ public final class World {
         }
 
         var newArchetypeId = archetypeGraph.removeEdge(oldArchetype.id(), compId);
+
+        // No-op guard: entity doesn't have this component → nothing to remove.
+        if (newArchetypeId.equals(oldArchetype.id())) {
+            return;
+        }
+
         var newArchetype = archetypeGraph.getOrCreate(newArchetypeId);
 
         var newLocation = newArchetype.add(entity);
@@ -1342,6 +1354,7 @@ public final class World {
             } catch (Throwable e) {
                 throw new RuntimeException("@ForEachPair tier-1 failed: " + desc.name(), e);
             }
+            markExecutedIfNeeded(desc);
             return;
         }
         var pairProc = pairIterationProcessors.get(desc.name());
@@ -1351,6 +1364,7 @@ public final class World {
             } catch (Throwable e) {
                 throw new RuntimeException("@ForEachPair system failed: " + desc.name(), e);
             }
+            markExecutedIfNeeded(desc);
             return;
         }
 
@@ -1411,12 +1425,13 @@ public final class World {
                 }
             }
         }
-        // Advance the per-system "last seen" watermark so change filters and
-        // RemovedComponents readers on the next tick compare against this
-        // tick's boundary.
+        markExecutedIfNeeded(desc);
+    }
+
+    private void markExecutedIfNeeded(SystemDescriptor desc) {
         var plan = systemPlans.get(desc.name());
         if (plan != null && (plan.hasChangeFilters() || !desc.removedReads().isEmpty() || !desc.removedRelationReads().isEmpty())) {
-            plan.markExecuted(currentTick);
+            plan.markExecuted(tick.current());
         }
     }
 
