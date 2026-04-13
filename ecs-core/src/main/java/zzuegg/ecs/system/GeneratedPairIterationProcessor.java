@@ -155,14 +155,17 @@ public final class GeneratedPairIterationProcessor {
 
         // SoA detection per component param.
         boolean[] isSoA = new boolean[paramCount];
-        java.lang.reflect.RecordComponent[][] soaComps = new java.lang.reflect.RecordComponent[paramCount][];
+        @SuppressWarnings("unchecked")
+        java.util.List<zzuegg.ecs.storage.RecordFlattener.FlatField>[] soaFlatFields =
+            new java.util.List[paramCount];
         for (int i = 0; i < paramCount; i++) {
             if ((kinds[i] == ParamKind.SOURCE_READ || kinds[i] == ParamKind.SOURCE_WRITE || kinds[i] == ParamKind.TARGET_READ)
                 && paramRecordClass[i] != null
                 && Record.class.isAssignableFrom(paramRecordClass[i])
                 && zzuegg.ecs.storage.SoAComponentStorage.isEligible((Class<? extends Record>) paramRecordClass[i])) {
                 isSoA[i] = true;
-                soaComps[i] = paramRecordClass[i].getRecordComponents();
+                soaFlatFields[i] = zzuegg.ecs.storage.RecordFlattener.flatten(
+                    (Class<? extends Record>) paramRecordClass[i]);
             }
         }
 
@@ -273,7 +276,7 @@ public final class GeneratedPairIterationProcessor {
                     locChunkIdx, locSlotIdx, archChunks, chunkStorage,
                     chunkTracker, storageGet, storageSet,
                     mutFlush,
-                    isSoA, soaComps, hiddenMutInfos));
+                    isSoA, soaFlatFields, hiddenMutInfos));
         });
 
         // Define hidden class + populate fields.
@@ -345,7 +348,7 @@ public final class GeneratedPairIterationProcessor {
             MethodTypeDesc chunkStorage, MethodTypeDesc chunkTracker,
             MethodTypeDesc storageGet, MethodTypeDesc storageSet,
             MethodTypeDesc mutFlush,
-            boolean[] isSoA, java.lang.reflect.RecordComponent[][] soaComps,
+            boolean[] isSoA, java.util.List<zzuegg.ecs.storage.RecordFlattener.FlatField>[] soaFlatFields,
             GeneratedChunkProcessor.HiddenMutInfo[] hiddenMutInfos) {
 
         // ------- local variable layout -------
@@ -400,8 +403,8 @@ public final class GeneratedPairIterationProcessor {
                     srcReadStorageLocal[i] = slotLocal++;
                     srcReadValueLocal[i] = slotLocal++;
                     if (isSoA[i]) {
-                        soaFieldLocals[i] = new int[soaComps[i].length];
-                        for (int f = 0; f < soaComps[i].length; f++)
+                        soaFieldLocals[i] = new int[soaFlatFields[i].size()];
+                        for (int f = 0; f < soaFlatFields[i].size(); f++)
                             soaFieldLocals[i][f] = slotLocal++;
                     }
                 }
@@ -410,16 +413,16 @@ public final class GeneratedPairIterationProcessor {
                     srcWriteTrackerLocal[i] = slotLocal++;
                     srcWriteMutLocal[i] = slotLocal++;
                     if (isSoA[i]) {
-                        soaFieldLocals[i] = new int[soaComps[i].length];
-                        for (int f = 0; f < soaComps[i].length; f++)
+                        soaFieldLocals[i] = new int[soaFlatFields[i].size()];
+                        for (int f = 0; f < soaFlatFields[i].size(); f++)
                             soaFieldLocals[i][f] = slotLocal++;
                     }
                 }
                 case TARGET_READ -> {
                     tgtReadStorageLocal[i] = slotLocal++;
                     if (isSoA[i]) {
-                        soaFieldLocals[i] = new int[soaComps[i].length];
-                        for (int f = 0; f < soaComps[i].length; f++)
+                        soaFieldLocals[i] = new int[soaFlatFields[i].size()];
+                        for (int f = 0; f < soaFlatFields[i].size(); f++)
                             soaFieldLocals[i][f] = slotLocal++;
                     }
                 }
@@ -658,7 +661,7 @@ public final class GeneratedPairIterationProcessor {
             cb.astore(srcReadStorageLocal[i]);
             if (isSoA[i]) {
                 extractSoAFieldArrays(cb, srcReadStorageLocal[i], storageDesc,
-                    soaComps[i], soaFieldLocals[i]);
+                    soaFlatFields[i], soaFieldLocals[i]);
             }
         }
         // SOURCE_WRITE params: cache both storage and tracker.
@@ -674,7 +677,7 @@ public final class GeneratedPairIterationProcessor {
             cb.astore(srcWriteStorageLocal[i]);
             if (isSoA[i]) {
                 extractSoAFieldArrays(cb, srcWriteStorageLocal[i], storageDesc,
-                    soaComps[i], soaFieldLocals[i]);
+                    soaFlatFields[i], soaFieldLocals[i]);
             }
             // tracker
             cb.aload(srcChunkTempVar);
@@ -699,7 +702,7 @@ public final class GeneratedPairIterationProcessor {
         for (int i = 0; i < paramCount; i++) {
             if (kinds[i] != ParamKind.SOURCE_READ) continue;
             if (isSoA[i]) {
-                emitSoAGet(cb, srcSlotVar, soaComps[i],
+                emitSoAGet(cb, srcSlotVar, soaFlatFields[i],
                     soaFieldLocals[i], paramRecordClass[i]);
             } else {
                 cb.aload(srcReadStorageLocal[i]);
@@ -728,19 +731,20 @@ public final class GeneratedPairIterationProcessor {
                 // HiddenMut: stores primitives directly from SoA arrays.
                 var hmi = hiddenMutInfos[i];
                 var hmDesc = hmi.classDesc();
-                var hmRc = hmi.components();
+                var hmRc = hmi.flatFields();
                 cb.new_(hmDesc);
                 cb.dup();
                 cb.invokespecial(hmDesc, "<init>",
                     MethodTypeDesc.of(ConstantDescs.CD_void));
                 // Populate cur_ fields from SoA arrays (widened to long)
-                for (int f = 0; f < hmRc.length; f++) {
+                for (int f = 0; f < hmRc.size(); f++) {
+                    var ff = hmRc.get(f);
                     cb.dup();
                     cb.aload(soaFieldLocals[i][f]);
                     cb.iload(srcSlotVar);
-                    zzuegg.ecs.storage.SoAComponentStorage.emitArrayLoad(cb, hmRc[f].getType());
-                    GeneratedChunkProcessor.emitWidenToLong(cb, hmRc[f].getType());
-                    cb.putfield(hmDesc, "cur_" + hmRc[f].getName(), ConstantDescs.CD_long);
+                    zzuegg.ecs.storage.SoAComponentStorage.emitArrayLoad(cb, ff.type());
+                    GeneratedChunkProcessor.emitWidenToLong(cb, ff.type());
+                    cb.putfield(hmDesc, "cur_" + ff.flatName(), ConstantDescs.CD_long);
                 }
                 // Set slot, tracker, tick
                 cb.dup(); cb.iload(srcSlotVar);
@@ -754,7 +758,7 @@ public final class GeneratedPairIterationProcessor {
                 cb.new_(mutDesc);
                 cb.dup();
                 if (isSoA[i]) {
-                    emitSoAGet(cb, srcSlotVar, soaComps[i],
+                    emitSoAGet(cb, srcSlotVar, soaFlatFields[i],
                         soaFieldLocals[i], paramRecordClass[i]);
                 } else {
                     cb.aload(srcWriteStorageLocal[i]);
@@ -864,7 +868,7 @@ public final class GeneratedPairIterationProcessor {
             cb.astore(tgtReadStorageLocal[i]);
             if (isSoA[i]) {
                 extractSoAFieldArrays(cb, tgtReadStorageLocal[i], storageDesc,
-                    soaComps[i], soaFieldLocals[i]);
+                    soaFlatFields[i], soaFieldLocals[i]);
             }
         }
         cb.aload(tgtArchNewVar);
@@ -885,7 +889,7 @@ public final class GeneratedPairIterationProcessor {
                         cb.aload(tgtLocVar);
                         cb.invokevirtual(entityLocationDesc, "slotIndex", locSlotIdx);
                         cb.istore(tgtSlotTempVar);
-                        emitSoAGet(cb, tgtSlotTempVar, soaComps[i],
+                        emitSoAGet(cb, tgtSlotTempVar, soaFlatFields[i],
                             soaFieldLocals[i], paramRecordClass[i]);
                     } else {
                         cb.aload(tgtReadStorageLocal[i]);
@@ -925,20 +929,25 @@ public final class GeneratedPairIterationProcessor {
             if (hiddenMutInfos[i] != null) {
                 // HiddenMut: read pending Record, decompose into SoA arrays.
                 var hmi = hiddenMutInfos[i];
-                var hmRc = hmi.components();
+                var hmRc = hmi.flatFields();
                 var recDesc = (ClassDesc) paramRecordClass[i].describeConstable().orElseThrow();
                 // Read pending once, cast, store in temp local.
                 cb.aload(srcWriteMutLocal[i]);
                 cb.getfield(mutDesc, "pending", recordDesc);
                 cb.checkcast(recDesc);
                 cb.astore(tempRecordVar);
-                for (int f = 0; f < hmRc.length; f++) {
+                for (int f = 0; f < hmRc.size(); f++) {
+                    var ff = hmRc.get(f);
                     cb.aload(soaFieldLocals[i][f]);
                     cb.iload(srcSlotVar);
                     cb.aload(tempRecordVar);
-                    var fDesc = (ClassDesc) hmRc[f].getType().describeConstable().orElseThrow();
-                    cb.invokevirtual(recDesc, hmRc[f].getName(), MethodTypeDesc.of(fDesc));
-                    zzuegg.ecs.storage.SoAComponentStorage.emitArrayStore(cb, hmRc[f].getType());
+                    // Navigate accessor chain for nested records
+                    for (var rc : ff.accessors()) {
+                        var ownerCd = (ClassDesc) rc.getDeclaringRecord().describeConstable().orElseThrow();
+                        var retCd = (ClassDesc) rc.getType().describeConstable().orElseThrow();
+                        cb.invokevirtual(ownerCd, rc.getName(), MethodTypeDesc.of(retCd));
+                    }
+                    zzuegg.ecs.storage.SoAComponentStorage.emitArrayStore(cb, ff.type());
                 }
                 // markChanged
                 cb.aload(srcWriteMutLocal[i]);
@@ -953,7 +962,7 @@ public final class GeneratedPairIterationProcessor {
                 cb.aload(srcWriteMutLocal[i]);
                 cb.invokevirtual(mutDesc, "flush", mutFlush);
                 emitSoASet(cb, srcSlotVar, tempRecordVar,
-                    soaComps[i], soaFieldLocals[i], paramRecordClass[i]);
+                    soaFlatFields[i], soaFieldLocals[i], paramRecordClass[i]);
             } else {
                 cb.aload(srcWriteStorageLocal[i]);
                 cb.iload(srcSlotVar);
@@ -981,18 +990,19 @@ public final class GeneratedPairIterationProcessor {
     private static void extractSoAFieldArrays(
             java.lang.classfile.CodeBuilder cb, int storageLocal,
             ClassDesc storageDesc,
-            java.lang.reflect.RecordComponent[] comps, int[] fieldLocals) {
+            java.util.List<zzuegg.ecs.storage.RecordFlattener.FlatField> flatFields,
+            int[] fieldLocals) {
         var objArrDesc = ConstantDescs.CD_Object.arrayType();
         // Object[] fa = storage.soaFieldArrays();
         cb.aload(storageLocal);
         cb.invokeinterface(storageDesc, "soaFieldArrays",
             MethodTypeDesc.of(objArrDesc));
-        // For each field: fieldLocals[f] = (PrimType[]) fa[f];
-        for (int f = 0; f < comps.length; f++) {
-            if (f < comps.length - 1) cb.dup(); // keep fa on stack for next field
+        // For each flattened field: fieldLocals[f] = (PrimType[]) fa[f];
+        for (int f = 0; f < flatFields.size(); f++) {
+            if (f < flatFields.size() - 1) cb.dup();
             cb.ldc(f);
             cb.aaload();
-            cb.checkcast((ClassDesc) comps[f].getType().arrayType()
+            cb.checkcast((ClassDesc) flatFields.get(f).type().arrayType()
                 .describeConstable().orElseThrow());
             cb.astore(fieldLocals[f]);
         }
@@ -1004,44 +1014,71 @@ public final class GeneratedPairIterationProcessor {
      * {@code fieldLocals[f]} holds the primitive array for field f;
      * {@code slotVar} is the iload source for the entity slot index.
      */
+    /**
+     * Emit SoA get: reconstruct a (possibly nested) record from flattened
+     * per-field arrays. Supports nested records via recursive reconstruction.
+     */
     private static void emitSoAGet(
             java.lang.classfile.CodeBuilder cb, int slotVar,
-            java.lang.reflect.RecordComponent[] comps, int[] fieldLocals,
+            java.util.List<zzuegg.ecs.storage.RecordFlattener.FlatField> flatFields,
+            int[] fieldLocals,
             @SuppressWarnings("rawtypes") Class recordClass) {
-        var recDesc = (ClassDesc) recordClass.describeConstable().orElseThrow();
+        emitSoAGetRecursive(cb, recordClass, flatFields, new int[]{0}, fieldLocals, slotVar);
+    }
+
+    private static void emitSoAGetRecursive(
+            java.lang.classfile.CodeBuilder cb,
+            Class<?> recordType,
+            java.util.List<zzuegg.ecs.storage.RecordFlattener.FlatField> flatFields,
+            int[] flatIdx,
+            int[] fieldLocals,
+            int slotVar) {
+        var recDesc = (ClassDesc) recordType.describeConstable().orElseThrow();
+        var comps = recordType.getRecordComponents();
+        var ctorParams = new ClassDesc[comps.length];
+        for (int i = 0; i < comps.length; i++) {
+            ctorParams[i] = (ClassDesc) comps[i].getType().describeConstable().orElseThrow();
+        }
         cb.new_(recDesc);
         cb.dup();
-        var ctorParams = new ClassDesc[comps.length];
-        for (int f = 0; f < comps.length; f++) {
-            ctorParams[f] = (ClassDesc) comps[f].getType().describeConstable().orElseThrow();
-            cb.aload(fieldLocals[f]);
-            cb.iload(slotVar);
-            zzuegg.ecs.storage.SoAComponentStorage.emitArrayLoad(cb, comps[f].getType());
+        for (var comp : comps) {
+            if (comp.getType().isPrimitive()) {
+                int fi = flatIdx[0]++;
+                cb.aload(fieldLocals[fi]);
+                cb.iload(slotVar);
+                zzuegg.ecs.storage.SoAComponentStorage.emitArrayLoad(cb, comp.getType());
+            } else {
+                emitSoAGetRecursive(cb, comp.getType(), flatFields, flatIdx, fieldLocals, slotVar);
+            }
         }
         cb.invokespecial(recDesc, "<init>",
             MethodTypeDesc.of(ConstantDescs.CD_void, ctorParams));
     }
 
     /**
-     * Emit SoA set: decompose a record on the stack into per-field array stores.
-     * Expects the Record value on top of the stack; consumes it.
-     * Uses cached per-field array locals — no invokeinterface per entity.
+     * Emit SoA set: decompose a (possibly nested) record on the stack into
+     * per-field array stores using flattened accessor chains.
      */
     private static void emitSoASet(
             java.lang.classfile.CodeBuilder cb, int slotVar, int tempRecordLocal,
-            java.lang.reflect.RecordComponent[] comps, int[] fieldLocals,
+            java.util.List<zzuegg.ecs.storage.RecordFlattener.FlatField> flatFields,
+            int[] fieldLocals,
             @SuppressWarnings("rawtypes") Class recordClass) {
         var recDesc = (ClassDesc) recordClass.describeConstable().orElseThrow();
-        // Record value is on the stack. Store in temp.
         cb.checkcast(recDesc);
         cb.astore(tempRecordLocal);
-        for (int f = 0; f < comps.length; f++) {
-            cb.aload(fieldLocals[f]); // field array
-            cb.iload(slotVar);        // slot
-            cb.aload(tempRecordLocal); // record value
-            cb.invokevirtual(recDesc, comps[f].getName(),
-                MethodTypeDesc.of((ClassDesc) comps[f].getType().describeConstable().orElseThrow()));
-            zzuegg.ecs.storage.SoAComponentStorage.emitArrayStore(cb, comps[f].getType());
+        for (int f = 0; f < flatFields.size(); f++) {
+            var ff = flatFields.get(f);
+            cb.aload(fieldLocals[f]);
+            cb.iload(slotVar);
+            cb.aload(tempRecordLocal);
+            // Navigate accessor chain
+            for (var rc : ff.accessors()) {
+                var ownerDesc = (ClassDesc) rc.getDeclaringRecord().describeConstable().orElseThrow();
+                var retDesc = (ClassDesc) rc.getType().describeConstable().orElseThrow();
+                cb.invokevirtual(ownerDesc, rc.getName(), MethodTypeDesc.of(retDesc));
+            }
+            zzuegg.ecs.storage.SoAComponentStorage.emitArrayStore(cb, ff.type());
         }
     }
 }
