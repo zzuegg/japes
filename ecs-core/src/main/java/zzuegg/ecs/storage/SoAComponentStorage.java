@@ -5,6 +5,7 @@ import java.lang.constant.*;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.RecordComponent;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static java.lang.classfile.ClassFile.*;
@@ -28,15 +29,11 @@ public final class SoAComponentStorage {
 
     /**
      * Check if a record type is eligible for SoA storage:
-     * all components must be primitive types.
+     * all leaf fields must be primitive types. Nested records
+     * are eligible if they recursively satisfy the same constraint.
      */
     public static boolean isEligible(Class<? extends Record> type) {
-        var comps = type.getRecordComponents();
-        if (comps == null || comps.length == 0) return false;
-        for (var comp : comps) {
-            if (!comp.getType().isPrimitive()) return false;
-        }
-        return true;
+        return RecordFlattener.isEligible(type);
     }
 
     /**
@@ -57,7 +54,7 @@ public final class SoAComponentStorage {
     private static <T extends Record> ComponentStorage<T> doGenerate(
             Class<T> type, int capacity) throws Exception {
 
-        var comps = type.getRecordComponents();
+        var flatFields = RecordFlattener.flatten((Class<? extends Record>) type);
         var lookup = MethodHandles.privateLookupIn(type, MethodHandles.lookup());
 
         var storageDesc = ClassDesc.of("zzuegg.ecs.storage.ComponentStorage");
@@ -68,27 +65,15 @@ public final class SoAComponentStorage {
         var genName = type.getPackageName() + ".SoA_" + type.getSimpleName() + "_" + COUNTER.incrementAndGet();
         var genDesc = ClassDesc.of(genName);
 
-        // Field descriptors for each record component's array type.
-        var fieldDescs = new ClassDesc[comps.length];
-        var fieldNames = new String[comps.length];
-        for (int i = 0; i < comps.length; i++) {
-            fieldNames[i] = "f_" + comps[i].getName();
-            fieldDescs[i] = comps[i].getType().arrayType().describeConstable().orElseThrow();
-        }
+        int nFlat = flatFields.size();
 
-        // Accessor method descriptors (e.g., Position.x() → float)
-        var accessorDescs = new MethodTypeDesc[comps.length];
-        for (int i = 0; i < comps.length; i++) {
-            accessorDescs[i] = MethodTypeDesc.of(
-                comps[i].getType().describeConstable().orElseThrow());
+        // Field descriptors for each flattened primitive array type.
+        var fieldDescs = new ClassDesc[nFlat];
+        var fieldNames = new String[nFlat];
+        for (int i = 0; i < nFlat; i++) {
+            fieldNames[i] = "f_" + flatFields.get(i).flatName();
+            fieldDescs[i] = flatFields.get(i).type().arrayType().describeConstable().orElseThrow();
         }
-
-        // Constructor descriptor: (float, float, float) → void for Position
-        var ctorParamDescs = new ClassDesc[comps.length];
-        for (int i = 0; i < comps.length; i++) {
-            ctorParamDescs[i] = comps[i].getType().describeConstable().orElseThrow();
-        }
-        var ctorDesc = MethodTypeDesc.of(ConstantDescs.CD_void, ctorParamDescs);
 
         byte[] bytes = ClassFile.of().build(genDesc, clb -> {
             clb.withFlags(ACC_PUBLIC | ACC_FINAL);
@@ -96,12 +81,11 @@ public final class SoAComponentStorage {
             clb.withInterfaces(clb.constantPool().classEntry(storageDesc));
 
             // Per-field arrays as instance fields.
-            for (int i = 0; i < comps.length; i++) {
+            for (int i = 0; i < nFlat; i++) {
                 clb.withField(fieldNames[i], fieldDescs[i], fb -> fb.withFlags(ACC_PRIVATE));
             }
             clb.withField("capacity", ConstantDescs.CD_int, fb -> fb.withFlags(ACC_PRIVATE | ACC_FINAL));
             clb.withField("type", classDesc, fb -> fb.withFlags(ACC_PRIVATE | ACC_FINAL));
-            // Cached soaFieldArrays result — avoids allocation per call.
             var objArrDescCtor = ConstantDescs.CD_Object.arrayType();
             clb.withField("cachedFieldArrays", objArrDescCtor, fb -> fb.withFlags(ACC_PRIVATE));
 
@@ -115,17 +99,17 @@ public final class SoAComponentStorage {
                     cb.aload(0);
                     cb.iload(1);
                     cb.putfield(genDesc, "capacity", ConstantDescs.CD_int);
-                    for (int i = 0; i < comps.length; i++) {
+                    for (int i = 0; i < nFlat; i++) {
                         cb.aload(0);
                         cb.iload(1);
-                        cb.newarray(java.lang.classfile.TypeKind.from(comps[i].getType()));
+                        cb.newarray(java.lang.classfile.TypeKind.from(flatFields.get(i).type()));
                         cb.putfield(genDesc, fieldNames[i], fieldDescs[i]);
                     }
                     // Build + cache the fieldArrays Object[]
                     cb.aload(0);
-                    cb.ldc(comps.length);
+                    cb.ldc(nFlat);
                     cb.anewarray(ConstantDescs.CD_Object);
-                    for (int i = 0; i < comps.length; i++) {
+                    for (int i = 0; i < nFlat; i++) {
                         cb.dup();
                         cb.ldc(i);
                         cb.aload(0);
@@ -137,33 +121,30 @@ public final class SoAComponentStorage {
                 });
 
             // get(int index) → T: reconstructs the record from per-field arrays.
+            // For nested records, we reconstruct bottom-up.
             clb.withMethodBody("get",
                 MethodTypeDesc.of(recordDesc, ConstantDescs.CD_int),
                 ACC_PUBLIC, cb -> {
-                    cb.new_(typeDesc);
-                    cb.dup();
-                    for (int i = 0; i < comps.length; i++) {
-                        cb.aload(0);
-                        cb.getfield(genDesc, fieldNames[i], fieldDescs[i]);
-                        cb.iload(1);
-                        emitArrayLoad(cb, comps[i].getType());
-                    }
-                    cb.invokespecial(typeDesc, "<init>", ctorDesc);
+                    emitRecordReconstruction(cb, type, flatFields, new int[]{0},
+                        genDesc, fieldNames, fieldDescs, 1);
                     cb.areturn();
                 });
 
             // set(int index, Record value): decomposes into per-field array stores.
+            // For nested records, navigates the accessor chain.
             clb.withMethodBody("set",
                 MethodTypeDesc.of(ConstantDescs.CD_void, ConstantDescs.CD_int, recordDesc),
                 ACC_PUBLIC, cb -> {
-                    for (int i = 0; i < comps.length; i++) {
+                    for (int i = 0; i < nFlat; i++) {
+                        var ff = flatFields.get(i);
                         cb.aload(0);
                         cb.getfield(genDesc, fieldNames[i], fieldDescs[i]);
                         cb.iload(1); // index
+                        // Navigate accessor chain: value.pos().x()
                         cb.aload(2); // value (Record)
                         cb.checkcast(typeDesc);
-                        cb.invokevirtual(typeDesc, comps[i].getName(), accessorDescs[i]);
-                        emitArrayStore(cb, comps[i].getType());
+                        emitAccessorChain(cb, ff.accessors());
+                        emitArrayStore(cb, ff.type());
                     }
                     cb.return_();
                 });
@@ -181,15 +162,15 @@ public final class SoAComponentStorage {
                     var lastVar = 3;
                     cb.istore(lastVar);
                     cb.if_icmpge(end); // if index >= last, skip
-                    for (int i = 0; i < comps.length; i++) {
+                    for (int i = 0; i < nFlat; i++) {
                         cb.aload(0);
                         cb.getfield(genDesc, fieldNames[i], fieldDescs[i]);
                         cb.dup();
                         cb.iload(1); // index (dst)
                         cb.swap();
                         cb.iload(lastVar); // last (src)
-                        emitArrayLoad(cb, comps[i].getType());
-                        emitArrayStore(cb, comps[i].getType());
+                        emitArrayLoad(cb, flatFields.get(i).type());
+                        emitArrayStore(cb, flatFields.get(i).type());
                     }
                     cb.labelBinding(end);
                     cb.return_();
@@ -243,6 +224,67 @@ public final class SoAComponentStorage {
         var clazz = hiddenLookup.lookupClass();
         var instance = clazz.getDeclaredConstructor(int.class).newInstance(capacity);
         return (ComponentStorage<T>) instance;
+    }
+
+    /**
+     * Emit bytecode to navigate an accessor chain on a record reference
+     * that is already on the stack. E.g., for chain [pos, x], emits
+     * invokevirtual(Transform, "pos") then invokevirtual(Position, "x").
+     */
+    private static void emitAccessorChain(java.lang.classfile.CodeBuilder cb,
+                                           List<RecordComponent> chain) {
+        for (var rc : chain) {
+            var ownerDesc = rc.getDeclaringRecord().describeConstable().orElseThrow();
+            var retDesc = rc.getType().isPrimitive()
+                ? rc.getType().describeConstable().orElseThrow()
+                : rc.getType().describeConstable().orElseThrow();
+            cb.invokevirtual(ownerDesc, rc.getName(), MethodTypeDesc.of(retDesc));
+        }
+    }
+
+    /**
+     * Emit bytecode to reconstruct a record (possibly nested) from flattened
+     * SoA arrays. Uses a recursive approach: for each component of the record,
+     * if it's primitive, loads from the corresponding SoA array; if it's a
+     * nested record, recursively reconstructs it.
+     *
+     * @param flatIdx mutable counter tracking position in the flatFields list
+     * @param indexSlot the local variable slot holding the array index
+     */
+    private static void emitRecordReconstruction(
+            java.lang.classfile.CodeBuilder cb,
+            Class<?> recordType,
+            List<RecordFlattener.FlatField> flatFields,
+            int[] flatIdx,
+            ClassDesc genDesc,
+            String[] fieldNames,
+            ClassDesc[] fieldDescs,
+            int indexSlot) {
+
+        var recDesc = recordType.describeConstable().orElseThrow();
+        var comps = recordType.getRecordComponents();
+        var ctorParams = new ClassDesc[comps.length];
+        for (int i = 0; i < comps.length; i++) {
+            ctorParams[i] = comps[i].getType().describeConstable().orElseThrow();
+        }
+        var ctorDesc = MethodTypeDesc.of(ConstantDescs.CD_void, ctorParams);
+
+        cb.new_(recDesc);
+        cb.dup();
+        for (var comp : comps) {
+            if (comp.getType().isPrimitive()) {
+                int fi = flatIdx[0]++;
+                cb.aload(0); // this (storage instance)
+                cb.getfield(genDesc, fieldNames[fi], fieldDescs[fi]);
+                cb.iload(indexSlot);
+                emitArrayLoad(cb, comp.getType());
+            } else {
+                // Nested record — recurse
+                emitRecordReconstruction(cb, comp.getType(), flatFields, flatIdx,
+                    genDesc, fieldNames, fieldDescs, indexSlot);
+            }
+        }
+        cb.invokespecial(recDesc, "<init>", ctorDesc);
     }
 
     private static int arrayTypeCode(Class<?> type) {
