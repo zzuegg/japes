@@ -162,10 +162,14 @@ public final class ArchetypeGraph {
     }
 
     public List<Archetype> findMatching(Set<ComponentId> required) {
-        // Cache the result keyed by the required set — most systems query the
-        // same set every tick. computeIfAbsent is atomic so concurrent threads
-        // querying different required sets don't corrupt the map.
-        return findMatchingCache.computeIfAbsent(Set.copyOf(required), key -> {
+        // Fast path: check existing cache entry without allocating a
+        // Set.copyOf defensive copy. The cache is keyed by immutable sets,
+        // so an equals() check against the caller's (possibly mutable) set
+        // is safe for lookup. Only on a miss do we copy + insert.
+        var cached = findMatchingCache.get(required);
+        if (cached != null) return cached;
+        var immutableKey = Set.copyOf(required);
+        return findMatchingCache.computeIfAbsent(immutableKey, key -> {
             var result = new ArrayList<Archetype>();
             for (var entry : archetypes.entrySet()) {
                 if (entry.getKey().components().containsAll(key)) {
