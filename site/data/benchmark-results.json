@@ -1,86 +1,898 @@
 {
-  "generated": "2026-04-14T17:28:35.083043+00:00",
-  "jdk": "openjdk version \"26\" 2026-03-17",
-  "results": [
-    {
-      "benchmark": "zzuegg.ecs.bench.macro.NBodyBenchmark.simulateOneTick",
-      "name": "simulateOneTick",
-      "implementation": "japes",
-      "params": {
-        "bodyCount": "1000"
-      },
-      "mode": "avgt",
-      "us_per_op": 0.133,
-      "ops_per_ms": 7492.789,
-      "entities_per_second": 7492789239,
-      "bytes_per_op": 0.0,
-      "score": 0.000133,
-      "score_unit": "ms/op",
-      "score_error": null
-    },
-    {
-      "benchmark": "zzuegg.ecs.bench.macro.NBodyBenchmark.simulateOneTick",
-      "name": "simulateOneTick",
-      "implementation": "japes",
-      "params": {
-        "bodyCount": "10000"
-      },
-      "mode": "avgt",
-      "us_per_op": 1.647,
-      "ops_per_ms": 607.142,
-      "entities_per_second": 6071418642,
-      "bytes_per_op": 0.0,
-      "score": 0.001647,
-      "score_unit": "ms/op",
-      "score_error": null
-    },
-    {
-      "benchmark": "zzuegg.ecs.bench.micro.IterationBenchmark.iterateWithWrite",
-      "name": "iterateWithWrite",
-      "implementation": "japes",
-      "params": {
-        "entityCount": "1000"
-      },
-      "mode": "thrpt",
-      "us_per_op": 0.133,
-      "ops_per_ms": 7506.851,
-      "entities_per_second": 7506851377,
-      "bytes_per_op": 0.0,
-      "score": 7506.851377,
-      "score_unit": "ops/ms",
-      "score_error": null
-    },
-    {
-      "benchmark": "zzuegg.ecs.bench.micro.IterationBenchmark.iterateWithWrite",
-      "name": "iterateWithWrite",
-      "implementation": "japes",
-      "params": {
-        "entityCount": "10000"
-      },
-      "mode": "thrpt",
-      "us_per_op": 1.608,
-      "ops_per_ms": 621.756,
-      "entities_per_second": 6217556112,
-      "bytes_per_op": 0.0,
-      "score": 621.755611,
-      "score_unit": "ops/ms",
-      "score_error": null
-    },
-    {
-      "benchmark": "zzuegg.ecs.bench.micro.IterationBenchmark.iterateWithWrite",
-      "name": "iterateWithWrite",
-      "implementation": "japes",
-      "params": {
-        "entityCount": "100000"
-      },
-      "mode": "thrpt",
-      "us_per_op": 23.496,
-      "ops_per_ms": 42.56,
-      "entities_per_second": 4255992680,
-      "bytes_per_op": 0.2,
-      "score": 42.559927,
-      "score_unit": "ops/ms",
-      "score_error": null
-    }
-  ]
+    "generated": "2026-04-14T18:32:19.284Z",
+    "jdk": "openjdk version \"26\" 2026-03-17",
+    "rust": "rustc 1.94.1 (e408947bf 2026-03-25)",
+    "results": [
+        {
+            "benchmark": "bevy.change_detection.changed_all_dirty.10000",
+            "name": "change_detection/changed_all_dirty",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 11.944,
+            "ops_per_ms": 83.725,
+            "entities_per_second": 837250091,
+            "bytes_per_op": null,
+            "score": 11943.863,
+            "score_unit": "ns/op",
+            "score_error": 22.157
+        },
+        {
+            "benchmark": "bevy.change_detection.removed_drain_bulk_despawn.10000",
+            "name": "change_detection/removed_drain_bulk_despawn",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 165.582,
+            "ops_per_ms": 6.039,
+            "entities_per_second": 60392957,
+            "bytes_per_op": null,
+            "score": 165582.221,
+            "score_unit": "ns/op",
+            "score_error": 64.11
+        },
+        {
+            "benchmark": "bevy.entity.despawn_1k",
+            "name": "entity/despawn_1k",
+            "implementation": "bevy",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 15.497,
+            "ops_per_ms": 64.529,
+            "entities_per_second": null,
+            "bytes_per_op": null,
+            "score": 15496.892,
+            "score_unit": "ns/op",
+            "score_error": 6.215
+        },
+        {
+            "benchmark": "bevy.entity.spawn_100k",
+            "name": "entity/spawn_100k",
+            "implementation": "bevy",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 2320.887,
+            "ops_per_ms": 0.431,
+            "entities_per_second": null,
+            "bytes_per_op": null,
+            "score": 2320886.963,
+            "score_unit": "ns/op",
+            "score_error": 264.634
+        },
+        {
+            "benchmark": "bevy.entity.spawn_1k",
+            "name": "entity/spawn_1k",
+            "implementation": "bevy",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 19.577,
+            "ops_per_ms": 51.081,
+            "entities_per_second": null,
+            "bytes_per_op": null,
+            "score": 19576.728,
+            "score_unit": "ns/op",
+            "score_error": 4.134
+        },
+        {
+            "benchmark": "bevy.iteration.read_write.1000",
+            "name": "iteration/read_write",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "avgt",
+            "us_per_op": 0.641,
+            "ops_per_ms": 1559.436,
+            "entities_per_second": 1559435758,
+            "bytes_per_op": null,
+            "score": 641.258,
+            "score_unit": "ns/op",
+            "score_error": 0.091
+        },
+        {
+            "benchmark": "bevy.iteration.read_write.10000",
+            "name": "iteration/read_write",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 6.207,
+            "ops_per_ms": 161.117,
+            "entities_per_second": 1611169901,
+            "bytes_per_op": null,
+            "score": 6206.67,
+            "score_unit": "ns/op",
+            "score_error": 2.256
+        },
+        {
+            "benchmark": "bevy.iteration.read_write.100000",
+            "name": "iteration/read_write",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "avgt",
+            "us_per_op": 62.892,
+            "ops_per_ms": 15.9,
+            "entities_per_second": 1590026737,
+            "bytes_per_op": null,
+            "score": 62892.024,
+            "score_unit": "ns/op",
+            "score_error": 49.992
+        },
+        {
+            "benchmark": "bevy.iteration.single_read.1000",
+            "name": "iteration/single_read",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "avgt",
+            "us_per_op": 0.244,
+            "ops_per_ms": 4096.767,
+            "entities_per_second": 4096767236,
+            "bytes_per_op": null,
+            "score": 244.095,
+            "score_unit": "ns/op",
+            "score_error": 0.317
+        },
+        {
+            "benchmark": "bevy.iteration.single_read.10000",
+            "name": "iteration/single_read",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 2.106,
+            "ops_per_ms": 474.82,
+            "entities_per_second": 4748202701,
+            "bytes_per_op": null,
+            "score": 2106.06,
+            "score_unit": "ns/op",
+            "score_error": 0.189
+        },
+        {
+            "benchmark": "bevy.iteration.single_read.100000",
+            "name": "iteration/single_read",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "avgt",
+            "us_per_op": 20.786,
+            "ops_per_ms": 48.11,
+            "entities_per_second": 4810995418,
+            "bytes_per_op": null,
+            "score": 20785.719,
+            "score_unit": "ns/op",
+            "score_error": 9.671
+        },
+        {
+            "benchmark": "bevy.iteration.two_read.1000",
+            "name": "iteration/two_read",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "avgt",
+            "us_per_op": 0.381,
+            "ops_per_ms": 2623.185,
+            "entities_per_second": 2623185159,
+            "bytes_per_op": null,
+            "score": 381.216,
+            "score_unit": "ns/op",
+            "score_error": 0.133
+        },
+        {
+            "benchmark": "bevy.iteration.two_read.10000",
+            "name": "iteration/two_read",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 3.602,
+            "ops_per_ms": 277.661,
+            "entities_per_second": 2776606666,
+            "bytes_per_op": null,
+            "score": 3601.518,
+            "score_unit": "ns/op",
+            "score_error": 1.931
+        },
+        {
+            "benchmark": "bevy.iteration.two_read.100000",
+            "name": "iteration/two_read",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "avgt",
+            "us_per_op": 35.713,
+            "ops_per_ms": 28.001,
+            "entities_per_second": 2800132768,
+            "bytes_per_op": null,
+            "score": 35712.592,
+            "score_unit": "ns/op",
+            "score_error": 8.974
+        },
+        {
+            "benchmark": "bevy.nbody.one_tick.1000",
+            "name": "nbody/one_tick",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "avgt",
+            "us_per_op": 0.874,
+            "ops_per_ms": 1144.335,
+            "entities_per_second": 1144334785,
+            "bytes_per_op": null,
+            "score": 873.87,
+            "score_unit": "ns/op",
+            "score_error": 0.361
+        },
+        {
+            "benchmark": "bevy.nbody.one_tick.10000",
+            "name": "nbody/one_tick",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 8.651,
+            "ops_per_ms": 115.599,
+            "entities_per_second": 1155991207,
+            "bytes_per_op": null,
+            "score": 8650.585,
+            "score_unit": "ns/op",
+            "score_error": 2.815
+        },
+        {
+            "benchmark": "bevy.nbody.ten_ticks.1000",
+            "name": "nbody/ten_ticks",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "avgt",
+            "us_per_op": 8.771,
+            "ops_per_ms": 114.007,
+            "entities_per_second": 114006588,
+            "bytes_per_op": null,
+            "score": 8771.423,
+            "score_unit": "ns/op",
+            "score_error": 6.214
+        },
+        {
+            "benchmark": "bevy.nbody.ten_ticks.10000",
+            "name": "nbody/ten_ticks",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 86.317,
+            "ops_per_ms": 11.585,
+            "entities_per_second": 115852396,
+            "bytes_per_op": null,
+            "score": 86316.73,
+            "score_unit": "ns/op",
+            "score_error": 58.593
+        },
+        {
+            "benchmark": "bevy.predator_prey.naive_tick.pred_1000_prey_2000",
+            "name": "predator_prey/naive_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "1000",
+                "preyPerPredator": "2000"
+            },
+            "mode": "avgt",
+            "us_per_op": 457.548,
+            "ops_per_ms": 2.186,
+            "entities_per_second": 4371122488,
+            "bytes_per_op": null,
+            "score": 457548.377,
+            "score_unit": "ns/op",
+            "score_error": 1657.057
+        },
+        {
+            "benchmark": "bevy.predator_prey.naive_tick.pred_1000_prey_500",
+            "name": "predator_prey/naive_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "1000",
+                "preyPerPredator": "500"
+            },
+            "mode": "avgt",
+            "us_per_op": 120.543,
+            "ops_per_ms": 8.296,
+            "entities_per_second": 4147899675,
+            "bytes_per_op": null,
+            "score": 120542.935,
+            "score_unit": "ns/op",
+            "score_error": 416.391
+        },
+        {
+            "benchmark": "bevy.predator_prey.naive_tick.pred_1000_prey_5000",
+            "name": "predator_prey/naive_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "1000",
+                "preyPerPredator": "5000"
+            },
+            "mode": "avgt",
+            "us_per_op": 1126.267,
+            "ops_per_ms": 0.888,
+            "entities_per_second": 4439446095,
+            "bytes_per_op": null,
+            "score": 1126266.632,
+            "score_unit": "ns/op",
+            "score_error": 1937.01
+        },
+        {
+            "benchmark": "bevy.predator_prey.naive_tick.pred_100_prey_2000",
+            "name": "predator_prey/naive_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "100",
+                "preyPerPredator": "2000"
+            },
+            "mode": "avgt",
+            "us_per_op": 53.984,
+            "ops_per_ms": 18.524,
+            "entities_per_second": 3704812418,
+            "bytes_per_op": null,
+            "score": 53983.84,
+            "score_unit": "ns/op",
+            "score_error": 144.788
+        },
+        {
+            "benchmark": "bevy.predator_prey.naive_tick.pred_100_prey_500",
+            "name": "predator_prey/naive_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "100",
+                "preyPerPredator": "500"
+            },
+            "mode": "avgt",
+            "us_per_op": 14.441,
+            "ops_per_ms": 69.248,
+            "entities_per_second": 3462406968,
+            "bytes_per_op": null,
+            "score": 14440.821,
+            "score_unit": "ns/op",
+            "score_error": 32.547
+        },
+        {
+            "benchmark": "bevy.predator_prey.naive_tick.pred_100_prey_5000",
+            "name": "predator_prey/naive_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "100",
+                "preyPerPredator": "5000"
+            },
+            "mode": "avgt",
+            "us_per_op": 130.011,
+            "ops_per_ms": 7.692,
+            "entities_per_second": 3845817840,
+            "bytes_per_op": null,
+            "score": 130011.358,
+            "score_unit": "ns/op",
+            "score_error": 367.891
+        },
+        {
+            "benchmark": "bevy.predator_prey.naive_tick.pred_500_prey_2000",
+            "name": "predator_prey/naive_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "500",
+                "preyPerPredator": "2000"
+            },
+            "mode": "avgt",
+            "us_per_op": 238.773,
+            "ops_per_ms": 4.188,
+            "entities_per_second": 4188076398,
+            "bytes_per_op": null,
+            "score": 238773.104,
+            "score_unit": "ns/op",
+            "score_error": 897.46
+        },
+        {
+            "benchmark": "bevy.predator_prey.naive_tick.pred_500_prey_500",
+            "name": "predator_prey/naive_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "500",
+                "preyPerPredator": "500"
+            },
+            "mode": "avgt",
+            "us_per_op": 62.885,
+            "ops_per_ms": 15.902,
+            "entities_per_second": 3975512695,
+            "bytes_per_op": null,
+            "score": 62884.971,
+            "score_unit": "ns/op",
+            "score_error": 114.866
+        },
+        {
+            "benchmark": "bevy.predator_prey.naive_tick.pred_500_prey_5000",
+            "name": "predator_prey/naive_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "500",
+                "preyPerPredator": "5000"
+            },
+            "mode": "avgt",
+            "us_per_op": 584.196,
+            "ops_per_ms": 1.712,
+            "entities_per_second": 4279383292,
+            "bytes_per_op": null,
+            "score": 584196.327,
+            "score_unit": "ns/op",
+            "score_error": 863.098
+        },
+        {
+            "benchmark": "bevy.predator_prey.optimized_tick.pred_1000_prey_2000",
+            "name": "predator_prey/optimized_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "1000",
+                "preyPerPredator": "2000"
+            },
+            "mode": "avgt",
+            "us_per_op": 19.248,
+            "ops_per_ms": 51.953,
+            "entities_per_second": 103906512758,
+            "bytes_per_op": null,
+            "score": 19248.072,
+            "score_unit": "ns/op",
+            "score_error": 84.43
+        },
+        {
+            "benchmark": "bevy.predator_prey.optimized_tick.pred_1000_prey_500",
+            "name": "predator_prey/optimized_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "1000",
+                "preyPerPredator": "500"
+            },
+            "mode": "avgt",
+            "us_per_op": 12.918,
+            "ops_per_ms": 77.409,
+            "entities_per_second": 38704568036,
+            "bytes_per_op": null,
+            "score": 12918.372,
+            "score_unit": "ns/op",
+            "score_error": 43.019
+        },
+        {
+            "benchmark": "bevy.predator_prey.optimized_tick.pred_1000_prey_5000",
+            "name": "predator_prey/optimized_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "1000",
+                "preyPerPredator": "5000"
+            },
+            "mode": "avgt",
+            "us_per_op": 33.092,
+            "ops_per_ms": 30.219,
+            "entities_per_second": 151095560087,
+            "bytes_per_op": null,
+            "score": 33091.641,
+            "score_unit": "ns/op",
+            "score_error": 239.669
+        },
+        {
+            "benchmark": "bevy.predator_prey.optimized_tick.pred_100_prey_2000",
+            "name": "predator_prey/optimized_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "100",
+                "preyPerPredator": "2000"
+            },
+            "mode": "avgt",
+            "us_per_op": 3.922,
+            "ops_per_ms": 254.998,
+            "entities_per_second": 50999619449,
+            "bytes_per_op": null,
+            "score": 3921.598,
+            "score_unit": "ns/op",
+            "score_error": 7.773
+        },
+        {
+            "benchmark": "bevy.predator_prey.optimized_tick.pred_100_prey_500",
+            "name": "predator_prey/optimized_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "100",
+                "preyPerPredator": "500"
+            },
+            "mode": "avgt",
+            "us_per_op": 2.014,
+            "ops_per_ms": 496.446,
+            "entities_per_second": 24822288687,
+            "bytes_per_op": null,
+            "score": 2014.319,
+            "score_unit": "ns/op",
+            "score_error": 2.688
+        },
+        {
+            "benchmark": "bevy.predator_prey.optimized_tick.pred_100_prey_5000",
+            "name": "predator_prey/optimized_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "100",
+                "preyPerPredator": "5000"
+            },
+            "mode": "avgt",
+            "us_per_op": 7.488,
+            "ops_per_ms": 133.54,
+            "entities_per_second": 66769967876,
+            "bytes_per_op": null,
+            "score": 7488.397,
+            "score_unit": "ns/op",
+            "score_error": 12.31
+        },
+        {
+            "benchmark": "bevy.predator_prey.optimized_tick.pred_500_prey_2000",
+            "name": "predator_prey/optimized_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "500",
+                "preyPerPredator": "2000"
+            },
+            "mode": "avgt",
+            "us_per_op": 10.962,
+            "ops_per_ms": 91.222,
+            "entities_per_second": 91221947287,
+            "bytes_per_op": null,
+            "score": 10962.274,
+            "score_unit": "ns/op",
+            "score_error": 24.942
+        },
+        {
+            "benchmark": "bevy.predator_prey.optimized_tick.pred_500_prey_500",
+            "name": "predator_prey/optimized_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "500",
+                "preyPerPredator": "500"
+            },
+            "mode": "avgt",
+            "us_per_op": 6.978,
+            "ops_per_ms": 143.3,
+            "entities_per_second": 35825102322,
+            "bytes_per_op": null,
+            "score": 6978.347,
+            "score_unit": "ns/op",
+            "score_error": 10.113
+        },
+        {
+            "benchmark": "bevy.predator_prey.optimized_tick.pred_500_prey_5000",
+            "name": "predator_prey/optimized_tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "500",
+                "preyPerPredator": "5000"
+            },
+            "mode": "avgt",
+            "us_per_op": 18.718,
+            "ops_per_ms": 53.425,
+            "entities_per_second": 133561641595,
+            "bytes_per_op": null,
+            "score": 18717.949,
+            "score_unit": "ns/op",
+            "score_error": 76.974
+        },
+        {
+            "benchmark": "bevy.predator_prey.tick.pred_1000_prey_2000",
+            "name": "predator_prey/tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "1000",
+                "preyPerPredator": "2000"
+            },
+            "mode": "avgt",
+            "us_per_op": 478.155,
+            "ops_per_ms": 2.091,
+            "entities_per_second": 4182741092,
+            "bytes_per_op": null,
+            "score": 478155.343,
+            "score_unit": "ns/op",
+            "score_error": 859.808
+        },
+        {
+            "benchmark": "bevy.predator_prey.tick.pred_1000_prey_500",
+            "name": "predator_prey/tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "1000",
+                "preyPerPredator": "500"
+            },
+            "mode": "avgt",
+            "us_per_op": 127.628,
+            "ops_per_ms": 7.835,
+            "entities_per_second": 3917648805,
+            "bytes_per_op": null,
+            "score": 127627.571,
+            "score_unit": "ns/op",
+            "score_error": 435.005
+        },
+        {
+            "benchmark": "bevy.predator_prey.tick.pred_1000_prey_5000",
+            "name": "predator_prey/tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "1000",
+                "preyPerPredator": "5000"
+            },
+            "mode": "avgt",
+            "us_per_op": 1197.673,
+            "ops_per_ms": 0.835,
+            "entities_per_second": 4174760917,
+            "bytes_per_op": null,
+            "score": 1197673.376,
+            "score_unit": "ns/op",
+            "score_error": 2000.143
+        },
+        {
+            "benchmark": "bevy.predator_prey.tick.pred_100_prey_2000",
+            "name": "predator_prey/tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "100",
+                "preyPerPredator": "2000"
+            },
+            "mode": "avgt",
+            "us_per_op": 52.143,
+            "ops_per_ms": 19.178,
+            "entities_per_second": 3835637518,
+            "bytes_per_op": null,
+            "score": 52142.571,
+            "score_unit": "ns/op",
+            "score_error": 120.637
+        },
+        {
+            "benchmark": "bevy.predator_prey.tick.pred_100_prey_500",
+            "name": "predator_prey/tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "100",
+                "preyPerPredator": "500"
+            },
+            "mode": "avgt",
+            "us_per_op": 14.099,
+            "ops_per_ms": 70.929,
+            "entities_per_second": 3546474292,
+            "bytes_per_op": null,
+            "score": 14098.509,
+            "score_unit": "ns/op",
+            "score_error": 31.264
+        },
+        {
+            "benchmark": "bevy.predator_prey.tick.pred_100_prey_5000",
+            "name": "predator_prey/tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "100",
+                "preyPerPredator": "5000"
+            },
+            "mode": "avgt",
+            "us_per_op": 126.792,
+            "ops_per_ms": 7.887,
+            "entities_per_second": 3943474432,
+            "bytes_per_op": null,
+            "score": 126791.744,
+            "score_unit": "ns/op",
+            "score_error": 220.324
+        },
+        {
+            "benchmark": "bevy.predator_prey.tick.pred_500_prey_2000",
+            "name": "predator_prey/tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "500",
+                "preyPerPredator": "2000"
+            },
+            "mode": "avgt",
+            "us_per_op": 260.57,
+            "ops_per_ms": 3.838,
+            "entities_per_second": 3837738458,
+            "bytes_per_op": null,
+            "score": 260570.128,
+            "score_unit": "ns/op",
+            "score_error": 507.779
+        },
+        {
+            "benchmark": "bevy.predator_prey.tick.pred_500_prey_500",
+            "name": "predator_prey/tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "500",
+                "preyPerPredator": "500"
+            },
+            "mode": "avgt",
+            "us_per_op": 68.513,
+            "ops_per_ms": 14.596,
+            "entities_per_second": 3648958675,
+            "bytes_per_op": null,
+            "score": 68512.697,
+            "score_unit": "ns/op",
+            "score_error": 294.895
+        },
+        {
+            "benchmark": "bevy.predator_prey.tick.pred_500_prey_5000",
+            "name": "predator_prey/tick",
+            "implementation": "bevy",
+            "params": {
+                "predators": "500",
+                "preyPerPredator": "5000"
+            },
+            "mode": "avgt",
+            "us_per_op": 632.621,
+            "ops_per_ms": 1.581,
+            "entities_per_second": 3951814991,
+            "bytes_per_op": null,
+            "score": 632620.708,
+            "score_unit": "ns/op",
+            "score_error": 999.641
+        },
+        {
+            "benchmark": "bevy.realistic_tick.tick.10000",
+            "name": "realistic_tick/tick",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 8.372,
+            "ops_per_ms": 119.45,
+            "entities_per_second": 1194495720,
+            "bytes_per_op": null,
+            "score": 8371.734,
+            "score_unit": "ns/op",
+            "score_error": 5.566
+        },
+        {
+            "benchmark": "bevy.realistic_tick.tick.100000",
+            "name": "realistic_tick/tick",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "avgt",
+            "us_per_op": 73.358,
+            "ops_per_ms": 13.632,
+            "entities_per_second": 1363172231,
+            "bytes_per_op": null,
+            "score": 73358.302,
+            "score_unit": "ns/op",
+            "score_error": 60.482
+        },
+        {
+            "benchmark": "bevy.scenario.particle_tick.10000",
+            "name": "scenario/particle_tick",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 21.119,
+            "ops_per_ms": 47.351,
+            "entities_per_second": 473511835,
+            "bytes_per_op": null,
+            "score": 21118.796,
+            "score_unit": "ns/op",
+            "score_error": 62.344
+        },
+        {
+            "benchmark": "bevy.sparse_delta.observe_changed_health.10000",
+            "name": "sparse_delta/observe_changed_health",
+            "implementation": "bevy",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 3.948,
+            "ops_per_ms": 253.304,
+            "entities_per_second": 2533038048,
+            "bytes_per_op": null,
+            "score": 3947.829,
+            "score_unit": "ns/op",
+            "score_error": 6.671
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.macro.NBodyBenchmark.simulateOneTick",
+            "name": "simulateOneTick",
+            "implementation": "japes",
+            "params": {
+                "bodyCount": "1000"
+            },
+            "mode": "avgt",
+            "us_per_op": 0.133,
+            "ops_per_ms": 7492.789,
+            "entities_per_second": 7492789239,
+            "bytes_per_op": 0.0,
+            "score": 1.33E-4,
+            "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.macro.NBodyBenchmark.simulateOneTick",
+            "name": "simulateOneTick",
+            "implementation": "japes",
+            "params": {
+                "bodyCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 1.647,
+            "ops_per_ms": 607.142,
+            "entities_per_second": 6071418642,
+            "bytes_per_op": 0.0,
+            "score": 0.001647,
+            "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.IterationBenchmark.iterateWithWrite",
+            "name": "iterateWithWrite",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 0.133,
+            "ops_per_ms": 7506.851,
+            "entities_per_second": 7506851376,
+            "bytes_per_op": 0.0,
+            "score": 7506.851377,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.IterationBenchmark.iterateWithWrite",
+            "name": "iterateWithWrite",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 1.608,
+            "ops_per_ms": 621.756,
+            "entities_per_second": 6217556112,
+            "bytes_per_op": 0.0,
+            "score": 621.755611,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.IterationBenchmark.iterateWithWrite",
+            "name": "iterateWithWrite",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 23.496,
+            "ops_per_ms": 42.56,
+            "entities_per_second": 4255992680,
+            "bytes_per_op": 0.2,
+            "score": 42.559927,
+            "score_unit": "ops/ms",
+            "score_error": null
+        }
+    ]
 }

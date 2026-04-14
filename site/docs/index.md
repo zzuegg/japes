@@ -82,9 +82,11 @@ The scheduler analyses each system's access set statically and runs everything t
 
 </div>
 
+<!-- BENCH:START headline -->
 <div class="japes-perf-callout" markdown>
-**Headline benchmark.** With SoA storage, `iterateWithWrite` at 10k lands at **japes 1.70 µs/op** vs Bevy 0.15's 6.29 µs/op — **3.7× faster** than the Rust reference on writes. Change detection stays strong: `SparseDelta` at **2.16 µs/op** vs Bevy's 4.11 — **1.90× faster**. The [benchmarks section](benchmarks/index.md) shows the full cross-library tables plus the predator/prey relations workload where japes runs at **27.6 µs/op** on 500 × 2000 tuples.
+**Headline benchmark.** With SoA storage, `iterateWithWrite` at 10k lands at **japes 1.61 µs/op** vs Bevy 0.15's 6.28 µs/op — **3.9× faster** than the Rust reference on writes. Change detection stays strong: `SparseDelta` — data pending. The [benchmarks section](benchmarks/index.md) shows the full cross-library tables plus the predator/prey relations workload where data pending for 500 × 2000 tuples.
 </div>
+<!-- BENCH:END headline -->
 
 ## Where to start
 

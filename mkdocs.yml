@@ -120,6 +120,7 @@ nav:
           - 'Field filters — @Where': tutorials/advanced/14-where-filters.md
           - '@Exclusive systems': tutorials/advanced/15-exclusive-systems.md
           - Run conditions: tutorials/advanced/16-run-conditions.md
+          - Persistence and sync: tutorials/advanced/17-persistence.md
       - Relations:
           - tutorials/relations/index.md
           - Overview: tutorials/relations/17-overview.md

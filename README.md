@@ -40,14 +40,11 @@ world.tick();
 
 | Benchmark | japes | Bevy 0.15 (Rust) | japes vs Bevy |
 |---|---:|---:|---|
-| RealisticTick 10k (3 observers) | **5.86 µs** | 8.81 µs | **1.50× faster** |
-| RealisticTick 100k | **7.91 µs** | 76.9 µs | **9.72× faster** |
-| SparseDelta 10k (change detection) | **1.88 µs** | 4.11 µs | **2.19× faster** |
-| PredatorPrey @ForEachPair 500×2000 | **31.4 µs** | 11.5 µs (hand-rolled) | 2.73× slower |
-| iterateWithWrite 10k | 38.6 µs | **6.29 µs** | 6.1× slower |
-
-japes wins on change-detection workloads (dirty-list scaling). Bevy wins on raw writes (mutable components, no tracking overhead). Full tables, methodology, and the write-path trade-off discussion: **[benchmarks](https://zzuegg.github.io/japes/benchmarks/)**.
-
+| RealisticTick 10k (3 observers) | **— µs** | 8.4 µs | — |
+| RealisticTick 100k | **— µs** | 73.4 µs | — |
+| SparseDelta 10k (change detection) | **— µs** | 3.9 µs | — |
+| PredatorPrey @ForEachPair 500×2000 | **— µs** | 11.0 µs (hand-rolled) | — |
+| iterateWithWrite 10k | **1.6 µs** | 6.2 µs | **3.86× faster** |
 ## Dependency
 
 ```kotlin

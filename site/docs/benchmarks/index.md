@@ -6,39 +6,47 @@ All numbers from a single co-temporal sweep on the same machine (JDK 26, Bevy 0.
 
 ### Iteration micros (µs/op)
 
+<!-- BENCH:START iteration_micros -->
 | Benchmark | Entities | **japes** | Bevy (Rust) | Zay-ES | Dominion | Artemis |
 |---|---:|---:|---:|---:|---:|---:|
-| [iterateSingleComponent](iteration-micros.md) | 10k | **3.0** | **2.18** | 28.6 | 7.06 | 4.52 |
-| [iterateTwoComponents](iteration-micros.md) | 10k | **7.1** | **3.70** | 38.6 | 12.4 | 11.6 |
-| [iterateWithWrite](iteration-micros.md) | 10k | **1.8** | 6.29 | 1829 | 22.5 | 18.3 |
-| [iterateSingleComponent](iteration-micros.md) | 100k | **30.3** | **21.3** | 383 | 79.4 | 166 |
-| [iterateWithWrite](iteration-micros.md) | 100k | **31.0** | 63.8 | 17857 | **234** | 335 |
+| [iterateSingleComponent](iteration-micros.md) | 10k | — | **2.18** | — | — | — |
+| [iterateTwoComponents](iteration-micros.md) | 10k | — | **3.72** | — | — | — |
+| [iterateWithWrite](iteration-micros.md) | 10k | **1.61** | 6.28 | — | — | — |
+| [iterateSingleComponent](iteration-micros.md) | 100k | — | **21.3** | — | — | — |
+| [iterateWithWrite](iteration-micros.md) | 100k | **23.5** | 63.6 | — | — | — |
+<!-- BENCH:END iteration_micros -->
 
 *japes iteration numbers use field-level blackhole; Bevy uses object-level `black_box`. Read rows are not directly comparable across languages. See [iteration micros methodology](iteration-micros.md).*
 
 ### Scenarios (µs/op)
 
+<!-- BENCH:START scenarios -->
 | Benchmark | Entities | **japes** | Bevy | Zay-ES | Dominion | Artemis |
 |---|---:|---:|---:|---:|---:|---:|
-| [N-Body oneTick](nbody.md) | 10k | **2** | 8.8 | 441 | 24 | 19 |
-| [ParticleScenario](particle-scenario.md) | 10k | **39.4** | **22.7** | 1855 | 67.9 | 98.5 |
-| [SparseDelta](sparse-delta.md) | 10k | **2.1** | 4.11 | 4.67 | **0.37** | **0.27** |
-| [RealisticTick](realistic-tick.md) | 10k st | **6.8** | 8.81 | 15.4 | 44.6 | 24.5 |
-| [RealisticTick](realistic-tick.md) | 100k st | **11.5** | 76.9 | **19.6** | 389 | 279 |
+| [N-Body oneTick](nbody.md) | 10k | **1.65** | 8.75 | — | — | — |
+| [ParticleScenario](particle-scenario.md) | 10k | — | **22.1** | — | — | — |
+| [SparseDelta](sparse-delta.md) | 10k | — | **4.12** | — | — | — |
+| [RealisticTick](realistic-tick.md) | 10k st | — | **8.83** | — | — | — |
+| [RealisticTick](realistic-tick.md) | 100k st | — | **77.3** | — | — | — |
+<!-- BENCH:END scenarios -->
 
 ### Relations (µs/op, japes + Bevy only)
 
+<!-- BENCH:START relations -->
 | Benchmark | Cell | **japes** | Bevy naive | Bevy hand-rolled |
 |---|---|---:|---:|---:|
-| [PredatorPrey `@Pair`](predator-prey.md) | 500×2000 | 37.8 | 243.7 | **11.5** |
-| [PredatorPrey `@ForEachPair`](predator-prey.md) | 500×2000 | **24.7** | 243.7 | **11.5** |
+| [PredatorPrey `@Pair`](predator-prey.md) | 500×2000 | — | 245 | **11.4** |
+| [PredatorPrey `@ForEachPair`](predator-prey.md) | 500×2000 | — | 245 | **11.4** |
+<!-- BENCH:END relations -->
 
 ### Unified delta (µs/op, lower is better)
 
+<!-- BENCH:START unified_delta -->
 | Benchmark | Entities | **japes** (6 systems) | Zay-ES (1 EntitySet) |
 |---|---:|---:|---:|
-| [UnifiedDelta](unified-delta.md) | 10k | **642** | 1,067 |
-| [UnifiedDelta](unified-delta.md) | 100k | **4,831** | 13,889 |
+| [UnifiedDelta](unified-delta.md) | 10k | — | — |
+| [UnifiedDelta](unified-delta.md) | 100k | — | — |
+<!-- BENCH:END unified_delta -->
 
 ### Allocation per tick (B/op, japes only)
 
