@@ -1,11 +1,11 @@
-package zzuegg.ecs.command;
+package zzuegg.ecs.world;
 
+import zzuegg.ecs.command.Commands;
 import zzuegg.ecs.entity.Entity;
-import zzuegg.ecs.world.World;
 
 import java.util.List;
 
-public final class CommandProcessor {
+final class CommandProcessor {
 
     private CommandProcessor() {}
 

@@ -65,7 +65,7 @@ class SetComponentMarksChangedTest {
         // end-of-stage flush, not inline, but must still mark changed.
         var cmds = new Commands();
         cmds.set(entity, new Position(7, 7));
-        zzuegg.ecs.command.CommandProcessor.process(cmds.drain(), world);
+        cmds.applyTo(world);
 
         world.tick();
         assertEquals(1, observer.observed.size(),

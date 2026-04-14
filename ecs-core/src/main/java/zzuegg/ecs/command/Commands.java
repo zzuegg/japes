@@ -8,7 +8,7 @@ import java.util.List;
 /**
  * Deferred command buffer. Systems enqueue mutations via the public API
  * methods; the world flushes them at the end of each stage via
- * {@link CommandProcessor#process(Commands, zzuegg.ecs.world.World)}.
+ * {@link zzuegg.ecs.world.CommandProcessor}.
  *
  * <h2>Flat-buffer encoding</h2>
  * Commands are stored in three parallel arrays rather than individual
@@ -36,15 +36,15 @@ public final class Commands {
     public record SetRelationCommand(Entity source, Entity target, Record value) implements Command {}
     public record RemoveRelationCommand(Entity source, Entity target, Class<? extends Record> type) implements Command {}
 
-    // Opcodes
-    static final int OP_SPAWN          = 0;
-    static final int OP_DESPAWN        = 1;
-    static final int OP_ADD            = 2;
-    static final int OP_REMOVE         = 3;
-    static final int OP_SET            = 4;
-    static final int OP_INSERT_RES     = 5;
-    static final int OP_SET_RELATION   = 6;
-    static final int OP_REMOVE_RELATION = 7;
+    // Opcodes (public for CommandProcessor which lives in zzuegg.ecs.world)
+    public static final int OP_SPAWN          = 0;
+    public static final int OP_DESPAWN        = 1;
+    public static final int OP_ADD            = 2;
+    public static final int OP_REMOVE         = 3;
+    public static final int OP_SET            = 4;
+    public static final int OP_INSERT_RES     = 5;
+    public static final int OP_SET_RELATION   = 6;
+    public static final int OP_REMOVE_RELATION = 7;
 
     private int[] ops;
     private long[] ids;
@@ -126,6 +126,14 @@ public final class Commands {
 
     // ---- Drain / query API ----
 
+    /**
+     * Apply all buffered commands to the world and reset the buffer.
+     * Convenience method equivalent to what happens during tick flush.
+     */
+    public void applyTo(zzuegg.ecs.world.World world) {
+        world.flushCommands(this);
+    }
+
     /** Number of commands currently buffered. */
     public int size() { return count; }
 
@@ -144,7 +152,7 @@ public final class Commands {
 
     /**
      * Legacy drain that materializes Command objects. Provided for
-     * backward compatibility. Prefer {@link CommandProcessor#process(Commands, zzuegg.ecs.world.World)}.
+     * backward compatibility. Prefer {@link zzuegg.ecs.world.CommandProcessor}.
      */
     public List<Command> drain() {
         if (count == 0) return List.of();

@@ -94,7 +94,7 @@ class RemovedComponentsTest {
 
         var cmds = new Commands();
         cmds.despawn(e);
-        zzuegg.ecs.command.CommandProcessor.process(cmds.drain(), world);
+        cmds.applyTo(world);
 
         world.tick();
         assertEquals(1, graveyard.gravedIds.size(),

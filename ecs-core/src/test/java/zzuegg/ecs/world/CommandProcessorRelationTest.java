@@ -1,8 +1,9 @@
-package zzuegg.ecs.command;
+package zzuegg.ecs.world;
+
+import zzuegg.ecs.command.Commands;
 
 import org.junit.jupiter.api.Test;
 import zzuegg.ecs.entity.Entity;
-import zzuegg.ecs.world.World;
 
 import static org.junit.jupiter.api.Assertions.*;
 

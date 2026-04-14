@@ -84,7 +84,7 @@ class CommandProcessingTest {
         // Use Commands directly through command processor for this test
         var cmds = new Commands();
         cmds.despawn(target);
-        zzuegg.ecs.command.CommandProcessor.process(cmds.drain(), world);
+        cmds.applyTo(world);
 
         assertEquals(1, world.entityCount());
     }
@@ -96,7 +96,7 @@ class CommandProcessingTest {
 
         var cmds = new Commands();
         cmds.set(entity, new Position(99, 99));
-        zzuegg.ecs.command.CommandProcessor.process(cmds.drain(), world);
+        cmds.applyTo(world);
 
         assertEquals(new Position(99, 99), world.getComponent(entity, Position.class));
     }

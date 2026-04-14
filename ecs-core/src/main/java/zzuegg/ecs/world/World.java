@@ -549,7 +549,7 @@ public final class World {
      * Raw-id variant that avoids allocating an Entity record on the flush
      * hot path.
      */
-    public void despawnIfAliveById(long entityId) {
+    void despawnIfAliveById(long entityId) {
         if (!entityAllocator.isAlive(entityId)) return;
         despawnWithCascade(new zzuegg.ecs.entity.Entity(entityId));
     }
@@ -713,7 +713,7 @@ public final class World {
      * Raw-id variant that avoids allocating an Entity record on the flush
      * hot path. Caller must ensure the entity is alive.
      */
-    public void setComponentById(long entityId, Record component) {
+    void setComponentById(long entityId, Record component) {
         setComponentInternal((int) (entityId >>> 32), component);
     }
 
@@ -908,7 +908,7 @@ public final class World {
     /**
      * Raw-id variant for the command flush path.
      */
-    public <T extends Record> void setRelationById(long sourceId, long targetId, T value) {
+    <T extends Record> void setRelationById(long sourceId, long targetId, T value) {
         setRelation(new zzuegg.ecs.entity.Entity(sourceId),
                     new zzuegg.ecs.entity.Entity(targetId), value);
     }
@@ -916,7 +916,7 @@ public final class World {
     /**
      * Raw-id variant for the command flush path.
      */
-    public <T extends Record> void removeRelationById(long sourceId, long targetId, Class<T> type) {
+    <T extends Record> void removeRelationById(long sourceId, long targetId, Class<T> type) {
         removeRelation(new zzuegg.ecs.entity.Entity(sourceId),
                        new zzuegg.ecs.entity.Entity(targetId), type);
     }
@@ -1029,7 +1029,7 @@ public final class World {
      * Raw-id variant that avoids allocating an Entity record on the flush
      * hot path. Caller must ensure the entity is alive.
      */
-    public void addComponentById(long entityId, Record component) {
+    void addComponentById(long entityId, Record component) {
         addComponent(new zzuegg.ecs.entity.Entity(entityId), component);
     }
 
@@ -1081,7 +1081,7 @@ public final class World {
      * Raw-id variant that avoids allocating an Entity record on the flush
      * hot path. Caller must ensure the entity is alive.
      */
-    public void removeComponentById(long entityId, Class<? extends Record> type) {
+    void removeComponentById(long entityId, Class<? extends Record> type) {
         removeComponent(new zzuegg.ecs.entity.Entity(entityId), type);
     }
 
@@ -1253,7 +1253,7 @@ public final class World {
     /**
      * Raw-id variant that avoids allocating an Entity record.
      */
-    public boolean isAliveById(long entityId) {
+    boolean isAliveById(long entityId) {
         return entityAllocator.isAlive(entityId);
     }
 
@@ -1515,11 +1515,16 @@ public final class World {
         flushPendingCommands();
     }
 
+    /** Apply a command buffer to this world. Used by {@link zzuegg.ecs.command.Commands#applyTo}. */
+    public void flushCommands(zzuegg.ecs.command.Commands cmds) {
+        CommandProcessor.process(cmds, this);
+    }
+
     private void flushPendingCommands() {
         for (int i = 0, n = allCommandBuffers.size(); i < n; i++) {
             var cmds = allCommandBuffers.get(i);
             if (!cmds.isEmpty()) {
-                zzuegg.ecs.command.CommandProcessor.process(cmds, this);
+                CommandProcessor.process(cmds, this);
             }
         }
     }

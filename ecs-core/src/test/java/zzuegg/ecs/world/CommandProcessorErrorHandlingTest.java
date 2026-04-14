@@ -1,7 +1,8 @@
-package zzuegg.ecs.command;
+package zzuegg.ecs.world;
+
+import zzuegg.ecs.command.Commands;
 
 import org.junit.jupiter.api.Test;
-import zzuegg.ecs.world.World;
 
 import java.util.List;
 
