@@ -39,7 +39,13 @@
 
   function paramKey(r) {
     const p = r.params || {};
-    return p.entityCount || p.bodyCount || `${p.predators || ""}x${p.preyPerPredator || ""}`;
+    if (p.entityCount) return p.entityCount;
+    if (p.bodyCount) return p.bodyCount;
+    // Bevy uses predators/preyPerPredator, japes uses predatorCount/preyCount
+    const pred = p.predators || p.predatorCount || "";
+    const prey = p.preyPerPredator || p.preyCount || "";
+    if (pred && prey) return `${pred}x${prey}`;
+    return "";
   }
 
   function fmt(v) {

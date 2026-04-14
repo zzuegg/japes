@@ -325,8 +325,9 @@ fun entityCount(params: Map<String, String>): Long? {
     for (key in listOf("entityCount", "bodyCount")) {
         params[key]?.toLongOrNull()?.let { return it }
     }
-    val pred = params["predators"]?.toLongOrNull()
-    val prey = params["preyPerPredator"]?.toLongOrNull()
+    // Bevy: predators/preyPerPredator, japes: predatorCount/preyCount
+    val pred = (params["predators"] ?: params["predatorCount"])?.toLongOrNull()
+    val prey = (params["preyPerPredator"] ?: params["preyCount"])?.toLongOrNull()
     if (pred != null && prey != null) return pred * prey
     return null
 }

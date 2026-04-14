@@ -1,5 +1,5 @@
 {
-    "generated": "2026-04-14T18:53:20.719Z",
+    "generated": "2026-04-14T19:02:59.264Z",
     "jdk": "openjdk version \"26\" 2026-03-17",
     "rust": "rustc 1.94.1 (e408947bf 2026-03-25)",
     "results": [
@@ -2957,7 +2957,7 @@
             "mode": "avgt",
             "us_per_op": 31.822,
             "ops_per_ms": 31.425,
-            "entities_per_second": null,
+            "entities_per_second": 31425134104,
             "bytes_per_op": 79756.5,
             "score": 31.821662,
             "score_unit": "us/op",
@@ -2974,7 +2974,7 @@
             "mode": "avgt",
             "us_per_op": 19.442,
             "ops_per_ms": 51.434,
-            "entities_per_second": null,
+            "entities_per_second": 51433817364,
             "bytes_per_op": 9936.5,
             "score": 19.442461,
             "score_unit": "us/op",
