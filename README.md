@@ -40,11 +40,11 @@ world.tick();
 
 | Benchmark | japes | Bevy 0.15 (Rust) | japes vs Bevy |
 |---|---:|---:|---|
-| RealisticTick 10k (3 observers) | **— µs** | 8.4 µs | — |
-| RealisticTick 100k | **— µs** | 73.4 µs | — |
-| SparseDelta 10k (change detection) | **— µs** | 3.9 µs | — |
-| PredatorPrey @ForEachPair 500×2000 | **— µs** | 11.0 µs (hand-rolled) | — |
-| iterateWithWrite 10k | **1.6 µs** | 6.2 µs | **3.86× faster** |
+| RealisticTick 10k (3 observers) | **6.5 µs** | 8.5 µs | **1.32× faster** |
+| RealisticTick 100k | **8.5 µs** | 75.4 µs | **8.93× faster** |
+| SparseDelta 10k (change detection) | **1.8 µs** | 4.0 µs | **2.28× faster** |
+| PredatorPrey @ForEachPair 500×2000 | **19.4 µs** | 11.1 µs (hand-rolled) | 1.8× slower |
+| iterateWithWrite 10k | **1.6 µs** | 6.3 µs | **3.92× faster** |
 ## Dependency
 
 ```kotlin

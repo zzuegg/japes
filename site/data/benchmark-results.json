@@ -1,8 +1,282 @@
 {
-    "generated": "2026-04-14T18:32:19.284Z",
+    "generated": "2026-04-14T18:42:42.593Z",
     "jdk": "openjdk version \"26\" 2026-03-17",
     "rust": "rustc 1.94.1 (e408947bf 2026-03-25)",
     "results": [
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisIterationBenchmark.iterateSingleComponent",
+            "name": "iterateSingleComponent",
+            "implementation": "artemis",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 0.89,
+            "ops_per_ms": 1123.304,
+            "entities_per_second": 1123304206,
+            "bytes_per_op": 0.0,
+            "score": 1123.304206,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisIterationBenchmark.iterateSingleComponent",
+            "name": "iterateSingleComponent",
+            "implementation": "artemis",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 8.795,
+            "ops_per_ms": 113.703,
+            "entities_per_second": 1137028960,
+            "bytes_per_op": 0.1,
+            "score": 113.702896,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisIterationBenchmark.iterateSingleComponent",
+            "name": "iterateSingleComponent",
+            "implementation": "artemis",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 204.91,
+            "ops_per_ms": 4.88,
+            "entities_per_second": 488019152,
+            "bytes_per_op": 1.4,
+            "score": 4.880192,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisIterationBenchmark.iterateTwoComponents",
+            "name": "iterateTwoComponents",
+            "implementation": "artemis",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 1.591,
+            "ops_per_ms": 628.63,
+            "entities_per_second": 628629974,
+            "bytes_per_op": 0.0,
+            "score": 628.629974,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisIterationBenchmark.iterateTwoComponents",
+            "name": "iterateTwoComponents",
+            "implementation": "artemis",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 16.203,
+            "ops_per_ms": 61.717,
+            "entities_per_second": 617172156,
+            "bytes_per_op": 0.1,
+            "score": 61.717216,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisIterationBenchmark.iterateTwoComponents",
+            "name": "iterateTwoComponents",
+            "implementation": "artemis",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 305.4,
+            "ops_per_ms": 3.274,
+            "entities_per_second": 327439606,
+            "bytes_per_op": 2.1,
+            "score": 3.274396,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisIterationBenchmark.iterateWithWrite",
+            "name": "iterateWithWrite",
+            "implementation": "artemis",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 1.834,
+            "ops_per_ms": 545.329,
+            "entities_per_second": 545329290,
+            "bytes_per_op": 0.0,
+            "score": 545.329291,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisIterationBenchmark.iterateWithWrite",
+            "name": "iterateWithWrite",
+            "implementation": "artemis",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 18.996,
+            "ops_per_ms": 52.642,
+            "entities_per_second": 526424424,
+            "bytes_per_op": 0.1,
+            "score": 52.642442,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisIterationBenchmark.iterateWithWrite",
+            "name": "iterateWithWrite",
+            "implementation": "artemis",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 336.721,
+            "ops_per_ms": 2.97,
+            "entities_per_second": 296981560,
+            "bytes_per_op": 2.4,
+            "score": 2.969816,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisNBodyBenchmark.simulateOneTick",
+            "name": "simulateOneTick",
+            "implementation": "artemis",
+            "params": {
+                "bodyCount": "1000"
+            },
+            "mode": "avgt",
+            "us_per_op": 1.901,
+            "ops_per_ms": 525.948,
+            "entities_per_second": 525948420,
+            "bytes_per_op": 0.0,
+            "score": 0.001901,
+            "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisNBodyBenchmark.simulateOneTick",
+            "name": "simulateOneTick",
+            "implementation": "artemis",
+            "params": {
+                "bodyCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 19.972,
+            "ops_per_ms": 50.069,
+            "entities_per_second": 500688882,
+            "bytes_per_op": 0.1,
+            "score": 0.019972,
+            "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisNBodyBenchmark.simulateTenTicks",
+            "name": "simulateTenTicks",
+            "implementation": "artemis",
+            "params": {
+                "bodyCount": "1000"
+            },
+            "mode": "avgt",
+            "us_per_op": 19.386,
+            "ops_per_ms": 51.584,
+            "entities_per_second": 51583964,
+            "bytes_per_op": 0.1,
+            "score": 0.019386,
+            "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisNBodyBenchmark.simulateTenTicks",
+            "name": "simulateTenTicks",
+            "implementation": "artemis",
+            "params": {
+                "bodyCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 195.313,
+            "ops_per_ms": 5.12,
+            "entities_per_second": 51199754,
+            "bytes_per_op": 0.7,
+            "score": 0.195313,
+            "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisParticleScenarioBenchmark.tick",
+            "name": "tick",
+            "implementation": "artemis",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 100.613,
+            "ops_per_ms": 9.939,
+            "entities_per_second": 99390728,
+            "bytes_per_op": 8230.2,
+            "score": 9.939073,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisRealisticTickBenchmark.tick",
+            "name": "tick",
+            "implementation": "artemis",
+            "params": {
+                "entityCount": "10000",
+                "executor": "st"
+            },
+            "mode": "thrpt",
+            "us_per_op": 26.237,
+            "ops_per_ms": 38.114,
+            "entities_per_second": 381135727,
+            "bytes_per_op": 26.6,
+            "score": 38.113573,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisRealisticTickBenchmark.tick",
+            "name": "tick",
+            "implementation": "artemis",
+            "params": {
+                "entityCount": "100000",
+                "executor": "st"
+            },
+            "mode": "thrpt",
+            "us_per_op": 283.231,
+            "ops_per_ms": 3.531,
+            "entities_per_second": 353068868,
+            "bytes_per_op": 2580.7,
+            "score": 3.530689,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.artemis.ArtemisSparseDeltaBenchmark.tick",
+            "name": "tick",
+            "implementation": "artemis",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 0.275,
+            "ops_per_ms": 3631.431,
+            "entities_per_second": 36314309133,
+            "bytes_per_op": 0.3,
+            "score": 3631.430913,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
         {
             "benchmark": "bevy.change_detection.changed_all_dirty.10000",
             "name": "change_detection/changed_all_dirty",
@@ -11,13 +285,13 @@
                 "entityCount": "10000"
             },
             "mode": "avgt",
-            "us_per_op": 11.944,
-            "ops_per_ms": 83.725,
-            "entities_per_second": 837250091,
+            "us_per_op": 12.013,
+            "ops_per_ms": 83.245,
+            "entities_per_second": 832453076,
             "bytes_per_op": null,
-            "score": 11943.863,
+            "score": 12012.689,
             "score_unit": "ns/op",
-            "score_error": 22.157
+            "score_error": 26.479
         },
         {
             "benchmark": "bevy.change_detection.removed_drain_bulk_despawn.10000",
@@ -27,13 +301,13 @@
                 "entityCount": "10000"
             },
             "mode": "avgt",
-            "us_per_op": 165.582,
-            "ops_per_ms": 6.039,
-            "entities_per_second": 60392957,
+            "us_per_op": 167.503,
+            "ops_per_ms": 5.97,
+            "entities_per_second": 59700335,
             "bytes_per_op": null,
-            "score": 165582.221,
+            "score": 167503.247,
             "score_unit": "ns/op",
-            "score_error": 64.11
+            "score_error": 247.068
         },
         {
             "benchmark": "bevy.entity.despawn_1k",
@@ -43,13 +317,13 @@
                 
             },
             "mode": "avgt",
-            "us_per_op": 15.497,
-            "ops_per_ms": 64.529,
+            "us_per_op": 16.016,
+            "ops_per_ms": 62.439,
             "entities_per_second": null,
             "bytes_per_op": null,
-            "score": 15496.892,
+            "score": 16015.594,
             "score_unit": "ns/op",
-            "score_error": 6.215
+            "score_error": 9.659
         },
         {
             "benchmark": "bevy.entity.spawn_100k",
@@ -59,13 +333,13 @@
                 
             },
             "mode": "avgt",
-            "us_per_op": 2320.887,
-            "ops_per_ms": 0.431,
+            "us_per_op": 2355.434,
+            "ops_per_ms": 0.425,
             "entities_per_second": null,
             "bytes_per_op": null,
-            "score": 2320886.963,
+            "score": 2355433.545,
             "score_unit": "ns/op",
-            "score_error": 264.634
+            "score_error": 3310.207
         },
         {
             "benchmark": "bevy.entity.spawn_1k",
@@ -75,13 +349,13 @@
                 
             },
             "mode": "avgt",
-            "us_per_op": 19.577,
-            "ops_per_ms": 51.081,
+            "us_per_op": 19.76,
+            "ops_per_ms": 50.606,
             "entities_per_second": null,
             "bytes_per_op": null,
-            "score": 19576.728,
+            "score": 19760.432,
             "score_unit": "ns/op",
-            "score_error": 4.134
+            "score_error": 5.052
         },
         {
             "benchmark": "bevy.iteration.read_write.1000",
@@ -91,13 +365,13 @@
                 "entityCount": "1000"
             },
             "mode": "avgt",
-            "us_per_op": 0.641,
-            "ops_per_ms": 1559.436,
-            "entities_per_second": 1559435758,
+            "us_per_op": 0.648,
+            "ops_per_ms": 1542.841,
+            "entities_per_second": 1542841146,
             "bytes_per_op": null,
-            "score": 641.258,
+            "score": 648.155,
             "score_unit": "ns/op",
-            "score_error": 0.091
+            "score_error": 0.89
         },
         {
             "benchmark": "bevy.iteration.read_write.10000",
@@ -107,13 +381,13 @@
                 "entityCount": "10000"
             },
             "mode": "avgt",
-            "us_per_op": 6.207,
-            "ops_per_ms": 161.117,
-            "entities_per_second": 1611169901,
+            "us_per_op": 6.333,
+            "ops_per_ms": 157.912,
+            "entities_per_second": 1579121201,
             "bytes_per_op": null,
-            "score": 6206.67,
+            "score": 6332.636,
             "score_unit": "ns/op",
-            "score_error": 2.256
+            "score_error": 10.37
         },
         {
             "benchmark": "bevy.iteration.read_write.100000",
@@ -123,13 +397,13 @@
                 "entityCount": "100000"
             },
             "mode": "avgt",
-            "us_per_op": 62.892,
-            "ops_per_ms": 15.9,
-            "entities_per_second": 1590026737,
+            "us_per_op": 63.494,
+            "ops_per_ms": 15.75,
+            "entities_per_second": 1574955418,
             "bytes_per_op": null,
-            "score": 62892.024,
+            "score": 63493.861,
             "score_unit": "ns/op",
-            "score_error": 49.992
+            "score_error": 88.853
         },
         {
             "benchmark": "bevy.iteration.single_read.1000",
@@ -139,13 +413,13 @@
                 "entityCount": "1000"
             },
             "mode": "avgt",
-            "us_per_op": 0.244,
-            "ops_per_ms": 4096.767,
-            "entities_per_second": 4096767236,
+            "us_per_op": 0.256,
+            "ops_per_ms": 3900.237,
+            "entities_per_second": 3900237070,
             "bytes_per_op": null,
-            "score": 244.095,
+            "score": 256.395,
             "score_unit": "ns/op",
-            "score_error": 0.317
+            "score_error": 0.08
         },
         {
             "benchmark": "bevy.iteration.single_read.10000",
@@ -155,13 +429,13 @@
                 "entityCount": "10000"
             },
             "mode": "avgt",
-            "us_per_op": 2.106,
-            "ops_per_ms": 474.82,
-            "entities_per_second": 4748202701,
+            "us_per_op": 2.244,
+            "ops_per_ms": 445.641,
+            "entities_per_second": 4456406670,
             "bytes_per_op": null,
-            "score": 2106.06,
+            "score": 2243.96,
             "score_unit": "ns/op",
-            "score_error": 0.189
+            "score_error": 13.573
         },
         {
             "benchmark": "bevy.iteration.single_read.100000",
@@ -171,13 +445,13 @@
                 "entityCount": "100000"
             },
             "mode": "avgt",
-            "us_per_op": 20.786,
-            "ops_per_ms": 48.11,
-            "entities_per_second": 4810995418,
+            "us_per_op": 21.929,
+            "ops_per_ms": 45.603,
+            "entities_per_second": 4560260017,
             "bytes_per_op": null,
-            "score": 20785.719,
+            "score": 21928.574,
             "score_unit": "ns/op",
-            "score_error": 9.671
+            "score_error": 15.042
         },
         {
             "benchmark": "bevy.iteration.two_read.1000",
@@ -187,13 +461,13 @@
                 "entityCount": "1000"
             },
             "mode": "avgt",
-            "us_per_op": 0.381,
-            "ops_per_ms": 2623.185,
-            "entities_per_second": 2623185159,
+            "us_per_op": 0.392,
+            "ops_per_ms": 2552.063,
+            "entities_per_second": 2552062560,
             "bytes_per_op": null,
-            "score": 381.216,
+            "score": 391.84,
             "score_unit": "ns/op",
-            "score_error": 0.133
+            "score_error": 0.555
         },
         {
             "benchmark": "bevy.iteration.two_read.10000",
@@ -203,13 +477,13 @@
                 "entityCount": "10000"
             },
             "mode": "avgt",
-            "us_per_op": 3.602,
-            "ops_per_ms": 277.661,
-            "entities_per_second": 2776606666,
+            "us_per_op": 3.705,
+            "ops_per_ms": 269.921,
+            "entities_per_second": 2699211051,
             "bytes_per_op": null,
-            "score": 3601.518,
+            "score": 3704.786,
             "score_unit": "ns/op",
-            "score_error": 1.931
+            "score_error": 6.371
         },
         {
             "benchmark": "bevy.iteration.two_read.100000",
@@ -219,13 +493,13 @@
                 "entityCount": "100000"
             },
             "mode": "avgt",
-            "us_per_op": 35.713,
-            "ops_per_ms": 28.001,
-            "entities_per_second": 2800132768,
+            "us_per_op": 36.289,
+            "ops_per_ms": 27.557,
+            "entities_per_second": 2755661701,
             "bytes_per_op": null,
-            "score": 35712.592,
+            "score": 36288.925,
             "score_unit": "ns/op",
-            "score_error": 8.974
+            "score_error": 58.987
         },
         {
             "benchmark": "bevy.nbody.one_tick.1000",
@@ -235,13 +509,13 @@
                 "entityCount": "1000"
             },
             "mode": "avgt",
-            "us_per_op": 0.874,
-            "ops_per_ms": 1144.335,
-            "entities_per_second": 1144334785,
+            "us_per_op": 0.883,
+            "ops_per_ms": 1132.451,
+            "entities_per_second": 1132450860,
             "bytes_per_op": null,
-            "score": 873.87,
+            "score": 883.041,
             "score_unit": "ns/op",
-            "score_error": 0.361
+            "score_error": 0.89
         },
         {
             "benchmark": "bevy.nbody.one_tick.10000",
@@ -251,13 +525,13 @@
                 "entityCount": "10000"
             },
             "mode": "avgt",
-            "us_per_op": 8.651,
-            "ops_per_ms": 115.599,
-            "entities_per_second": 1155991207,
+            "us_per_op": 8.783,
+            "ops_per_ms": 113.859,
+            "entities_per_second": 1138592879,
             "bytes_per_op": null,
-            "score": 8650.585,
+            "score": 8782.771,
             "score_unit": "ns/op",
-            "score_error": 2.815
+            "score_error": 13.294
         },
         {
             "benchmark": "bevy.nbody.ten_ticks.1000",
@@ -267,13 +541,13 @@
                 "entityCount": "1000"
             },
             "mode": "avgt",
-            "us_per_op": 8.771,
-            "ops_per_ms": 114.007,
-            "entities_per_second": 114006588,
+            "us_per_op": 8.808,
+            "ops_per_ms": 113.531,
+            "entities_per_second": 113530922,
             "bytes_per_op": null,
-            "score": 8771.423,
+            "score": 8808.173,
             "score_unit": "ns/op",
-            "score_error": 6.214
+            "score_error": 4.695
         },
         {
             "benchmark": "bevy.nbody.ten_ticks.10000",
@@ -283,13 +557,13 @@
                 "entityCount": "10000"
             },
             "mode": "avgt",
-            "us_per_op": 86.317,
-            "ops_per_ms": 11.585,
-            "entities_per_second": 115852396,
+            "us_per_op": 87.636,
+            "ops_per_ms": 11.411,
+            "entities_per_second": 114108682,
             "bytes_per_op": null,
-            "score": 86316.73,
+            "score": 87635.75,
             "score_unit": "ns/op",
-            "score_error": 58.593
+            "score_error": 76.379
         },
         {
             "benchmark": "bevy.predator_prey.naive_tick.pred_1000_prey_2000",
@@ -300,13 +574,13 @@
                 "preyPerPredator": "2000"
             },
             "mode": "avgt",
-            "us_per_op": 457.548,
-            "ops_per_ms": 2.186,
-            "entities_per_second": 4371122488,
+            "us_per_op": 466.717,
+            "ops_per_ms": 2.143,
+            "entities_per_second": 4285254038,
             "bytes_per_op": null,
-            "score": 457548.377,
+            "score": 466716.788,
             "score_unit": "ns/op",
-            "score_error": 1657.057
+            "score_error": 1351.532
         },
         {
             "benchmark": "bevy.predator_prey.naive_tick.pred_1000_prey_500",
@@ -317,13 +591,13 @@
                 "preyPerPredator": "500"
             },
             "mode": "avgt",
-            "us_per_op": 120.543,
-            "ops_per_ms": 8.296,
-            "entities_per_second": 4147899675,
+            "us_per_op": 123.755,
+            "ops_per_ms": 8.08,
+            "entities_per_second": 4040246512,
             "bytes_per_op": null,
-            "score": 120542.935,
+            "score": 123754.825,
             "score_unit": "ns/op",
-            "score_error": 416.391
+            "score_error": 224.411
         },
         {
             "benchmark": "bevy.predator_prey.naive_tick.pred_1000_prey_5000",
@@ -334,13 +608,13 @@
                 "preyPerPredator": "5000"
             },
             "mode": "avgt",
-            "us_per_op": 1126.267,
-            "ops_per_ms": 0.888,
-            "entities_per_second": 4439446095,
+            "us_per_op": 1169.508,
+            "ops_per_ms": 0.855,
+            "entities_per_second": 4275300447,
             "bytes_per_op": null,
-            "score": 1126266.632,
+            "score": 1169508.45,
             "score_unit": "ns/op",
-            "score_error": 1937.01
+            "score_error": 3896.926
         },
         {
             "benchmark": "bevy.predator_prey.naive_tick.pred_100_prey_2000",
@@ -351,13 +625,13 @@
                 "preyPerPredator": "2000"
             },
             "mode": "avgt",
-            "us_per_op": 53.984,
-            "ops_per_ms": 18.524,
-            "entities_per_second": 3704812418,
+            "us_per_op": 55.241,
+            "ops_per_ms": 18.103,
+            "entities_per_second": 3620500394,
             "bytes_per_op": null,
-            "score": 53983.84,
+            "score": 55240.983,
             "score_unit": "ns/op",
-            "score_error": 144.788
+            "score_error": 122.11
         },
         {
             "benchmark": "bevy.predator_prey.naive_tick.pred_100_prey_500",
@@ -368,13 +642,13 @@
                 "preyPerPredator": "500"
             },
             "mode": "avgt",
-            "us_per_op": 14.441,
-            "ops_per_ms": 69.248,
-            "entities_per_second": 3462406968,
+            "us_per_op": 14.927,
+            "ops_per_ms": 66.993,
+            "entities_per_second": 3349673033,
             "bytes_per_op": null,
-            "score": 14440.821,
+            "score": 14926.83,
             "score_unit": "ns/op",
-            "score_error": 32.547
+            "score_error": 20.676
         },
         {
             "benchmark": "bevy.predator_prey.naive_tick.pred_100_prey_5000",
@@ -385,13 +659,13 @@
                 "preyPerPredator": "5000"
             },
             "mode": "avgt",
-            "us_per_op": 130.011,
-            "ops_per_ms": 7.692,
-            "entities_per_second": 3845817840,
+            "us_per_op": 138.313,
+            "ops_per_ms": 7.23,
+            "entities_per_second": 3614996414,
             "bytes_per_op": null,
-            "score": 130011.358,
+            "score": 138312.724,
             "score_unit": "ns/op",
-            "score_error": 367.891
+            "score_error": 980.364
         },
         {
             "benchmark": "bevy.predator_prey.naive_tick.pred_500_prey_2000",
@@ -402,13 +676,13 @@
                 "preyPerPredator": "2000"
             },
             "mode": "avgt",
-            "us_per_op": 238.773,
-            "ops_per_ms": 4.188,
-            "entities_per_second": 4188076398,
+            "us_per_op": 243.181,
+            "ops_per_ms": 4.112,
+            "entities_per_second": 4112167595,
             "bytes_per_op": null,
-            "score": 238773.104,
+            "score": 243180.75,
             "score_unit": "ns/op",
-            "score_error": 897.46
+            "score_error": 564.149
         },
         {
             "benchmark": "bevy.predator_prey.naive_tick.pred_500_prey_500",
@@ -419,13 +693,13 @@
                 "preyPerPredator": "500"
             },
             "mode": "avgt",
-            "us_per_op": 62.885,
-            "ops_per_ms": 15.902,
-            "entities_per_second": 3975512695,
+            "us_per_op": 64.502,
+            "ops_per_ms": 15.503,
+            "entities_per_second": 3875860923,
             "bytes_per_op": null,
-            "score": 62884.971,
+            "score": 64501.798,
             "score_unit": "ns/op",
-            "score_error": 114.866
+            "score_error": 120.254
         },
         {
             "benchmark": "bevy.predator_prey.naive_tick.pred_500_prey_5000",
@@ -436,13 +710,13 @@
                 "preyPerPredator": "5000"
             },
             "mode": "avgt",
-            "us_per_op": 584.196,
-            "ops_per_ms": 1.712,
-            "entities_per_second": 4279383292,
+            "us_per_op": 598.897,
+            "ops_per_ms": 1.67,
+            "entities_per_second": 4174342426,
             "bytes_per_op": null,
-            "score": 584196.327,
+            "score": 598896.723,
             "score_unit": "ns/op",
-            "score_error": 863.098
+            "score_error": 1162.278
         },
         {
             "benchmark": "bevy.predator_prey.optimized_tick.pred_1000_prey_2000",
@@ -453,13 +727,13 @@
                 "preyPerPredator": "2000"
             },
             "mode": "avgt",
-            "us_per_op": 19.248,
-            "ops_per_ms": 51.953,
-            "entities_per_second": 103906512758,
+            "us_per_op": 19.406,
+            "ops_per_ms": 51.531,
+            "entities_per_second": 103062875680,
             "bytes_per_op": null,
-            "score": 19248.072,
+            "score": 19405.63,
             "score_unit": "ns/op",
-            "score_error": 84.43
+            "score_error": 81.154
         },
         {
             "benchmark": "bevy.predator_prey.optimized_tick.pred_1000_prey_500",
@@ -470,13 +744,13 @@
                 "preyPerPredator": "500"
             },
             "mode": "avgt",
-            "us_per_op": 12.918,
-            "ops_per_ms": 77.409,
-            "entities_per_second": 38704568036,
+            "us_per_op": 13.085,
+            "ops_per_ms": 76.425,
+            "entities_per_second": 38212311690,
             "bytes_per_op": null,
-            "score": 12918.372,
+            "score": 13084.788,
             "score_unit": "ns/op",
-            "score_error": 43.019
+            "score_error": 46.042
         },
         {
             "benchmark": "bevy.predator_prey.optimized_tick.pred_1000_prey_5000",
@@ -487,13 +761,13 @@
                 "preyPerPredator": "5000"
             },
             "mode": "avgt",
-            "us_per_op": 33.092,
-            "ops_per_ms": 30.219,
-            "entities_per_second": 151095560087,
+            "us_per_op": 32.191,
+            "ops_per_ms": 31.065,
+            "entities_per_second": 155325134397,
             "bytes_per_op": null,
-            "score": 33091.641,
+            "score": 32190.54,
             "score_unit": "ns/op",
-            "score_error": 239.669
+            "score_error": 209.732
         },
         {
             "benchmark": "bevy.predator_prey.optimized_tick.pred_100_prey_2000",
@@ -504,13 +778,13 @@
                 "preyPerPredator": "2000"
             },
             "mode": "avgt",
-            "us_per_op": 3.922,
-            "ops_per_ms": 254.998,
-            "entities_per_second": 50999619449,
+            "us_per_op": 3.919,
+            "ops_per_ms": 255.191,
+            "entities_per_second": 51038252429,
             "bytes_per_op": null,
-            "score": 3921.598,
+            "score": 3918.629,
             "score_unit": "ns/op",
-            "score_error": 7.773
+            "score_error": 6.111
         },
         {
             "benchmark": "bevy.predator_prey.optimized_tick.pred_100_prey_500",
@@ -521,13 +795,13 @@
                 "preyPerPredator": "500"
             },
             "mode": "avgt",
-            "us_per_op": 2.014,
-            "ops_per_ms": 496.446,
-            "entities_per_second": 24822288687,
+            "us_per_op": 2.003,
+            "ops_per_ms": 499.202,
+            "entities_per_second": 24960104817,
             "bytes_per_op": null,
-            "score": 2014.319,
+            "score": 2003.197,
             "score_unit": "ns/op",
-            "score_error": 2.688
+            "score_error": 1.782
         },
         {
             "benchmark": "bevy.predator_prey.optimized_tick.pred_100_prey_5000",
@@ -538,13 +812,13 @@
                 "preyPerPredator": "5000"
             },
             "mode": "avgt",
-            "us_per_op": 7.488,
-            "ops_per_ms": 133.54,
-            "entities_per_second": 66769967876,
+            "us_per_op": 7.602,
+            "ops_per_ms": 131.548,
+            "entities_per_second": 65774194252,
             "bytes_per_op": null,
-            "score": 7488.397,
+            "score": 7601.765,
             "score_unit": "ns/op",
-            "score_error": 12.31
+            "score_error": 15.082
         },
         {
             "benchmark": "bevy.predator_prey.optimized_tick.pred_500_prey_2000",
@@ -555,13 +829,13 @@
                 "preyPerPredator": "2000"
             },
             "mode": "avgt",
-            "us_per_op": 10.962,
-            "ops_per_ms": 91.222,
-            "entities_per_second": 91221947287,
+            "us_per_op": 11.093,
+            "ops_per_ms": 90.144,
+            "entities_per_second": 90143564319,
             "bytes_per_op": null,
-            "score": 10962.274,
+            "score": 11093.415,
             "score_unit": "ns/op",
-            "score_error": 24.942
+            "score_error": 21.883
         },
         {
             "benchmark": "bevy.predator_prey.optimized_tick.pred_500_prey_500",
@@ -572,13 +846,13 @@
                 "preyPerPredator": "500"
             },
             "mode": "avgt",
-            "us_per_op": 6.978,
-            "ops_per_ms": 143.3,
-            "entities_per_second": 35825102322,
+            "us_per_op": 7.036,
+            "ops_per_ms": 142.125,
+            "entities_per_second": 35531170895,
             "bytes_per_op": null,
-            "score": 6978.347,
+            "score": 7036.075,
             "score_unit": "ns/op",
-            "score_error": 10.113
+            "score_error": 9.457
         },
         {
             "benchmark": "bevy.predator_prey.optimized_tick.pred_500_prey_5000",
@@ -589,13 +863,13 @@
                 "preyPerPredator": "5000"
             },
             "mode": "avgt",
-            "us_per_op": 18.718,
-            "ops_per_ms": 53.425,
-            "entities_per_second": 133561641595,
+            "us_per_op": 19.018,
+            "ops_per_ms": 52.583,
+            "entities_per_second": 131457298963,
             "bytes_per_op": null,
-            "score": 18717.949,
+            "score": 19017.582,
             "score_unit": "ns/op",
-            "score_error": 76.974
+            "score_error": 66.46
         },
         {
             "benchmark": "bevy.predator_prey.tick.pred_1000_prey_2000",
@@ -758,13 +1032,13 @@
                 "entityCount": "10000"
             },
             "mode": "avgt",
-            "us_per_op": 8.372,
-            "ops_per_ms": 119.45,
-            "entities_per_second": 1194495720,
+            "us_per_op": 8.544,
+            "ops_per_ms": 117.048,
+            "entities_per_second": 1170476255,
             "bytes_per_op": null,
-            "score": 8371.734,
+            "score": 8543.531,
             "score_unit": "ns/op",
-            "score_error": 5.566
+            "score_error": 11.12
         },
         {
             "benchmark": "bevy.realistic_tick.tick.100000",
@@ -774,13 +1048,13 @@
                 "entityCount": "100000"
             },
             "mode": "avgt",
-            "us_per_op": 73.358,
-            "ops_per_ms": 13.632,
-            "entities_per_second": 1363172231,
+            "us_per_op": 75.439,
+            "ops_per_ms": 13.256,
+            "entities_per_second": 1325577179,
             "bytes_per_op": null,
-            "score": 73358.302,
+            "score": 75438.836,
             "score_unit": "ns/op",
-            "score_error": 60.482
+            "score_error": 369.943
         },
         {
             "benchmark": "bevy.scenario.particle_tick.10000",
@@ -790,13 +1064,13 @@
                 "entityCount": "10000"
             },
             "mode": "avgt",
-            "us_per_op": 21.119,
-            "ops_per_ms": 47.351,
-            "entities_per_second": 473511835,
+            "us_per_op": 21.532,
+            "ops_per_ms": 46.442,
+            "entities_per_second": 464416336,
             "bytes_per_op": null,
-            "score": 21118.796,
+            "score": 21532.404,
             "score_unit": "ns/op",
-            "score_error": 62.344
+            "score_error": 68.603
         },
         {
             "benchmark": "bevy.sparse_delta.observe_changed_health.10000",
@@ -806,13 +1080,287 @@
                 "entityCount": "10000"
             },
             "mode": "avgt",
-            "us_per_op": 3.948,
-            "ops_per_ms": 253.304,
-            "entities_per_second": 2533038048,
+            "us_per_op": 4.0,
+            "ops_per_ms": 249.98,
+            "entities_per_second": 2499799374,
             "bytes_per_op": null,
-            "score": 3947.829,
+            "score": 4000.321,
             "score_unit": "ns/op",
-            "score_error": 6.671
+            "score_error": 7.896
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionIterationBenchmark.iterateSingleComponent",
+            "name": "iterateSingleComponent",
+            "implementation": "dominion",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 1.193,
+            "ops_per_ms": 838.548,
+            "entities_per_second": 838548040,
+            "bytes_per_op": 240.0,
+            "score": 838.548041,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionIterationBenchmark.iterateSingleComponent",
+            "name": "iterateSingleComponent",
+            "implementation": "dominion",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 11.562,
+            "ops_per_ms": 86.49,
+            "entities_per_second": 864900359,
+            "bytes_per_op": 240.1,
+            "score": 86.490036,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionIterationBenchmark.iterateSingleComponent",
+            "name": "iterateSingleComponent",
+            "implementation": "dominion",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 128.687,
+            "ops_per_ms": 7.771,
+            "entities_per_second": 777076622,
+            "bytes_per_op": 240.9,
+            "score": 7.770766,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionIterationBenchmark.iterateTwoComponents",
+            "name": "iterateTwoComponents",
+            "implementation": "dominion",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 2.026,
+            "ops_per_ms": 493.529,
+            "entities_per_second": 493529363,
+            "bytes_per_op": 288.0,
+            "score": 493.529363,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionIterationBenchmark.iterateTwoComponents",
+            "name": "iterateTwoComponents",
+            "implementation": "dominion",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 20.599,
+            "ops_per_ms": 48.546,
+            "entities_per_second": 485457002,
+            "bytes_per_op": 288.1,
+            "score": 48.5457,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionIterationBenchmark.iterateTwoComponents",
+            "name": "iterateTwoComponents",
+            "implementation": "dominion",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 216.158,
+            "ops_per_ms": 4.626,
+            "entities_per_second": 462624328,
+            "bytes_per_op": 304.2,
+            "score": 4.626243,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionIterationBenchmark.iterateWithWrite",
+            "name": "iterateWithWrite",
+            "implementation": "dominion",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 2.381,
+            "ops_per_ms": 420.061,
+            "entities_per_second": 420060804,
+            "bytes_per_op": 288.0,
+            "score": 420.060804,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionIterationBenchmark.iterateWithWrite",
+            "name": "iterateWithWrite",
+            "implementation": "dominion",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 23.447,
+            "ops_per_ms": 42.649,
+            "entities_per_second": 426491742,
+            "bytes_per_op": 288.2,
+            "score": 42.649174,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionIterationBenchmark.iterateWithWrite",
+            "name": "iterateWithWrite",
+            "implementation": "dominion",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 241.82,
+            "ops_per_ms": 4.135,
+            "entities_per_second": 413531265,
+            "bytes_per_op": 313.3,
+            "score": 4.135313,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionNBodyBenchmark.simulateOneTick",
+            "name": "simulateOneTick",
+            "implementation": "dominion",
+            "params": {
+                "bodyCount": "1000"
+            },
+            "mode": "avgt",
+            "us_per_op": 2.495,
+            "ops_per_ms": 400.88,
+            "entities_per_second": 400879589,
+            "bytes_per_op": 288.0,
+            "score": 0.002495,
+            "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionNBodyBenchmark.simulateOneTick",
+            "name": "simulateOneTick",
+            "implementation": "dominion",
+            "params": {
+                "bodyCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 24.265,
+            "ops_per_ms": 41.212,
+            "entities_per_second": 412119444,
+            "bytes_per_op": 288.1,
+            "score": 0.024265,
+            "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionNBodyBenchmark.simulateTenTicks",
+            "name": "simulateTenTicks",
+            "implementation": "dominion",
+            "params": {
+                "bodyCount": "1000"
+            },
+            "mode": "avgt",
+            "us_per_op": 24.744,
+            "ops_per_ms": 40.414,
+            "entities_per_second": 40414155,
+            "bytes_per_op": 2880.1,
+            "score": 0.024744,
+            "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionNBodyBenchmark.simulateTenTicks",
+            "name": "simulateTenTicks",
+            "implementation": "dominion",
+            "params": {
+                "bodyCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 246.37,
+            "ops_per_ms": 4.059,
+            "entities_per_second": 40589347,
+            "bytes_per_op": 2880.9,
+            "score": 0.24637,
+            "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionParticleScenarioBenchmark.tick",
+            "name": "tick",
+            "implementation": "dominion",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 69.239,
+            "ops_per_ms": 14.443,
+            "entities_per_second": 144426554,
+            "bytes_per_op": 23555.5,
+            "score": 14.442655,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionRealisticTickBenchmark.tick",
+            "name": "tick",
+            "implementation": "dominion",
+            "params": {
+                "entityCount": "10000",
+                "executor": "st"
+            },
+            "mode": "thrpt",
+            "us_per_op": 45.125,
+            "ops_per_ms": 22.16,
+            "entities_per_second": 221604771,
+            "bytes_per_op": 845.2,
+            "score": 22.160477,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionRealisticTickBenchmark.tick",
+            "name": "tick",
+            "implementation": "dominion",
+            "params": {
+                "entityCount": "100000",
+                "executor": "st"
+            },
+            "mode": "thrpt",
+            "us_per_op": 386.096,
+            "ops_per_ms": 2.59,
+            "entities_per_second": 259002817,
+            "bytes_per_op": 6920.7,
+            "score": 2.590028,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.dominion.DominionSparseDeltaBenchmark.tick",
+            "name": "tick",
+            "implementation": "dominion",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 0.373,
+            "ops_per_ms": 2682.843,
+            "entities_per_second": 26828434713,
+            "bytes_per_op": 1.3,
+            "score": 2682.843471,
+            "score_unit": "ops/ms",
+            "score_error": null
         },
         {
             "benchmark": "zzuegg.ecs.bench.macro.NBodyBenchmark.simulateOneTick",
@@ -822,11 +1370,11 @@
                 "bodyCount": "1000"
             },
             "mode": "avgt",
-            "us_per_op": 0.133,
-            "ops_per_ms": 7492.789,
-            "entities_per_second": 7492789239,
+            "us_per_op": 0.143,
+            "ops_per_ms": 7016.641,
+            "entities_per_second": 7016640805,
             "bytes_per_op": 0.0,
-            "score": 1.33E-4,
+            "score": 1.43E-4,
             "score_unit": "ms/op",
             "score_error": null
         },
@@ -838,12 +1386,1436 @@
                 "bodyCount": "10000"
             },
             "mode": "avgt",
-            "us_per_op": 1.647,
-            "ops_per_ms": 607.142,
-            "entities_per_second": 6071418642,
+            "us_per_op": 1.675,
+            "ops_per_ms": 596.985,
+            "entities_per_second": 5969848179,
             "bytes_per_op": 0.0,
-            "score": 0.001647,
+            "score": 0.001675,
             "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.macro.NBodyBenchmark.simulateTenTicks",
+            "name": "simulateTenTicks",
+            "implementation": "japes",
+            "params": {
+                "bodyCount": "1000"
+            },
+            "mode": "avgt",
+            "us_per_op": 1.396,
+            "ops_per_ms": 716.212,
+            "entities_per_second": 716211523,
+            "bytes_per_op": 0.0,
+            "score": 0.001396,
+            "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.macro.NBodyBenchmark.simulateTenTicks",
+            "name": "simulateTenTicks",
+            "implementation": "japes",
+            "params": {
+                "bodyCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 16.821,
+            "ops_per_ms": 59.449,
+            "entities_per_second": 594493701,
+            "bytes_per_op": 0.1,
+            "score": 0.016821,
+            "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.C2FieldOrderBugBenchmark.allLong_control",
+            "name": "allLong_control",
+            "implementation": "japes",
+            "params": {
+                "count": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 0.524,
+            "ops_per_ms": 1907.671,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 524.19941,
+            "score_unit": "ns/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.C2FieldOrderBugBenchmark.mixedA_int_float_double_long",
+            "name": "mixedA_int_float_double_long",
+            "implementation": "japes",
+            "params": {
+                "count": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 1.466,
+            "ops_per_ms": 682.025,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 1466.222128,
+            "score_unit": "ns/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.C2FieldOrderBugBenchmark.mixedB_double_long_int_float",
+            "name": "mixedB_double_long_int_float",
+            "implementation": "japes",
+            "params": {
+                "count": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 1.446,
+            "ops_per_ms": 691.363,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 1446.417492,
+            "score_unit": "ns/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.C2FieldOrderBugBenchmark.mixedC_long_double_float_int",
+            "name": "mixedC_long_double_float_int",
+            "implementation": "japes",
+            "params": {
+                "count": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 1.433,
+            "ops_per_ms": 697.757,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 1433.164375,
+            "score_unit": "ns/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.C2FieldOrderBugBenchmark.mixedD_int_float_long_double",
+            "name": "mixedD_int_float_long_double",
+            "implementation": "japes",
+            "params": {
+                "count": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 1.45,
+            "ops_per_ms": 689.469,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 1450.390664,
+            "score_unit": "ns/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.ChangeDetectionBenchmark.changedFilterAllEntitiesDirty",
+            "name": "changedFilterAllEntitiesDirty",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 57.957,
+            "ops_per_ms": 17.254,
+            "entities_per_second": 172543180,
+            "bytes_per_op": 4260754.8,
+            "score": 17.254318,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.ChangeDetectionBenchmark.removedComponentsDrainAfterBulkDespawn",
+            "name": "removedComponentsDrainAfterBulkDespawn",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 373.64,
+            "ops_per_ms": 2.676,
+            "entities_per_second": 26763696,
+            "bytes_per_op": 4675631.9,
+            "score": 2.67637,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAFieldCountBenchmark.fields1",
+            "name": "fields1",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 2.102,
+            "ops_per_ms": 475.73,
+            "entities_per_second": 4757304298,
+            "bytes_per_op": 141.1,
+            "score": 475.73043,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAFieldCountBenchmark.fields2",
+            "name": "fields2",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 2.111,
+            "ops_per_ms": 473.672,
+            "entities_per_second": 4736721425,
+            "bytes_per_op": 135.7,
+            "score": 473.672143,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAFieldCountBenchmark.fields3",
+            "name": "fields3",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 2.118,
+            "ops_per_ms": 472.168,
+            "entities_per_second": 4721678284,
+            "bytes_per_op": 181.5,
+            "score": 472.167828,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAFieldCountBenchmark.fields4",
+            "name": "fields4",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 3.88,
+            "ops_per_ms": 257.743,
+            "entities_per_second": 2577431524,
+            "bytes_per_op": 321031.3,
+            "score": 257.743152,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAFieldCountBenchmark.fields5",
+            "name": "fields5",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 3.948,
+            "ops_per_ms": 253.269,
+            "entities_per_second": 2532687066,
+            "bytes_per_op": 321028.8,
+            "score": 253.268707,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAFieldCountBenchmark.fields6",
+            "name": "fields6",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.079,
+            "ops_per_ms": 245.16,
+            "entities_per_second": 2451597978,
+            "bytes_per_op": 361254.0,
+            "score": 245.159798,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAFieldCountBenchmark.fields8",
+            "name": "fields8",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.092,
+            "ops_per_ms": 244.393,
+            "entities_per_second": 2443926102,
+            "bytes_per_op": 401400.2,
+            "score": 244.39261,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressCommandsBenchmark.writeAndCommands",
+            "name": "writeAndCommands",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.219,
+            "ops_per_ms": 237.042,
+            "entities_per_second": null,
+            "bytes_per_op": 442.2,
+            "score": 237.0415,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressCommandsBenchmark.writeAndCommandsSpawn",
+            "name": "writeAndCommandsSpawn",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 234.671,
+            "ops_per_ms": 4.261,
+            "entities_per_second": null,
+            "bytes_per_op": 63804.3,
+            "score": 4.261276,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressCommandsBenchmark.writeAndEntity",
+            "name": "writeAndEntity",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 6.569,
+            "ops_per_ms": 152.227,
+            "entities_per_second": null,
+            "bytes_per_op": 713.6,
+            "score": 152.227122,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressCommandsBenchmark.writeOnly",
+            "name": "writeOnly",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.209,
+            "ops_per_ms": 237.595,
+            "entities_per_second": null,
+            "bytes_per_op": 445.1,
+            "score": 237.594919,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressCommandsBenchmark.writeResCommands",
+            "name": "writeResCommands",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 10.716,
+            "ops_per_ms": 93.319,
+            "entities_per_second": null,
+            "bytes_per_op": 1310.2,
+            "score": 93.318784,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressComplexRecordBenchmark.activeSingleBoolean",
+            "name": "activeSingleBoolean",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 0.756,
+            "ops_per_ms": 1322.275,
+            "entities_per_second": 13222747623,
+            "bytes_per_op": 0.0,
+            "score": 1322.274762,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressComplexRecordBenchmark.bigState6Floats",
+            "name": "bigState6Floats",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 23.335,
+            "ops_per_ms": 42.855,
+            "entities_per_second": 428545070,
+            "bytes_per_op": 0.2,
+            "score": 42.854507,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressComplexRecordBenchmark.flagsBooleanInt",
+            "name": "flagsBooleanInt",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.497,
+            "ops_per_ms": 222.365,
+            "entities_per_second": 2223648131,
+            "bytes_per_op": 0.0,
+            "score": 222.364813,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressComplexRecordBenchmark.mixed4Types",
+            "name": "mixed4Types",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.789,
+            "ops_per_ms": 208.798,
+            "entities_per_second": 2087978008,
+            "bytes_per_op": 0.0,
+            "score": 208.797801,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressComplexRecordBenchmark.timer2Longs",
+            "name": "timer2Longs",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 5.717,
+            "ops_per_ms": 174.924,
+            "entities_per_second": 1749239673,
+            "bytes_per_op": 0.0,
+            "score": 174.923967,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressGetAfterSetBenchmark.p1_getBeforeSet",
+            "name": "p1_getBeforeSet",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 0.463,
+            "ops_per_ms": 2159.169,
+            "entities_per_second": 21591690826,
+            "bytes_per_op": 0.0,
+            "score": 2159.169083,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressGetAfterSetBenchmark.p2_getAfterSet",
+            "name": "p2_getAfterSet",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 1.003,
+            "ops_per_ms": 997.055,
+            "entities_per_second": 9970546884,
+            "bytes_per_op": 0.0,
+            "score": 997.054688,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressGetAfterSetBenchmark.p3_setGetSet",
+            "name": "p3_setGetSet",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 0.236,
+            "ops_per_ms": 4233.858,
+            "entities_per_second": 42338580046,
+            "bytes_per_op": 0.0,
+            "score": 4233.858005,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressGetAfterSetBenchmark.p4_conditionalDoubleGet",
+            "name": "p4_conditionalDoubleGet",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 1.574,
+            "ops_per_ms": 635.261,
+            "entities_per_second": 6352614837,
+            "bytes_per_op": 0.0,
+            "score": 635.261484,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressGetAfterSetBenchmark.p5_loopGetSet",
+            "name": "p5_loopGetSet",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 1.118,
+            "ops_per_ms": 894.246,
+            "entities_per_second": 8942459018,
+            "bytes_per_op": 0.0,
+            "score": 894.245902,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressMegamorphicBenchmark.systems_01",
+            "name": "systems_01",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 0.043,
+            "ops_per_ms": 23182.166,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 0.043137,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressMegamorphicBenchmark.systems_03",
+            "name": "systems_03",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 0.117,
+            "ops_per_ms": 8574.674,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 0.116623,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressMegamorphicBenchmark.systems_06",
+            "name": "systems_06",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 0.235,
+            "ops_per_ms": 4263.209,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 0.234565,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressMegamorphicBenchmark.systems_06_staged",
+            "name": "systems_06_staged",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 0.243,
+            "ops_per_ms": 4121.307,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 0.242642,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressMegamorphicBenchmark.systems_10",
+            "name": "systems_10",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 0.474,
+            "ops_per_ms": 2110.7,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 0.473776,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressMegamorphicBenchmark.systems_20",
+            "name": "systems_20",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 1.014,
+            "ops_per_ms": 986.39,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 1.013797,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressMultiWriteBenchmark.crossWrite",
+            "name": "crossWrite",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 1.001,
+            "ops_per_ms": 998.639,
+            "entities_per_second": 9986387204,
+            "bytes_per_op": 0.0,
+            "score": 1.001363,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressMultiWriteBenchmark.dualWrite",
+            "name": "dualWrite",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 1.388,
+            "ops_per_ms": 720.336,
+            "entities_per_second": 7203356228,
+            "bytes_per_op": 0.0,
+            "score": 1.388242,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressMultiWriteBenchmark.identityWrite",
+            "name": "identityWrite",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 0.067,
+            "ops_per_ms": 14938.52,
+            "entities_per_second": 149385204475,
+            "bytes_per_op": 0.0,
+            "score": 0.066941,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressMultiWriteBenchmark.mixedReadWrite",
+            "name": "mixedReadWrite",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 1.731,
+            "ops_per_ms": 577.751,
+            "entities_per_second": 5777506374,
+            "bytes_per_op": 0.0,
+            "score": 1.730851,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressMultiWriteBenchmark.quadWrite",
+            "name": "quadWrite",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 2.942,
+            "ops_per_ms": 339.933,
+            "entities_per_second": 3399326476,
+            "bytes_per_op": 0.0,
+            "score": 2.941759,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressNonSoABenchmark.writeLabel",
+            "name": "writeLabel",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 21.78,
+            "ops_per_ms": 45.914,
+            "entities_per_second": 459141646,
+            "bytes_per_op": 75898.0,
+            "score": 45.914165,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressNonSoABenchmark.writeMixed",
+            "name": "writeMixed",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 22.885,
+            "ops_per_ms": 43.697,
+            "entities_per_second": 436965012,
+            "bytes_per_op": 83651.8,
+            "score": 43.696501,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressNonSoABenchmark.writePrimForced",
+            "name": "writePrimForced",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 14.024,
+            "ops_per_ms": 71.306,
+            "entities_per_second": 713064696,
+            "bytes_per_op": 25700.3,
+            "score": 71.30647,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressNonSoABenchmark.writePrimLabel",
+            "name": "writePrimLabel",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.502,
+            "ops_per_ms": 222.14,
+            "entities_per_second": 2221398141,
+            "bytes_per_op": 572.7,
+            "score": 222.139814,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressNonSoABenchmark.writePrimMixed",
+            "name": "writePrimMixed",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.962,
+            "ops_per_ms": 201.53,
+            "entities_per_second": 2015295513,
+            "bytes_per_op": 707.0,
+            "score": 201.529551,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressNonSoABenchmark.writePrimNatural",
+            "name": "writePrimNatural",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.544,
+            "ops_per_ms": 220.087,
+            "entities_per_second": 2200873541,
+            "bytes_per_op": 628.3,
+            "score": 220.087354,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressNonSoABenchmark.writePrimRef",
+            "name": "writePrimRef",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.562,
+            "ops_per_ms": 219.204,
+            "entities_per_second": 2192035840,
+            "bytes_per_op": 608.9,
+            "score": 219.203584,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressNonSoABenchmark.writeRef",
+            "name": "writeRef",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 11.597,
+            "ops_per_ms": 86.233,
+            "entities_per_second": 862325910,
+            "bytes_per_op": 33693.7,
+            "score": 86.232591,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressObserverBenchmark.largeRecord",
+            "name": "largeRecord",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 8.771,
+            "ops_per_ms": 114.01,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 114.009543,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressObserverBenchmark.read1",
+            "name": "read1",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 9.705,
+            "ops_per_ms": 103.044,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 103.043958,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressObserverBenchmark.read3",
+            "name": "read3",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 9.424,
+            "ops_per_ms": 106.11,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 106.109792,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressObserverBenchmark.read3Ignored",
+            "name": "read3Ignored",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 9.387,
+            "ops_per_ms": 106.536,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 106.535704,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressObserverBenchmark.read3Used",
+            "name": "read3Used",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 10.166,
+            "ops_per_ms": 98.37,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 98.369741,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressObserverBenchmark.read4",
+            "name": "read4",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 9.543,
+            "ops_per_ms": 104.789,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 104.78949,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressObserverBenchmark.twoObservers",
+            "name": "twoObservers",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 10.675,
+            "ops_per_ms": 93.679,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 93.678919,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressPairWriteBenchmark.p1_writeVelocity2f",
+            "name": "p1_writeVelocity2f",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 3.313,
+            "ops_per_ms": 301.816,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 3.313276,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressPairWriteBenchmark.p2_writePosition3f",
+            "name": "p2_writePosition3f",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 4.372,
+            "ops_per_ms": 228.712,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 4.372307,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressPairWriteBenchmark.p3_writeSingleInt",
+            "name": "p3_writeSingleInt",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 2.98,
+            "ops_per_ms": 335.577,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 2.979943,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressPairWriteBenchmark.p4_readPosWriteVel",
+            "name": "p4_readPosWriteVel",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 4.538,
+            "ops_per_ms": 220.346,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 4.538316,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressPairWriteBenchmark.p5_crossEntityReadWrite",
+            "name": "p5_crossEntityReadWrite",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 5.442,
+            "ops_per_ms": 183.749,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 5.442213,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressPairWriteBenchmark.p6_dualSourceWrite",
+            "name": "p6_dualSourceWrite",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 3.881,
+            "ops_per_ms": 257.633,
+            "entities_per_second": null,
+            "bytes_per_op": 0.0,
+            "score": 3.881489,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressScalingBenchmark.chunkBoundary_size1024",
+            "name": "chunkBoundary_size1024",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 4.308,
+            "ops_per_ms": 232.12,
+            "entities_per_second": 2321197342,
+            "bytes_per_op": 0.0,
+            "score": 4.308121,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressScalingBenchmark.chunkBoundary_size64",
+            "name": "chunkBoundary_size64",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 5.227,
+            "ops_per_ms": 191.326,
+            "entities_per_second": 1913261410,
+            "bytes_per_op": 0.0,
+            "score": 5.226677,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressScalingBenchmark.denseWrite_100pct",
+            "name": "denseWrite_100pct",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "100"
+            },
+            "mode": "avgt",
+            "us_per_op": 0.03,
+            "ops_per_ms": 33048.221,
+            "entities_per_second": 3304822143,
+            "bytes_per_op": 0.0,
+            "score": 0.030259,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressScalingBenchmark.denseWrite_100pct",
+            "name": "denseWrite_100pct",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "avgt",
+            "us_per_op": 0.042,
+            "ops_per_ms": 24070.529,
+            "entities_per_second": 24070529300,
+            "bytes_per_op": 0.0,
+            "score": 0.041545,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressScalingBenchmark.denseWrite_100pct",
+            "name": "denseWrite_100pct",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 0.478,
+            "ops_per_ms": 2094.085,
+            "entities_per_second": 20940854486,
+            "bytes_per_op": 0.0,
+            "score": 0.477535,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressScalingBenchmark.denseWrite_100pct",
+            "name": "denseWrite_100pct",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "avgt",
+            "us_per_op": 4.574,
+            "ops_per_ms": 218.612,
+            "entities_per_second": 21861180652,
+            "bytes_per_op": 0.0,
+            "score": 4.574318,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressScalingBenchmark.denseWrite_100pct",
+            "name": "denseWrite_100pct",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "1000000"
+            },
+            "mode": "avgt",
+            "us_per_op": 59.092,
+            "ops_per_ms": 16.923,
+            "entities_per_second": 16922734106,
+            "bytes_per_op": 0.4,
+            "score": 59.092106,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressScalingBenchmark.sparseWrite_10pct",
+            "name": "sparseWrite_10pct",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "100"
+            },
+            "mode": "avgt",
+            "us_per_op": 0.068,
+            "ops_per_ms": 14625.604,
+            "entities_per_second": 1462560375,
+            "bytes_per_op": 0.0,
+            "score": 0.068373,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressScalingBenchmark.sparseWrite_10pct",
+            "name": "sparseWrite_10pct",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "avgt",
+            "us_per_op": 0.444,
+            "ops_per_ms": 2249.929,
+            "entities_per_second": 2249928568,
+            "bytes_per_op": 0.0,
+            "score": 0.444459,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressScalingBenchmark.sparseWrite_10pct",
+            "name": "sparseWrite_10pct",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 4.349,
+            "ops_per_ms": 229.954,
+            "entities_per_second": 2299541422,
+            "bytes_per_op": 0.0,
+            "score": 4.348693,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressScalingBenchmark.sparseWrite_10pct",
+            "name": "sparseWrite_10pct",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "avgt",
+            "us_per_op": 41.759,
+            "ops_per_ms": 23.947,
+            "entities_per_second": 2394669284,
+            "bytes_per_op": 0.3,
+            "score": 41.75942,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressScalingBenchmark.sparseWrite_10pct",
+            "name": "sparseWrite_10pct",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "1000000"
+            },
+            "mode": "avgt",
+            "us_per_op": 439.282,
+            "ops_per_ms": 2.276,
+            "entities_per_second": 2276442239,
+            "bytes_per_op": 25.6,
+            "score": 439.281956,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressValueTrackedBenchmark.writeTrackedDiffWithObserver",
+            "name": "writeTrackedDiffWithObserver",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.262,
+            "ops_per_ms": 234.624,
+            "entities_per_second": 2346239527,
+            "bytes_per_op": 0.0,
+            "score": 234.623953,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressValueTrackedBenchmark.writeTrackedDifferentValue",
+            "name": "writeTrackedDifferentValue",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.368,
+            "ops_per_ms": 228.933,
+            "entities_per_second": 2289334138,
+            "bytes_per_op": 0.0,
+            "score": 228.933414,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressValueTrackedBenchmark.writeTrackedSameValue",
+            "name": "writeTrackedSameValue",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.4,
+            "ops_per_ms": 227.278,
+            "entities_per_second": 2272777488,
+            "bytes_per_op": 24.0,
+            "score": 227.277749,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EAStressValueTrackedBenchmark.writeUntracked",
+            "name": "writeUntracked",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.173,
+            "ops_per_ms": 239.61,
+            "entities_per_second": 2396097327,
+            "bytes_per_op": 0.0,
+            "score": 239.609733,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EntityBenchmark.bulkDespawn1k",
+            "name": "bulkDespawn1k",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 1.547167968E7,
+            "ops_per_ms": 0.0,
+            "entities_per_second": null,
+            "bytes_per_op": 366416.4,
+            "score": 0.064634,
+            "score_unit": "ops/us",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EntityBenchmark.bulkSpawn100k",
+            "name": "bulkSpawn100k",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.316538949498E9,
+            "ops_per_ms": 0.0,
+            "entities_per_second": null,
+            "bytes_per_op": 4.09077221E7,
+            "score": 2.32E-4,
+            "score_unit": "ops/us",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EntityBenchmark.bulkSpawn1k",
+            "name": "bulkSpawn1k",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.2874763851E7,
+            "ops_per_ms": 0.0,
+            "entities_per_second": null,
+            "bytes_per_op": 415232.3,
+            "score": 0.023324,
+            "score_unit": "ops/us",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.EntityBenchmark.singleSpawn",
+            "name": "singleSpawn",
+            "implementation": "japes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 919.784,
+            "ops_per_ms": 1.087,
+            "entities_per_second": null,
+            "bytes_per_op": 24.0,
+            "score": 1087.211202,
+            "score_unit": "ops/us",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.IterationBenchmark.iterateSingleComponent",
+            "name": "iterateSingleComponent",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 0.296,
+            "ops_per_ms": 3375.678,
+            "entities_per_second": 3375677895,
+            "bytes_per_op": 0.0,
+            "score": 3375.677895,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.IterationBenchmark.iterateSingleComponent",
+            "name": "iterateSingleComponent",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 2.866,
+            "ops_per_ms": 348.88,
+            "entities_per_second": 3488803614,
+            "bytes_per_op": 0.0,
+            "score": 348.880361,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.IterationBenchmark.iterateSingleComponent",
+            "name": "iterateSingleComponent",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 28.705,
+            "ops_per_ms": 34.838,
+            "entities_per_second": 3483751691,
+            "bytes_per_op": 0.2,
+            "score": 34.837517,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.IterationBenchmark.iterateTwoComponents",
+            "name": "iterateTwoComponents",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 0.601,
+            "ops_per_ms": 1663.435,
+            "entities_per_second": 1663435080,
+            "bytes_per_op": 0.0,
+            "score": 1663.435081,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.IterationBenchmark.iterateTwoComponents",
+            "name": "iterateTwoComponents",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 5.925,
+            "ops_per_ms": 168.763,
+            "entities_per_second": 1687625752,
+            "bytes_per_op": 0.0,
+            "score": 168.762575,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.IterationBenchmark.iterateTwoComponents",
+            "name": "iterateTwoComponents",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 60.543,
+            "ops_per_ms": 16.517,
+            "entities_per_second": 1651707516,
+            "bytes_per_op": 0.4,
+            "score": 16.517075,
+            "score_unit": "ops/ms",
             "score_error": null
         },
         {
@@ -854,11 +2826,11 @@
                 "entityCount": "1000"
             },
             "mode": "thrpt",
-            "us_per_op": 0.133,
-            "ops_per_ms": 7506.851,
-            "entities_per_second": 7506851376,
+            "us_per_op": 0.156,
+            "ops_per_ms": 6406.861,
+            "entities_per_second": 6406861137,
             "bytes_per_op": 0.0,
-            "score": 7506.851377,
+            "score": 6406.861137,
             "score_unit": "ops/ms",
             "score_error": null
         },
@@ -870,11 +2842,11 @@
                 "entityCount": "10000"
             },
             "mode": "thrpt",
-            "us_per_op": 1.608,
-            "ops_per_ms": 621.756,
-            "entities_per_second": 6217556112,
+            "us_per_op": 1.616,
+            "ops_per_ms": 618.7,
+            "entities_per_second": 6186997803,
             "bytes_per_op": 0.0,
-            "score": 621.755611,
+            "score": 618.69978,
             "score_unit": "ops/ms",
             "score_error": null
         },
@@ -886,11 +2858,1139 @@
                 "entityCount": "100000"
             },
             "mode": "thrpt",
-            "us_per_op": 23.496,
-            "ops_per_ms": 42.56,
-            "entities_per_second": 4255992680,
+            "us_per_op": 23.421,
+            "ops_per_ms": 42.696,
+            "entities_per_second": 4269600368,
             "bytes_per_op": 0.2,
-            "score": 42.559927,
+            "score": 42.696004,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.NestedRecordBenchmark.flatRead",
+            "name": "flatRead",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 10.361,
+            "ops_per_ms": 96.517,
+            "entities_per_second": 965169219,
+            "bytes_per_op": 0.1,
+            "score": 96.516922,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.NestedRecordBenchmark.flatWrite",
+            "name": "flatWrite",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 1.894,
+            "ops_per_ms": 527.984,
+            "entities_per_second": 5279843449,
+            "bytes_per_op": 0.0,
+            "score": 527.984345,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.NestedRecordBenchmark.nestedRead",
+            "name": "nestedRead",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 10.331,
+            "ops_per_ms": 96.794,
+            "entities_per_second": 967939154,
+            "bytes_per_op": 0.1,
+            "score": 96.793915,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.micro.NestedRecordBenchmark.nestedWrite",
+            "name": "nestedWrite",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 1.965,
+            "ops_per_ms": 509.023,
+            "entities_per_second": 5090230860,
+            "bytes_per_op": 0.0,
+            "score": 509.023086,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.scenario.ParticleScenarioBenchmark.tick",
+            "name": "tick",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 28.298,
+            "ops_per_ms": 35.338,
+            "entities_per_second": 353384289,
+            "bytes_per_op": 72583.4,
+            "score": 35.338429,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.scenario.PredatorPreyBenchmark.tick",
+            "name": "tick",
+            "implementation": "japes",
+            "params": {
+                "predatorCount": "500",
+                "preyCount": "2000"
+            },
+            "mode": "avgt",
+            "us_per_op": 31.822,
+            "ops_per_ms": 31.425,
+            "entities_per_second": null,
+            "bytes_per_op": 79756.5,
+            "score": 31.821662,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.scenario.PredatorPreyForEachPairBenchmark.tick",
+            "name": "tick",
+            "implementation": "japes",
+            "params": {
+                "predatorCount": "500",
+                "preyCount": "2000"
+            },
+            "mode": "avgt",
+            "us_per_op": 19.442,
+            "ops_per_ms": 51.434,
+            "entities_per_second": null,
+            "bytes_per_op": 9936.5,
+            "score": 19.442461,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.scenario.RealisticTickBenchmark.tick",
+            "name": "tick",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000",
+                "executor": "st"
+            },
+            "mode": "thrpt",
+            "us_per_op": 6.462,
+            "ops_per_ms": 154.741,
+            "entities_per_second": 1547414227,
+            "bytes_per_op": 11279.2,
+            "score": 154.741423,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.scenario.RealisticTickBenchmark.tick",
+            "name": "tick",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "100000",
+                "executor": "st"
+            },
+            "mode": "thrpt",
+            "us_per_op": 8.45,
+            "ops_per_ms": 118.341,
+            "entities_per_second": 11834102484,
+            "bytes_per_op": 11519.3,
+            "score": 118.341025,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.scenario.RealisticTickBenchmarkSoA.tick",
+            "name": "tick",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000",
+                "executor": "st",
+                "storage": "default"
+            },
+            "mode": "thrpt",
+            "us_per_op": 6.546,
+            "ops_per_ms": 152.769,
+            "entities_per_second": 1527691739,
+            "bytes_per_op": 11300.1,
+            "score": 152.769174,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.scenario.RealisticTickBenchmarkSoA.tick",
+            "name": "tick",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000",
+                "executor": "st",
+                "storage": "soa"
+            },
+            "mode": "thrpt",
+            "us_per_op": 6.314,
+            "ops_per_ms": 158.368,
+            "entities_per_second": 1583675244,
+            "bytes_per_op": 11293.4,
+            "score": 158.367524,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.scenario.SparseDeltaBenchmark.tick",
+            "name": "tick",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 1.752,
+            "ops_per_ms": 570.646,
+            "entities_per_second": 5706462363,
+            "bytes_per_op": 1638.2,
+            "score": 570.646236,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.scenario.UnifiedDeltaBenchmark.tick",
+            "name": "tick",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 423.079,
+            "ops_per_ms": 2.364,
+            "entities_per_second": 23636235,
+            "bytes_per_op": 202942.8,
+            "score": 2.363624,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.scenario.UnifiedDeltaBenchmark.tick",
+            "name": "tick",
+            "implementation": "japes",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 3909.031,
+            "ops_per_ms": 0.256,
+            "entities_per_second": 25581788,
+            "bytes_per_op": 1795043.4,
+            "score": 0.255818,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CodecOnlyBenchmark.deltaEncode",
+            "name": "deltaEncode",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 1.724,
+            "ops_per_ms": 580.195,
+            "entities_per_second": 580195376,
+            "bytes_per_op": 3237.9,
+            "score": 580.195377,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CodecOnlyBenchmark.deltaEncode",
+            "name": "deltaEncode",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 16.797,
+            "ops_per_ms": 59.535,
+            "entities_per_second": 595345127,
+            "bytes_per_op": 34678.7,
+            "score": 59.534513,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CodecOnlyBenchmark.deltaEncode",
+            "name": "deltaEncode",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 167.476,
+            "ops_per_ms": 5.971,
+            "entities_per_second": 597098776,
+            "bytes_per_op": 360305.3,
+            "score": 5.970988,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CodecOnlyBenchmark.fullDecode",
+            "name": "fullDecode",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 104.731,
+            "ops_per_ms": 9.548,
+            "entities_per_second": 9548304,
+            "bytes_per_op": 145067.6,
+            "score": 9.548304,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CodecOnlyBenchmark.fullDecode",
+            "name": "fullDecode",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 949.168,
+            "ops_per_ms": 1.054,
+            "entities_per_second": 10535545,
+            "bytes_per_op": 1351990.5,
+            "score": 1.053555,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CodecOnlyBenchmark.fullDecode",
+            "name": "fullDecode",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 9543.079,
+            "ops_per_ms": 0.105,
+            "entities_per_second": 10478798,
+            "bytes_per_op": 1.40073823E7,
+            "score": 0.104788,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CodecOnlyBenchmark.fullDecodeColumnar",
+            "name": "fullDecodeColumnar",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 105.962,
+            "ops_per_ms": 9.437,
+            "entities_per_second": 9437309,
+            "bytes_per_op": 148925.1,
+            "score": 9.43731,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CodecOnlyBenchmark.fullDecodeColumnar",
+            "name": "fullDecodeColumnar",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 1013.105,
+            "ops_per_ms": 0.987,
+            "entities_per_second": 9870644,
+            "bytes_per_op": 1391085.0,
+            "score": 0.987064,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CodecOnlyBenchmark.fullDecodeColumnar",
+            "name": "fullDecodeColumnar",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 10290.432,
+            "ops_per_ms": 0.097,
+            "entities_per_second": 9717765,
+            "bytes_per_op": 1.44765338E7,
+            "score": 0.097178,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CodecOnlyBenchmark.fullEncode",
+            "name": "fullEncode",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 83.644,
+            "ops_per_ms": 11.955,
+            "entities_per_second": 11955413,
+            "bytes_per_op": 47618.6,
+            "score": 11.955413,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CodecOnlyBenchmark.fullEncode",
+            "name": "fullEncode",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 787.653,
+            "ops_per_ms": 1.27,
+            "entities_per_second": 12695939,
+            "bytes_per_op": 379467.2,
+            "score": 1.269594,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CodecOnlyBenchmark.fullEncode",
+            "name": "fullEncode",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 7735.741,
+            "ops_per_ms": 0.129,
+            "entities_per_second": 12927009,
+            "bytes_per_op": 4317055.8,
+            "score": 0.12927,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CommandsAllocBenchmark.despawn100",
+            "name": "despawn100",
+            "implementation": "japes-sync",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 1.581,
+            "ops_per_ms": 632.588,
+            "entities_per_second": null,
+            "bytes_per_op": 74696.1,
+            "score": 1.580808,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CommandsAllocBenchmark.mixed150",
+            "name": "mixed150",
+            "implementation": "japes-sync",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 4.235,
+            "ops_per_ms": 236.138,
+            "entities_per_second": null,
+            "bytes_per_op": 147505.5,
+            "score": 4.234808,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CommandsAllocBenchmark.set100",
+            "name": "set100",
+            "implementation": "japes-sync",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 1.128,
+            "ops_per_ms": 886.408,
+            "entities_per_second": null,
+            "bytes_per_op": 2400.1,
+            "score": 1.128149,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CommandsAllocBenchmark.spawn100",
+            "name": "spawn100",
+            "implementation": "japes-sync",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 8.044,
+            "ops_per_ms": 124.309,
+            "entities_per_second": null,
+            "bytes_per_op": 41006.2,
+            "score": 8.044492,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.CommandsAllocBenchmark.steadyStateSet100",
+            "name": "steadyStateSet100",
+            "implementation": "japes-sync",
+            "params": {
+                
+            },
+            "mode": "avgt",
+            "us_per_op": 1.121,
+            "ops_per_ms": 891.669,
+            "entities_per_second": null,
+            "bytes_per_op": 2400.2,
+            "score": 1.121492,
+            "score_unit": "us/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.DbSyncBenchmark.deltaSync",
+            "name": "deltaSync",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 203.337,
+            "ops_per_ms": 4.918,
+            "entities_per_second": 4917940,
+            "bytes_per_op": 472691.7,
+            "score": 4.917941,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.DbSyncBenchmark.deltaSync",
+            "name": "deltaSync",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 2123.952,
+            "ops_per_ms": 0.471,
+            "entities_per_second": 4708203,
+            "bytes_per_op": 5224701.7,
+            "score": 0.47082,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.DbSyncBenchmark.deltaSync",
+            "name": "deltaSync",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 56577.666,
+            "ops_per_ms": 0.018,
+            "entities_per_second": 1767481,
+            "bytes_per_op": 1.819108501E8,
+            "score": 0.017675,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.DbSyncBenchmark.fullSync",
+            "name": "fullSync",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 6735.493,
+            "ops_per_ms": 0.148,
+            "entities_per_second": 148467,
+            "bytes_per_op": 2.61805836E7,
+            "score": 0.148467,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.DbSyncBenchmark.fullSync",
+            "name": "fullSync",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 93259.614,
+            "ops_per_ms": 0.011,
+            "entities_per_second": 107227,
+            "bytes_per_op": 2.860403479E8,
+            "score": 0.010723,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.DbSyncBenchmark.fullSync",
+            "name": "fullSync",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 790184.353,
+            "ops_per_ms": 0.001,
+            "entities_per_second": 126552,
+            "bytes_per_op": 2.738826016E9,
+            "score": 0.001266,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.NetworkSyncBenchmark.deltaSync",
+            "name": "deltaSync",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 9.361,
+            "ops_per_ms": 106.822,
+            "entities_per_second": 106822497,
+            "bytes_per_op": 16134.0,
+            "score": 106.822497,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.NetworkSyncBenchmark.deltaSync",
+            "name": "deltaSync",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 66.741,
+            "ops_per_ms": 14.983,
+            "entities_per_second": 149833100,
+            "bytes_per_op": 150744.8,
+            "score": 14.98331,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.NetworkSyncBenchmark.deltaSyncDirect",
+            "name": "deltaSyncDirect",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.89,
+            "ops_per_ms": 204.515,
+            "entities_per_second": 204514639,
+            "bytes_per_op": 2856.0,
+            "score": 204.514639,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.NetworkSyncBenchmark.deltaSyncDirect",
+            "name": "deltaSyncDirect",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 24.833,
+            "ops_per_ms": 40.268,
+            "entities_per_second": 402683688,
+            "bytes_per_op": 25660.7,
+            "score": 40.268369,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.NetworkSyncBenchmark.fullSync",
+            "name": "fullSync",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 602.911,
+            "ops_per_ms": 1.659,
+            "entities_per_second": 1658620,
+            "bytes_per_op": 1597149.8,
+            "score": 1.65862,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.NetworkSyncBenchmark.fullSync",
+            "name": "fullSync",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 6104.628,
+            "ops_per_ms": 0.164,
+            "entities_per_second": 1638101,
+            "bytes_per_op": 1.59618884E7,
+            "score": 0.16381,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.NetworkSyncBenchmark.fullSyncDirect",
+            "name": "fullSyncDirect",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 206.606,
+            "ops_per_ms": 4.84,
+            "entities_per_second": 4840141,
+            "bytes_per_op": 309660.4,
+            "score": 4.840141,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.sync.NetworkSyncBenchmark.fullSyncDirect",
+            "name": "fullSyncDirect",
+            "implementation": "japes-sync",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 1988.907,
+            "ops_per_ms": 0.503,
+            "entities_per_second": 5027886,
+            "bytes_per_op": 3851058.3,
+            "score": 0.502789,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsChangeDetectionBenchmark.changedAfterBulkUpdate",
+            "name": "changedAfterBulkUpdate",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 506.875,
+            "ops_per_ms": 1.973,
+            "entities_per_second": 19728717,
+            "bytes_per_op": 5560155.3,
+            "score": 1.972872,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsChangeDetectionBenchmark.fullRoundtripAddChangeRemove",
+            "name": "fullRoundtripAddChangeRemove",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 98.274,
+            "ops_per_ms": 10.176,
+            "entities_per_second": 101756079,
+            "bytes_per_op": 4153016.7,
+            "score": 10.175608,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsChangeDetectionBenchmark.removedAfterBulkDespawn",
+            "name": "removedAfterBulkDespawn",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 549.838,
+            "ops_per_ms": 1.819,
+            "entities_per_second": 18187176,
+            "bytes_per_op": 4200120.9,
+            "score": 1.818718,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsEntityBenchmark.bulkDespawn1k",
+            "name": "bulkDespawn1k",
+            "implementation": "zayes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 1.9179719987E7,
+            "ops_per_ms": 0.0,
+            "entities_per_second": null,
+            "bytes_per_op": 224616.5,
+            "score": 0.052138,
+            "score_unit": "ops/us",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsEntityBenchmark.bulkSpawn100k",
+            "name": "bulkSpawn100k",
+            "implementation": "zayes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 5.703816998979E9,
+            "ops_per_ms": 0.0,
+            "entities_per_second": null,
+            "bytes_per_op": 1.0099878E7,
+            "score": 1.75E-4,
+            "score_unit": "ops/us",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsEntityBenchmark.bulkSpawn1k",
+            "name": "bulkSpawn1k",
+            "implementation": "zayes",
+            "params": {
+                
+            },
+            "mode": "thrpt",
+            "us_per_op": 5.6994254428E7,
+            "ops_per_ms": 0.0,
+            "entities_per_second": null,
+            "bytes_per_op": 230956.4,
+            "score": 0.017546,
+            "score_unit": "ops/us",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsIterationBenchmark.iterateSingleComponent",
+            "name": "iterateSingleComponent",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 2.971,
+            "ops_per_ms": 336.581,
+            "entities_per_second": 336580934,
+            "bytes_per_op": 32.0,
+            "score": 336.580935,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsIterationBenchmark.iterateSingleComponent",
+            "name": "iterateSingleComponent",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 28.195,
+            "ops_per_ms": 35.467,
+            "entities_per_second": 354669827,
+            "bytes_per_op": 32.2,
+            "score": 35.466983,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsIterationBenchmark.iterateSingleComponent",
+            "name": "iterateSingleComponent",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 427.052,
+            "ops_per_ms": 2.342,
+            "entities_per_second": 234163395,
+            "bytes_per_op": 35.0,
+            "score": 2.341634,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsIterationBenchmark.iterateTwoComponents",
+            "name": "iterateTwoComponents",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 3.818,
+            "ops_per_ms": 261.908,
+            "entities_per_second": 261908080,
+            "bytes_per_op": 32.0,
+            "score": 261.908081,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsIterationBenchmark.iterateTwoComponents",
+            "name": "iterateTwoComponents",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 41.8,
+            "ops_per_ms": 23.923,
+            "entities_per_second": 239233960,
+            "bytes_per_op": 32.3,
+            "score": 23.923396,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsIterationBenchmark.iterateTwoComponents",
+            "name": "iterateTwoComponents",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 541.335,
+            "ops_per_ms": 1.847,
+            "entities_per_second": 184728510,
+            "bytes_per_op": 35.8,
+            "score": 1.847285,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsIterationBenchmark.iterateWithWrite",
+            "name": "iterateWithWrite",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "1000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 156.759,
+            "ops_per_ms": 6.379,
+            "entities_per_second": 6379221,
+            "bytes_per_op": 160065.1,
+            "score": 6.379222,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsIterationBenchmark.iterateWithWrite",
+            "name": "iterateWithWrite",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 2070.936,
+            "ops_per_ms": 0.483,
+            "entities_per_second": 4828734,
+            "bytes_per_op": 1600107.9,
+            "score": 0.482873,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsIterationBenchmark.iterateWithWrite",
+            "name": "iterateWithWrite",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 19936.39,
+            "ops_per_ms": 0.05,
+            "entities_per_second": 5015953,
+            "bytes_per_op": 1.60002214E7,
+            "score": 0.05016,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsNBodyBenchmark.simulateOneTick",
+            "name": "simulateOneTick",
+            "implementation": "zayes",
+            "params": {
+                "bodyCount": "1000"
+            },
+            "mode": "avgt",
+            "us_per_op": 44.09,
+            "ops_per_ms": 22.681,
+            "entities_per_second": 22680842,
+            "bytes_per_op": 136064.2,
+            "score": 0.04409,
+            "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsNBodyBenchmark.simulateOneTick",
+            "name": "simulateOneTick",
+            "implementation": "zayes",
+            "params": {
+                "bodyCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 444.736,
+            "ops_per_ms": 2.249,
+            "entities_per_second": 22485244,
+            "bytes_per_op": 1360097.6,
+            "score": 0.444736,
+            "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsNBodyBenchmark.simulateTenTicks",
+            "name": "simulateTenTicks",
+            "implementation": "zayes",
+            "params": {
+                "bodyCount": "1000"
+            },
+            "mode": "avgt",
+            "us_per_op": 446.998,
+            "ops_per_ms": 2.237,
+            "entities_per_second": 2237148,
+            "bytes_per_op": 1360641.6,
+            "score": 0.446998,
+            "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsNBodyBenchmark.simulateTenTicks",
+            "name": "simulateTenTicks",
+            "implementation": "zayes",
+            "params": {
+                "bodyCount": "10000"
+            },
+            "mode": "avgt",
+            "us_per_op": 4486.387,
+            "ops_per_ms": 0.223,
+            "entities_per_second": 2228965,
+            "bytes_per_op": 1.36009758E7,
+            "score": 4.486387,
+            "score_unit": "ms/op",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsParticleScenarioBenchmark.tick",
+            "name": "tick",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 1852.802,
+            "ops_per_ms": 0.54,
+            "entities_per_second": 5397230,
+            "bytes_per_op": 4578444.1,
+            "score": 0.539723,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsRealisticTickBenchmark.tick",
+            "name": "tick",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 16.307,
+            "ops_per_ms": 61.325,
+            "entities_per_second": 613247712,
+            "bytes_per_op": 39274.5,
+            "score": 61.324771,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsRealisticTickBenchmark.tick",
+            "name": "tick",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 19.549,
+            "ops_per_ms": 51.153,
+            "entities_per_second": 5115260621,
+            "bytes_per_op": 40178.5,
+            "score": 51.152606,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsSparseDeltaBenchmark.tick",
+            "name": "tick",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 4.783,
+            "ops_per_ms": 209.059,
+            "entities_per_second": 2090585346,
+            "bytes_per_op": 12814.7,
+            "score": 209.058535,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsUnifiedDeltaBenchmark.tick",
+            "name": "tick",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "10000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 1070.928,
+            "ops_per_ms": 0.934,
+            "entities_per_second": 9337693,
+            "bytes_per_op": 2013091.7,
+            "score": 0.933769,
+            "score_unit": "ops/ms",
+            "score_error": null
+        },
+        {
+            "benchmark": "zzuegg.ecs.bench.zayes.ZayEsUnifiedDeltaBenchmark.tick",
+            "name": "tick",
+            "implementation": "zayes",
+            "params": {
+                "entityCount": "100000"
+            },
+            "mode": "thrpt",
+            "us_per_op": 15008.345,
+            "ops_per_ms": 0.067,
+            "entities_per_second": 6662959,
+            "bytes_per_op": 1.66737328E7,
+            "score": 0.06663,
             "score_unit": "ops/ms",
             "score_error": null
         }
