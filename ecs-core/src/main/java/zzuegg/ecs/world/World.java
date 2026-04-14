@@ -471,6 +471,17 @@ public final class World {
         return new SpawnBuilder(this, componentTypes);
     }
 
+    /**
+     * Create a bulk spawn builder for restoring entities with known IDs.
+     * Pre-resolves the archetype, component IDs, and storage references
+     * so per-entity spawns avoid HashSet, ArchetypeId, and ComponentInfo[]
+     * allocations. All entities must share the same component shape.
+     */
+    @SafeVarargs
+    public final BulkSpawnWithIdBuilder bulkSpawnWithIdBuilder(Class<? extends Record>... componentTypes) {
+        return new BulkSpawnWithIdBuilder(this, componentTypes);
+    }
+
     public zzuegg.ecs.entity.Entity spawn(Record... components) {
         var entity = entityAllocator.allocate();
 
@@ -542,28 +553,32 @@ public final class World {
             despawnInternal(root);
             return;
         }
-        var queue = new ArrayDeque<zzuegg.ecs.entity.Entity>();
-        queue.add(root);
-        while (!queue.isEmpty()) {
-            var next = queue.poll();
-            if (!entityAllocator.isAlive(next)) continue;
-            applyRelationCleanup(next, queue);
-            despawnInternal(next);
+        // Process the root entity without allocating a queue. The queue
+        // is only needed when CASCADE_SOURCE adds transitive entities.
+        ArrayDeque<zzuegg.ecs.entity.Entity> queue = applyRelationCleanup(root, null);
+        despawnInternal(root);
+        if (queue != null) {
+            while (!queue.isEmpty()) {
+                var next = queue.poll();
+                if (!entityAllocator.isAlive(next)) continue;
+                queue = applyRelationCleanup(next, queue);
+                despawnInternal(next);
+            }
         }
     }
 
-    private void applyRelationCleanup(
+    /**
+     * Apply relation cleanup for the given entity. Returns the cascade
+     * queue (possibly newly allocated) if any CASCADE_SOURCE entities
+     * were enqueued, or the original {@code cascadeQueue} (which may
+     * be {@code null}) if none were added.
+     */
+    private ArrayDeque<zzuegg.ecs.entity.Entity> applyRelationCleanup(
             zzuegg.ecs.entity.Entity entity,
             ArrayDeque<zzuegg.ecs.entity.Entity> cascadeQueue) {
         var tickNow = tick.current();
         for (var store : componentRegistry.allRelationStores()) {
-            // Outgoing pairs: the entity IS the source. Drop each
-            // forward entry so reverse cleanup + tracker + removal-log
-            // updates happen inside store.remove. No source-marker
-            // fix needed on `entity` itself — the despawn is about to
-            // free its entire archetype row — but each former target
-            // may have just lost its last incoming pair of this type,
-            // in which case it loses its target marker.
+            // Outgoing pairs: the entity IS the source.
             if (store.hasSource(entity)) {
                 var targets = new java.util.ArrayList<zzuegg.ecs.entity.Entity>();
                 for (var e : store.targetsFor(entity)) targets.add(e.getKey());
@@ -576,8 +591,8 @@ public final class World {
                     }
                 }
             }
-            // Incoming pairs: something points AT entity. Walk a snapshot
-            // of sources — the body below mutates the store.
+            // Incoming pairs: skip allocation entirely when nothing points at us.
+            if (!store.hasTarget(entity)) continue;
             var sources = new java.util.ArrayList<zzuegg.ecs.entity.Entity>();
             for (var s : store.sourcesFor(entity)) sources.add(s);
             if (sources.isEmpty()) continue;
@@ -590,6 +605,7 @@ public final class World {
                 // whether the source entity survives.
                 store.remove(source, entity, tickNow);
                 if (policy == zzuegg.ecs.relation.CleanupPolicy.CASCADE_SOURCE) {
+                    if (cascadeQueue == null) cascadeQueue = new ArrayDeque<>();
                     cascadeQueue.add(source);
                 } else {
                     // RELEASE_TARGET: source survives. If it lost its
@@ -603,6 +619,7 @@ public final class World {
                 }
             }
         }
+        return cascadeQueue;
     }
 
     private void despawnInternal(zzuegg.ecs.entity.Entity entity) {
@@ -719,10 +736,10 @@ public final class World {
         return tick.current();
     }
 
-    // Package-private accessors for SpawnBuilder
-    ArchetypeGraph archetypeGraph() { return archetypeGraph; }
-    zzuegg.ecs.entity.EntityAllocator entityAllocator() { return entityAllocator; }
-    void setEntityLocation(int index, zzuegg.ecs.archetype.EntityLocation loc) { setLocation(index, loc); }
+    // Accessors for SpawnBuilder and WorldSerializer
+    public ArchetypeGraph archetypeGraph() { return archetypeGraph; }
+    public zzuegg.ecs.entity.EntityAllocator entityAllocator() { return entityAllocator; }
+    public void setEntityLocation(int index, zzuegg.ecs.archetype.EntityLocation loc) { setLocation(index, loc); }
 
     /**
      * Package-of-framework accessor returning the
@@ -1180,6 +1197,24 @@ public final class World {
         for (var store : componentRegistry.allRelationStores()) {
             store.clear();
         }
+        // Reset bulk-load archetype cache
+        cachedSpawnCompCount = -1;
+        cachedSpawnArchetype = null;
+    }
+
+    /**
+     * Pre-size internal structures for a bulk load of {@code entityCount}
+     * entities whose indices go up to {@code maxEntityIndex} (exclusive).
+     * Call this before a series of {@link #spawnWithId} calls to eliminate
+     * incremental array copies and ArrayList growth.
+     */
+    public void prepareForLoad(int entityCount, int maxEntityIndex) {
+        entityAllocator.ensureCapacity(maxEntityIndex);
+        entityLocations.ensureCapacity(maxEntityIndex);
+        // Pre-fill to maxEntityIndex so setLocation avoids the while-loop.
+        while (entityLocations.size() < maxEntityIndex) {
+            entityLocations.add(null);
+        }
     }
 
     // ---------------------------------------------------------------
@@ -1201,6 +1236,21 @@ public final class World {
         new zzuegg.ecs.persistence.WorldSerializer().load(this, in);
     }
 
+    public void saveColumnar(java.io.DataOutput out) throws java.io.IOException {
+        new zzuegg.ecs.persistence.GroupedWorldSerializer().save(this, out);
+    }
+
+    public void loadColumnar(java.io.DataInput in) throws java.io.IOException {
+        new zzuegg.ecs.persistence.GroupedWorldSerializer().load(this, in);
+    }
+
+    // -- Bulk-load archetype cache: avoids HashSet + ComponentInfo[] + ArchetypeId
+    //    allocation when consecutive spawnWithId calls share the same component count
+    //    and types (the common case during deserialization).
+    private int cachedSpawnCompCount = -1;
+    private zzuegg.ecs.component.ComponentInfo[] cachedSpawnInfos;
+    private Archetype cachedSpawnArchetype;
+
     /**
      * Spawn an entity with a specific ID. Used by the load path to
      * restore exact entity identities from a save file.
@@ -1208,18 +1258,44 @@ public final class World {
     public void spawnWithId(zzuegg.ecs.entity.Entity entity, Record... components) {
         entityAllocator.allocateExact(entity.index(), entity.generation());
 
-        var compIds = new HashSet<ComponentId>();
-        var infos = new zzuegg.ecs.component.ComponentInfo[components.length];
-        for (int i = 0; i < components.length; i++) {
-            var info = componentRegistry.getOrRegisterInfo(components[i].getClass());
-            infos[i] = info;
-            if (info.isTableStorage()) {
-                compIds.add(info.id());
+        // Fast path: if component count matches the cached signature,
+        // check if all types match. This avoids allocating HashSet,
+        // ComponentInfo[], and ArchetypeId per entity during bulk loads.
+        Archetype archetype = null;
+        zzuegg.ecs.component.ComponentInfo[] infos = null;
+        if (components.length == cachedSpawnCompCount && cachedSpawnInfos != null) {
+            infos = cachedSpawnInfos;
+            boolean match = true;
+            for (int i = 0; i < components.length; i++) {
+                if (infos[i].type() != components[i].getClass()) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                archetype = cachedSpawnArchetype;
             }
         }
 
-        var archetypeId = ArchetypeId.of(compIds);
-        var archetype = archetypeGraph.getOrCreate(archetypeId);
+        if (archetype == null) {
+            // Slow path: resolve component infos and archetype
+            var compIds = new HashSet<ComponentId>();
+            infos = new zzuegg.ecs.component.ComponentInfo[components.length];
+            for (int i = 0; i < components.length; i++) {
+                var info = componentRegistry.getOrRegisterInfo(components[i].getClass());
+                infos[i] = info;
+                if (info.isTableStorage()) {
+                    compIds.add(info.id());
+                }
+            }
+            var archetypeId = ArchetypeId.of(compIds);
+            archetype = archetypeGraph.getOrCreate(archetypeId);
+            // Cache for next call
+            cachedSpawnCompCount = components.length;
+            cachedSpawnInfos = infos;
+            cachedSpawnArchetype = archetype;
+        }
+
         var location = archetype.add(entity);
         setLocation(entity.index(), location);
 
@@ -1355,7 +1431,7 @@ public final class World {
         for (int i = 0, n = allCommandBuffers.size(); i < n; i++) {
             var cmds = allCommandBuffers.get(i);
             if (!cmds.isEmpty()) {
-                zzuegg.ecs.command.CommandProcessor.process(cmds.drain(), this);
+                zzuegg.ecs.command.CommandProcessor.process(cmds, this);
             }
         }
     }

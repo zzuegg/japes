@@ -153,4 +153,17 @@ public final class Chunk {
             tracker.markAdded(slot, tick);
         }
     }
+
+    public void bulkSetEntities(zzuegg.ecs.entity.Entity[] entityIds, int offset, int len) {
+        System.arraycopy(entityIds, offset, entities, 0, len);
+        this.count = len;
+    }
+
+    public void bulkMarkAdded(long tick) {
+        for (int slot = 0; slot < count; slot++) {
+            for (var tracker : trackerList) {
+                tracker.markAdded(slot, tick);
+            }
+        }
+    }
 }

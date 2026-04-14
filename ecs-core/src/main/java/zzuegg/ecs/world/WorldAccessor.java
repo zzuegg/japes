@@ -5,6 +5,7 @@ import zzuegg.ecs.component.*;
 import zzuegg.ecs.entity.Entity;
 
 import java.util.*;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -88,15 +89,54 @@ public final class WorldAccessor {
     /** Iterate entities that have at least one {@link Persistent} component. */
     public Iterable<Entity> persistentEntities() {
         var result = new ArrayList<Entity>();
+        forEachPersistentEntity(result::add);
+        return result;
+    }
+
+    /** Iterate persistent entities without allocating an intermediate list. */
+    public void forEachPersistentEntity(Consumer<Entity> consumer) {
         for (var archetype : world.archetypeGraph().allArchetypes()) {
             if (!hasPersistentComponent(archetype)) continue;
-            for (var chunk : archetype.chunks()) {
-                for (int i = 0; i < chunk.count(); i++) {
-                    result.add(chunk.entity(i));
+            var chunks = archetype.chunks();
+            for (int c = 0, cSize = chunks.size(); c < cSize; c++) {
+                var chunk = chunks.get(c);
+                for (int i = 0, count = chunk.count(); i < count; i++) {
+                    consumer.accept(chunk.entity(i));
                 }
             }
         }
-        return result;
+    }
+
+    /**
+     * Iterate persistent entities and their persistent components without
+     * allocating intermediate collections. The consumer receives each
+     * entity once per persistent component it has.
+     */
+    public void forEachPersistentEntityComponent(BiConsumer<Entity, Record> consumer) {
+        var registry = world.componentRegistry();
+        for (var archetype : world.archetypeGraph().allArchetypes()) {
+            var allCompIds = archetype.id().sortedArray();
+            // Pre-filter: collect only persistent ComponentIds for this archetype
+            var persistentIds = new ComponentId[allCompIds.length];
+            int pCount = 0;
+            for (var compId : allCompIds) {
+                if (registry.info(compId).type().isAnnotationPresent(Persistent.class)) {
+                    persistentIds[pCount++] = compId;
+                }
+            }
+            if (pCount == 0) continue;
+
+            var chunks = archetype.chunks();
+            for (int c = 0, cSize = chunks.size(); c < cSize; c++) {
+                var chunk = chunks.get(c);
+                for (int i = 0, count = chunk.count(); i < count; i++) {
+                    var entity = chunk.entity(i);
+                    for (int p = 0; p < pCount; p++) {
+                        consumer.accept(entity, (Record) chunk.get(persistentIds[p], i));
+                    }
+                }
+            }
+        }
     }
 
     /** Get only the {@link Persistent}-annotated components for an entity. */
@@ -104,9 +144,34 @@ public final class WorldAccessor {
         return filteredComponents(entity, Persistent.class);
     }
 
+    /** Iterate persistent components for an entity without allocating. */
+    public void forEachPersistentComponent(Entity entity, Consumer<Record> consumer) {
+        forEachFilteredComponent(entity, Persistent.class, consumer);
+    }
+
     /** Get only the {@link NetworkSync}-annotated components for an entity. */
     public List<Record> networkSyncComponents(Entity entity) {
         return filteredComponents(entity, NetworkSync.class);
+    }
+
+    /** Iterate network-sync components for an entity without allocating. */
+    public void forEachNetworkSyncComponent(Entity entity, Consumer<Record> consumer) {
+        forEachFilteredComponent(entity, NetworkSync.class, consumer);
+    }
+
+    /** Iterate filtered components for an entity without allocating. */
+    public void forEachFilteredComponent(Entity entity,
+                                         Class<? extends java.lang.annotation.Annotation> annotation,
+                                         Consumer<Record> consumer) {
+        var location = world.entityLocation(entity);
+        if (location == null) return;
+        var chunk = location.archetype().chunks().get(location.chunkIndex());
+        for (var compId : location.archetype().id().sortedArray()) {
+            var info = world.componentRegistry().info(compId);
+            if (info.type().isAnnotationPresent(annotation)) {
+                consumer.accept((Record) chunk.get(compId, location.slotIndex()));
+            }
+        }
     }
 
     private List<Record> filteredComponents(Entity entity, Class<? extends java.lang.annotation.Annotation> annotation) {
@@ -114,7 +179,7 @@ public final class WorldAccessor {
         if (location == null) return List.of();
         var result = new ArrayList<Record>();
         var chunk = location.archetype().chunks().get(location.chunkIndex());
-        for (var compId : location.archetype().id().components()) {
+        for (var compId : location.archetype().id().sortedArray()) {
             var info = world.componentRegistry().info(compId);
             if (info.type().isAnnotationPresent(annotation)) {
                 result.add((Record) chunk.get(compId, location.slotIndex()));
@@ -124,7 +189,7 @@ public final class WorldAccessor {
     }
 
     private boolean hasPersistentComponent(Archetype archetype) {
-        for (var compId : archetype.id().components()) {
+        for (var compId : archetype.id().sortedArray()) {
             if (world.componentRegistry().info(compId).type().isAnnotationPresent(Persistent.class)) {
                 return true;
             }

@@ -44,6 +44,31 @@ public final class Archetype {
         }
     }
 
+    /**
+     * Pre-allocate enough chunks to hold {@code entityCount} entities.
+     * Call before a bulk insert to avoid creating chunks one-by-one.
+     */
+    public void ensureCapacity(int entityCount) {
+        int existingCapacity = 0;
+        for (var chunk : chunks) {
+            existingCapacity += chunkCapacity - chunk.count();
+        }
+        int needed = entityCount - existingCapacity;
+        while (needed > 0) {
+            chunks.add(new Chunk(chunkCapacity, componentTypes, storageFactory,
+                dirtyTrackedComponents, fullyUntrackedComponents));
+            needed -= chunkCapacity;
+        }
+        if (openChunkIndex < 0 && !chunks.isEmpty()) {
+            for (int i = 0; i < chunks.size(); i++) {
+                if (!chunks.get(i).isFull()) {
+                    openChunkIndex = i;
+                    break;
+                }
+            }
+        }
+    }
+
     public EntityLocation add(Entity entity) {
         int chunkIndex = findOrCreateChunkIndex();
         Chunk chunk = chunks.get(chunkIndex);
@@ -109,6 +134,18 @@ public final class Archetype {
 
     public ArchetypeId id() {
         return id;
+    }
+
+
+    public zzuegg.ecs.storage.Chunk createChunk() {
+        var chunk = new zzuegg.ecs.storage.Chunk(chunkCapacity, componentTypes, storageFactory,
+            dirtyTrackedComponents, fullyUntrackedComponents);
+        chunks.add(chunk);
+        return chunk;
+    }
+
+    public int chunkCapacity() {
+        return chunkCapacity;
     }
 
     private int findOrCreateChunkIndex() {

@@ -92,7 +92,7 @@ public final class EntityAllocator {
         liveCount++;
     }
 
-    private void ensureCapacity(int needed) {
+    public void ensureCapacity(int needed) {
         if (needed > generations.length) {
             int newLen = Math.max(generations.length * 2, needed);
             generations = Arrays.copyOf(generations, newLen);

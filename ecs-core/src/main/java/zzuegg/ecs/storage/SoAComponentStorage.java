@@ -25,6 +25,12 @@ public final class SoAComponentStorage {
 
     private static final AtomicLong COUNTER = new AtomicLong();
 
+    // Cache generated class constructors so the heavy class generation
+    // (bytecode emit + defineHiddenClass) happens once per record type,
+    // not once per chunk. The MethodHandle takes a single int (capacity).
+    private static final java.util.concurrent.ConcurrentHashMap<Class<?>, java.lang.invoke.MethodHandle>
+        CONSTRUCTOR_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+
     private SoAComponentStorage() {}
 
     /**
@@ -39,15 +45,38 @@ public final class SoAComponentStorage {
     /**
      * Generate a SoA ComponentStorage hidden class for the given record type.
      * The generated class has one primitive array field per record component,
-     * with get/set methods that do direct array I/O.
+     * with get/set methods that do direct array I/O. The class is generated
+     * once and cached; subsequent calls reuse the cached constructor.
      */
     @SuppressWarnings("unchecked")
     public static <T extends Record> ComponentStorage<T> create(Class<T> type, int capacity) {
         try {
-            return doGenerate(type, capacity);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to generate SoA storage for " + type.getName(), e);
+            var ctor = CONSTRUCTOR_CACHE.get(type);
+            if (ctor != null) {
+                return (ComponentStorage<T>) ctor.invoke(capacity);
+            }
+            return doGenerateAndCache(type, capacity);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Throwable e) {
+            throw new RuntimeException("Failed to create SoA storage for " + type.getName(), e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T extends Record> ComponentStorage<T> doGenerateAndCache(
+            Class<T> type, int capacity) throws Throwable {
+        var existing = CONSTRUCTOR_CACHE.get(type);
+        if (existing != null) return (ComponentStorage<T>) existing.invoke(capacity);
+
+        var storage = doGenerate(type, capacity);
+        var genClass = storage.getClass();
+        var lookup = java.lang.invoke.MethodHandles.privateLookupIn(
+            genClass, java.lang.invoke.MethodHandles.lookup());
+        var ctor = lookup.findConstructor(genClass,
+            java.lang.invoke.MethodType.methodType(void.class, int.class));
+        CONSTRUCTOR_CACHE.put(type, ctor);
+        return storage;
     }
 
     @SuppressWarnings("unchecked")

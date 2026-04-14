@@ -9,6 +9,8 @@ import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
 import java.util.List;
 
+import zzuegg.ecs.storage.RecordFlattener;
+
 /**
  * Auto-derived binary codec for record types. Encodes each field in
  * declaration order using DataOutput primitives. Supports nested records
@@ -23,6 +25,8 @@ public final class BinaryCodec<T extends Record> implements ComponentCodec<T> {
     private final Class<T> type;
     private final List<FieldCodec> fieldCodecs;
     private final MethodHandle constructor;
+    /** Pre-computed direct writers for SoA-eligible types; null otherwise. */
+    private final DirectFieldWriter[] directWriters;
 
     @SuppressWarnings("unchecked")
     public BinaryCodec(Class<T> type) {
@@ -41,6 +45,16 @@ public final class BinaryCodec<T extends Record> implements ComponentCodec<T> {
             this.constructor = lookup.unreflectConstructor(ctor);
         } catch (Exception e) {
             throw new IllegalArgumentException("Cannot access constructor for " + type.getName(), e);
+        }
+        // Build direct SoA writers if the type is SoA-eligible
+        if (RecordFlattener.isEligible((Class<? extends Record>) type)) {
+            var flatFields = RecordFlattener.flatten((Class<? extends Record>) type);
+            this.directWriters = new DirectFieldWriter[flatFields.size()];
+            for (int i = 0; i < flatFields.size(); i++) {
+                this.directWriters[i] = createDirectWriter(flatFields.get(i).type());
+            }
+        } else {
+            this.directWriters = null;
         }
     }
 
@@ -68,6 +82,55 @@ public final class BinaryCodec<T extends Record> implements ComponentCodec<T> {
     @Override
     public Class<T> type() {
         return type;
+    }
+
+    /**
+     * Returns true if this codec supports {@link #decodeDirect} — i.e., the
+     * record type is SoA-eligible (all-primitive leaf fields).
+     */
+    public boolean supportsDirectDecode() {
+        return directWriters != null;
+    }
+
+    /**
+     * Read primitives from the stream and write them directly into the SoA
+     * backing arrays at the given slot. No Record object is created.
+     *
+     * @param in         the data input stream positioned at this component's data
+     * @param soaArrays  the per-field primitive arrays from {@code ComponentStorage.soaFieldArrays()}
+     * @param slot       the slot index within the arrays
+     * @throws UnsupportedOperationException if the type is not SoA-eligible
+     */
+    public void decodeDirect(DataInput in, Object[] soaArrays, int slot) throws IOException {
+        if (directWriters == null) {
+            throw new UnsupportedOperationException(
+                "decodeDirect not supported for non-SoA type: " + type.getName());
+        }
+        for (int i = 0; i < directWriters.length; i++) {
+            directWriters[i].readAndStore(in, soaArrays[i], slot);
+        }
+    }
+
+    /** Returns the number of flat SoA fields, or -1 if not SoA-eligible. */
+    public int flatFieldCount() {
+        return directWriters != null ? directWriters.length : -1;
+    }
+
+    @FunctionalInterface
+    private interface DirectFieldWriter {
+        void readAndStore(DataInput in, Object array, int slot) throws IOException;
+    }
+
+    private static DirectFieldWriter createDirectWriter(Class<?> primitiveType) {
+        if (primitiveType == float.class)   return (in, arr, slot) -> ((float[]) arr)[slot] = in.readFloat();
+        if (primitiveType == int.class)     return (in, arr, slot) -> ((int[]) arr)[slot] = in.readInt();
+        if (primitiveType == double.class)  return (in, arr, slot) -> ((double[]) arr)[slot] = in.readDouble();
+        if (primitiveType == long.class)    return (in, arr, slot) -> ((long[]) arr)[slot] = in.readLong();
+        if (primitiveType == byte.class)    return (in, arr, slot) -> ((byte[]) arr)[slot] = in.readByte();
+        if (primitiveType == short.class)   return (in, arr, slot) -> ((short[]) arr)[slot] = in.readShort();
+        if (primitiveType == boolean.class) return (in, arr, slot) -> ((boolean[]) arr)[slot] = in.readBoolean();
+        if (primitiveType == char.class)    return (in, arr, slot) -> ((char[]) arr)[slot] = in.readChar();
+        throw new IllegalArgumentException("Not a primitive: " + primitiveType);
     }
 
     private static FieldCodec createFieldCodec(RecordComponent comp) {

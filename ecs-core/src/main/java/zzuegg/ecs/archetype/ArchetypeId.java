@@ -20,6 +20,7 @@ import java.util.*;
 public final class ArchetypeId {
 
     private final ComponentId[] sorted; // sorted by ComponentId.id(), immutable
+    private List<ComponentId> cachedList; // lazily computed, immutable
     private int cachedHash; // 0 = not yet computed (int, not Integer — avoids boxing)
     private boolean hashComputed;
 
@@ -84,11 +85,23 @@ public final class ArchetypeId {
 
     /**
      * The component ids as an unmodifiable list view. Sorted by
-     * {@code ComponentId.id()}. The backing array is shared — do not
-     * mutate (the List is unmodifiable so callers can't anyway).
+     * {@code ComponentId.id()}. Cached — no allocation after the first call.
      */
     public List<ComponentId> components() {
-        return List.of(sorted);
+        var list = cachedList;
+        if (list == null) {
+            list = List.of(sorted);
+            cachedList = list;
+        }
+        return list;
+    }
+
+    /**
+     * Raw array access for internal iteration loops that need zero-allocation
+     * traversal. The returned array must not be mutated.
+     */
+    public ComponentId[] sortedArray() {
+        return sorted;
     }
 
     /**
