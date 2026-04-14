@@ -79,6 +79,11 @@ public final class PairRemovalLog {
         else if (drop > 0) entries.subList(0, drop).clear();
     }
 
+    /** Drop all entries. Consumer registrations are preserved. */
+    public void clear() {
+        entries.clear();
+    }
+
     /** Current minimum watermark — for tests + scheduler bookkeeping. */
     public long minWatermark() {
         return minWatermark;

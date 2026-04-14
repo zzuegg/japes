@@ -63,6 +63,35 @@ public final class EntityAllocator {
         return liveCount;
     }
 
+    /**
+     * Reset the allocator to its initial empty state. All entities become
+     * invalid. Indices and generations are wiped so a subsequent load can
+     * re-use exact Entity IDs.
+     */
+    public void reset() {
+        Arrays.fill(generations, 0, capacity, 0);
+        Arrays.fill(aliveBits, 0L);
+        freeTop = 0;
+        capacity = 0;
+        liveCount = 0;
+    }
+
+    /**
+     * Force-allocate an entity with a specific index and generation.
+     * Used by the load path to restore exact Entity IDs from a save file.
+     * The index must not already be alive.
+     */
+    public void allocateExact(int index, int generation) {
+        ensureCapacity(index + 1);
+        if (index >= capacity) capacity = index + 1;
+        if (isAliveBit(index)) {
+            throw new IllegalArgumentException("Index already alive: " + index);
+        }
+        generations[index] = generation;
+        setAlive(index, true);
+        liveCount++;
+    }
+
     private void ensureCapacity(int needed) {
         if (needed > generations.length) {
             int newLen = Math.max(generations.length * 2, needed);

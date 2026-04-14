@@ -191,4 +191,16 @@ public final class ArchetypeGraph {
     public Collection<Archetype> allArchetypes() {
         return Collections.unmodifiableCollection(archetypes.values());
     }
+
+    /**
+     * Remove all archetypes and their entities. Edge caches and query
+     * caches are cleared. The registry and storage factory are preserved.
+     */
+    public void clear() {
+        archetypes.clear();
+        addEdges.clear();
+        removeEdges.clear();
+        findMatchingCache.clear();
+        generation++;
+    }
 }

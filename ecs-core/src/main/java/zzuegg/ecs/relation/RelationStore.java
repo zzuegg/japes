@@ -427,6 +427,15 @@ public final class RelationStore<T extends Record> {
         return reverse.get(target.id());
     }
 
+    /** Drop all pairs and reset the tracker and removal log. */
+    public void clear() {
+        forward.clear();
+        reverse.clear();
+        tracker.clear();
+        removalLog.clear();
+        size = 0;
+    }
+
     private static final class SliceSourceIterable implements Iterable<Entity> {
         private final SourceSlice slice;
         SliceSourceIterable(SourceSlice slice) { this.slice = slice; }

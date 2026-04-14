@@ -118,6 +118,14 @@ public final class PairChangeTracker {
         }
     }
 
+    /** Drop all ticks and dirty-list state. */
+    public void clear() {
+        addedTicks.clear();
+        changedTicks.clear();
+        dirtyList.clear();
+        dirtyMembership.clear();
+    }
+
     private void appendDirty(PairKey key) {
         if (dirtyMembership.add(key)) {
             dirtyList.add(key);

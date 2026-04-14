@@ -1166,6 +1166,83 @@ public final class World {
         return entityLocations.set(index, null);
     }
 
+    /**
+     * Remove all entities and archetypes, resetting the world to an empty
+     * state. Systems, resources, the scheduler, and the executor are
+     * preserved. Typically used before {@code load()} to restore a saved
+     * world into a clean state with preserved entity IDs.
+     */
+    public void clear() {
+        entityLocations.clear();
+        entityAllocator.reset();
+        archetypeGraph.clear();
+        removalLog.clear();
+        for (var store : componentRegistry.allRelationStores()) {
+            store.clear();
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Persistence
+    // ---------------------------------------------------------------
+
+    /** Save all entities with @Persistent components using the default binary codec. */
+    public void save(java.io.DataOutput out) throws java.io.IOException {
+        new zzuegg.ecs.persistence.WorldSerializer().save(this, out);
+    }
+
+    /** Save entities with components matching the given filter. */
+    public void save(java.io.DataOutput out, java.util.function.Predicate<Class<?>> componentFilter) throws java.io.IOException {
+        new zzuegg.ecs.persistence.WorldSerializer().save(this, out, componentFilter);
+    }
+
+    /** Load entities from a save stream. Clears the world first. */
+    public void load(java.io.DataInput in) throws java.io.IOException {
+        new zzuegg.ecs.persistence.WorldSerializer().load(this, in);
+    }
+
+    /**
+     * Spawn an entity with a specific ID. Used by the load path to
+     * restore exact entity identities from a save file.
+     */
+    public void spawnWithId(zzuegg.ecs.entity.Entity entity, Record... components) {
+        entityAllocator.allocateExact(entity.index(), entity.generation());
+
+        var compIds = new HashSet<ComponentId>();
+        var infos = new zzuegg.ecs.component.ComponentInfo[components.length];
+        for (int i = 0; i < components.length; i++) {
+            var info = componentRegistry.getOrRegisterInfo(components[i].getClass());
+            infos[i] = info;
+            if (info.isTableStorage()) {
+                compIds.add(info.id());
+            }
+        }
+
+        var archetypeId = ArchetypeId.of(compIds);
+        var archetype = archetypeGraph.getOrCreate(archetypeId);
+        var location = archetype.add(entity);
+        setLocation(entity.index(), location);
+
+        for (int i = 0; i < components.length; i++) {
+            if (infos[i].isTableStorage()) {
+                archetype.set(infos[i].id(), location, components[i]);
+            }
+        }
+
+        var chunk = archetype.chunks().get(location.chunkIndex());
+        chunk.markAdded(location.slotIndex(), tick.current());
+    }
+
+    /** Create a read-only accessor for serialization, sync, and debugging. */
+    public WorldAccessor accessor() {
+        return new WorldAccessor(this);
+    }
+
+    /** Package-private: get the EntityLocation for an entity. */
+    EntityLocation entityLocation(zzuegg.ecs.entity.Entity entity) {
+        return getLocation(entity.index());
+    }
+
     public void close() {
         executor.shutdown();
     }

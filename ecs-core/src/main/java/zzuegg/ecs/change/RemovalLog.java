@@ -98,4 +98,9 @@ public final class RemovalLog {
         consumerCount.clear();
         minWatermark.clear();
     }
+
+    /** Drop all stored entries. Consumer registrations are preserved. */
+    public void clear() {
+        byComponent.clear();
+    }
 }

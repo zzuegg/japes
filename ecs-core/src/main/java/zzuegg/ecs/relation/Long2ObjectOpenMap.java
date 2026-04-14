@@ -202,6 +202,11 @@ final class Long2ObjectOpenMap<V> {
         }
     }
 
+    void clear() {
+        Arrays.fill(values, null);
+        size = 0;
+    }
+
     private void resize() {
         var oldKeys = keys;
         var oldValues = values;
