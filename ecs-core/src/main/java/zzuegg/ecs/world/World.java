@@ -694,6 +694,10 @@ public final class World {
         return location.archetype().id().contains(compId);
     }
 
+    public <T> T getResource(Class<T> type) {
+        return resourceStore.get(type).get();
+    }
+
     public <T> void setResource(T resource) {
         resourceStore.setDirect(resource.getClass(), resource);
     }

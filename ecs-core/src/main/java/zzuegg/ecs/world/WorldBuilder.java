@@ -54,6 +54,11 @@ public final class WorldBuilder {
         return this;
     }
 
+    public WorldBuilder addPlugin(Plugin plugin) {
+        plugin.install(this);
+        return this;
+    }
+
     public WorldBuilder addStage(String name, Stage stage) {
         stages.put(name, new Stage(name, stage.order()));
         return this;

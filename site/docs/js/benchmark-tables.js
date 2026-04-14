@@ -100,14 +100,12 @@
   }
 
   function renderTable(el, md) {
-    // Convert markdown bold and table to HTML
     const lines = md.split("\n").filter((l) => l.startsWith("|"));
     if (lines.length < 2) {
       el.textContent = "No data";
       return;
     }
     const table = document.createElement("table");
-    table.className = "md-typeset__table";
     const thead = document.createElement("thead");
     const tbody = document.createElement("tbody");
 
@@ -120,9 +118,11 @@
       const tr = document.createElement("tr");
       cells.forEach((cell) => {
         const td = document.createElement(i === 0 ? "th" : "td");
-        // Handle **bold**
-        td.innerHTML = cell.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-        if (i > 0 && /^\d|^\*\*\d|^—/.test(cell)) td.style.textAlign = "right";
+        // Handle **bold** and [links](url)
+        let html = cell.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+        td.innerHTML = html;
+        if (i > 0 && /^\d|^<strong>\d|^—/.test(html)) td.style.textAlign = "right";
         tr.appendChild(td);
       });
       (i === 0 ? thead : tbody).appendChild(tr);
@@ -130,11 +130,16 @@
     table.appendChild(thead);
     table.appendChild(tbody);
 
-    const wrapper = document.createElement("div");
-    wrapper.className = "md-typeset__scrollwrap";
-    wrapper.appendChild(table);
+    // Match mkdocs-material table structure exactly
+    const innerDiv = document.createElement("div");
+    innerDiv.className = "md-typeset__table";
+    innerDiv.appendChild(table);
+    const outerDiv = document.createElement("div");
+    outerDiv.className = "md-typeset__scrollwrap";
+    outerDiv.setAttribute("tabindex", "0");
+    outerDiv.appendChild(innerDiv);
     el.innerHTML = "";
-    el.appendChild(wrapper);
+    el.appendChild(outerDiv);
   }
 
   async function main() {

@@ -36,7 +36,7 @@ import java.util.Set;
  * h2.close();
  * }</pre>
  */
-public final class H2PersistencePlugin {
+public final class H2PersistencePlugin implements AutoCloseable {
 
     private final World world;
     private final H2ComponentStore store;
@@ -54,6 +54,29 @@ public final class H2PersistencePlugin {
         this.world = world;
         this.store = store;
     }
+
+    /**
+     * Returns a {@link zzuegg.ecs.world.Plugin} that installs automatic
+     * per-tick delta sync to the given H2 database.
+     *
+     * <pre>{@code
+     * var world = World.builder()
+     *     .addSystem(Physics.class)
+     *     .addPlugin(H2PersistencePlugin.autoSync("jdbc:h2:./gamedata"))
+     *     .build();
+     * }</pre>
+     *
+     * @param jdbcUrl H2 JDBC connection URL
+     */
+    public static zzuegg.ecs.world.Plugin autoSync(String jdbcUrl) {
+        return builder -> {
+            builder.addSystem(H2AutoSyncSystem.class);
+            builder.addResource(new DeferredH2Config(jdbcUrl));
+        };
+    }
+
+    /** Deferred config — the plugin creates the real H2PersistencePlugin on first tick. */
+    public record DeferredH2Config(String jdbcUrl) {}
 
     /**
      * Create a new plugin instance connected to the given JDBC URL.
