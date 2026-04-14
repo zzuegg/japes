@@ -36,9 +36,7 @@ world.tick();
 | **Deferred structural edits** | `Commands` buffers flush at stage boundaries — no locking |
 | **Disjoint-access parallelism** | DAG scheduler runs non-conflicting systems in parallel automatically |
 
-## Benchmark snapshot
-
-µs/op, lower is better. JDK 26, Bevy 0.15 via Criterion, single fork.
+## Benchmark snapshot (µs/op)
 
 | Benchmark | **japes** | Bevy (Rust) | Artemis | vs Bevy |
 |---|---:|---:|---:|---|
@@ -60,7 +58,7 @@ world.tick();
 | RealisticTick 10k | 11,279 |
 | ParticleScenario 10k | 72,583 |
 
-Full cross-library tables (Zay-ES, Dominion): **[benchmarks](https://zzuegg.github.io/japes/benchmarks/)**.
+**[Full results and methodology](https://zzuegg.github.io/japes/benchmarks/)**
 
 ## Dependency
 

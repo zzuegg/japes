@@ -221,9 +221,7 @@ val updateSiteTables = tasks.register("updateSiteTables") {
             val bPPopt = lookup("bevy", "optimized_tick", "predators", "500")
 
             val table = """
-## Benchmark snapshot
-
-µs/op, lower is better. JDK 26, Bevy 0.15 via Criterion, single fork.
+## Benchmark snapshot (µs/op)
 
 | Benchmark | **japes** | Bevy (Rust) | Artemis | vs Bevy |
 |---|---:|---:|---:|---|
@@ -245,7 +243,7 @@ val updateSiteTables = tasks.register("updateSiteTables") {
 | RealisticTick 10k | ${bopStr(jRT10k)} |
 | ParticleScenario 10k | ${bopStr(jPS)} |
 
-Full cross-library tables (Zay-ES, Dominion): **[benchmarks](https://zzuegg.github.io/japes/benchmarks/)**.
+**[Full results and methodology](https://zzuegg.github.io/japes/benchmarks/)**
 
 """.trimStart()
 
