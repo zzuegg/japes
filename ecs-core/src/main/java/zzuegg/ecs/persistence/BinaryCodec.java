@@ -27,6 +27,8 @@ public final class BinaryCodec<T extends Record> implements ComponentCodec<T> {
     private final MethodHandle constructor;
     /** Pre-computed direct writers for SoA-eligible types; null otherwise. */
     private final DirectFieldWriter[] directWriters;
+    /** Pre-computed direct readers for SoA-eligible types; null otherwise. */
+    private final DirectFieldReader[] directReaders;
 
     @SuppressWarnings("unchecked")
     public BinaryCodec(Class<T> type) {
@@ -46,15 +48,18 @@ public final class BinaryCodec<T extends Record> implements ComponentCodec<T> {
         } catch (Exception e) {
             throw new IllegalArgumentException("Cannot access constructor for " + type.getName(), e);
         }
-        // Build direct SoA writers if the type is SoA-eligible
+        // Build direct SoA writers/readers if the type is SoA-eligible
         if (RecordFlattener.isEligible((Class<? extends Record>) type)) {
             var flatFields = RecordFlattener.flatten((Class<? extends Record>) type);
             this.directWriters = new DirectFieldWriter[flatFields.size()];
+            this.directReaders = new DirectFieldReader[flatFields.size()];
             for (int i = 0; i < flatFields.size(); i++) {
                 this.directWriters[i] = createDirectWriter(flatFields.get(i).type());
+                this.directReaders[i] = createDirectReader(flatFields.get(i).type());
             }
         } else {
             this.directWriters = null;
+            this.directReaders = null;
         }
     }
 
@@ -111,9 +116,53 @@ public final class BinaryCodec<T extends Record> implements ComponentCodec<T> {
         }
     }
 
+    /**
+     * Returns true if this codec supports {@link #encodeDirect} — i.e., the
+     * record type is SoA-eligible (all-primitive leaf fields).
+     */
+    public boolean supportsDirectEncode() {
+        return directReaders != null;
+    }
+
+    /**
+     * Read primitives directly from the SoA backing arrays at the given slot
+     * and write them to the output stream. No Record object is created.
+     *
+     * @param soaArrays  the per-field primitive arrays from {@code ComponentStorage.soaFieldArrays()}
+     * @param slot       the slot index within the arrays
+     * @param out        the data output stream to write to
+     * @throws UnsupportedOperationException if the type is not SoA-eligible
+     */
+    public void encodeDirect(Object[] soaArrays, int slot, DataOutput out) throws IOException {
+        if (directReaders == null) {
+            throw new UnsupportedOperationException(
+                "encodeDirect not supported for non-SoA type: " + type.getName());
+        }
+        for (int i = 0; i < directReaders.length; i++) {
+            directReaders[i].loadAndWrite(soaArrays[i], slot, out);
+        }
+    }
+
     /** Returns the number of flat SoA fields, or -1 if not SoA-eligible. */
     public int flatFieldCount() {
         return directWriters != null ? directWriters.length : -1;
+    }
+
+    @FunctionalInterface
+    private interface DirectFieldReader {
+        void loadAndWrite(Object array, int slot, DataOutput out) throws IOException;
+    }
+
+    private static DirectFieldReader createDirectReader(Class<?> primitiveType) {
+        if (primitiveType == float.class)   return (arr, slot, out) -> out.writeFloat(((float[]) arr)[slot]);
+        if (primitiveType == int.class)     return (arr, slot, out) -> out.writeInt(((int[]) arr)[slot]);
+        if (primitiveType == double.class)  return (arr, slot, out) -> out.writeDouble(((double[]) arr)[slot]);
+        if (primitiveType == long.class)    return (arr, slot, out) -> out.writeLong(((long[]) arr)[slot]);
+        if (primitiveType == byte.class)    return (arr, slot, out) -> out.writeByte(((byte[]) arr)[slot]);
+        if (primitiveType == short.class)   return (arr, slot, out) -> out.writeShort(((short[]) arr)[slot]);
+        if (primitiveType == boolean.class) return (arr, slot, out) -> out.writeBoolean(((boolean[]) arr)[slot]);
+        if (primitiveType == char.class)    return (arr, slot, out) -> out.writeChar(((char[]) arr)[slot]);
+        throw new IllegalArgumentException("Not a primitive: " + primitiveType);
     }
 
     @FunctionalInterface

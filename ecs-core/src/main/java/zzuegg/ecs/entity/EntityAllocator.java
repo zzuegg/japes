@@ -59,6 +59,19 @@ public final class EntityAllocator {
             && isAliveBit(index);
     }
 
+    /**
+     * Raw-id variant that avoids allocating an Entity record.
+     * Used by CommandProcessor on the flush hot path.
+     */
+    public boolean isAlive(long entityId) {
+        int index = (int) (entityId >>> 32);
+        int generation = (int) entityId;
+        return index >= 0
+            && index < capacity
+            && generations[index] == generation
+            && isAliveBit(index);
+    }
+
     public int entityCount() {
         return liveCount;
     }

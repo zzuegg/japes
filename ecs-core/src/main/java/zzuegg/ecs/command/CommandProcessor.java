@@ -11,8 +11,10 @@ public final class CommandProcessor {
 
     /**
      * Fast path: reads the flat buffer directly — no Command objects
-     * are allocated. After processing, the buffer is reset so it can
-     * be reused on the next tick.
+     * are allocated. Uses raw entity-id overloads on World to avoid
+     * wrapping every {@code long} in an {@link Entity} record.
+     * After processing, the buffer is reset so it can be reused on
+     * the next tick.
      */
     public static void process(Commands cmds, World world) {
         int n = cmds.size();
@@ -32,24 +34,24 @@ public final class CommandProcessor {
                     ii++;
                 }
                 case Commands.OP_DESPAWN -> {
-                    world.despawnIfAlive(new Entity(ids[ii++]));
+                    world.despawnIfAliveById(ids[ii++]);
                 }
                 case Commands.OP_ADD -> {
-                    var entity = new Entity(ids[ii++]);
-                    if (world.isAlive(entity)) {
-                        world.addComponent(entity, (Record) refs[ri++]);
+                    long eid = ids[ii++];
+                    if (world.isAliveById(eid)) {
+                        world.addComponentById(eid, (Record) refs[ri++]);
                     } else { ri++; }
                 }
                 case Commands.OP_REMOVE -> {
-                    var entity = new Entity(ids[ii++]);
-                    if (world.isAlive(entity)) {
-                        world.removeComponent(entity, asRecordClass(refs[ri++]));
+                    long eid = ids[ii++];
+                    if (world.isAliveById(eid)) {
+                        world.removeComponentById(eid, asRecordClass(refs[ri++]));
                     } else { ri++; }
                 }
                 case Commands.OP_SET -> {
-                    var entity = new Entity(ids[ii++]);
-                    if (world.isAlive(entity)) {
-                        world.setComponent(entity, (Record) refs[ri++]);
+                    long eid = ids[ii++];
+                    if (world.isAliveById(eid)) {
+                        world.setComponentById(eid, (Record) refs[ri++]);
                     } else { ri++; }
                 }
                 case Commands.OP_INSERT_RES -> {
@@ -57,17 +59,17 @@ public final class CommandProcessor {
                     ii++;
                 }
                 case Commands.OP_SET_RELATION -> {
-                    var source = new Entity(ids[ii++]);
-                    var target = new Entity(ids[ii++]);
-                    if (world.isAlive(source) && world.isAlive(target)) {
-                        world.setRelation(source, target, (Record) refs[ri++]);
+                    long sid = ids[ii++];
+                    long tid = ids[ii++];
+                    if (world.isAliveById(sid) && world.isAliveById(tid)) {
+                        world.setRelationById(sid, tid, (Record) refs[ri++]);
                     } else { ri++; }
                 }
                 case Commands.OP_REMOVE_RELATION -> {
-                    var source = new Entity(ids[ii++]);
-                    var target = new Entity(ids[ii++]);
-                    if (world.isAlive(source)) {
-                        world.removeRelation(source, target, asRecordClass(refs[ri++]));
+                    long sid = ids[ii++];
+                    long tid = ids[ii++];
+                    if (world.isAliveById(sid)) {
+                        world.removeRelationById(sid, tid, asRecordClass(refs[ri++]));
                     } else { ri++; }
                 }
                 default -> throw new IllegalStateException("Unknown command op: " + ops[i]);

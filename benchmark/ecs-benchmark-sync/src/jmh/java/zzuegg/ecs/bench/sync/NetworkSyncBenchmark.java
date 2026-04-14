@@ -1,9 +1,12 @@
 package zzuegg.ecs.bench.sync;
 
 import org.openjdk.jmh.annotations.*;
+import zzuegg.ecs.archetype.EntityLocation;
+import zzuegg.ecs.component.ComponentId;
 import zzuegg.ecs.component.NetworkSync;
 import zzuegg.ecs.entity.Entity;
 import zzuegg.ecs.persistence.BinaryCodec;
+import zzuegg.ecs.world.BulkSpawnWithIdBuilder;
 import zzuegg.ecs.world.World;
 import zzuegg.ecs.world.WorldAccessor;
 
@@ -78,6 +81,15 @@ public class NetworkSyncBenchmark {
     static final String VEL_NAME = Velocity.class.getName();
     static final String HEALTH_NAME = Health.class.getName();
 
+    // --- Direct decode state (for decodeDirect benchmarks) ---
+    ComponentId posCompId;
+    ComponentId velCompId;
+    ComponentId healthCompId;
+    /** Codec array in fixed order for BulkSpawnWithIdBuilder.spawnWithIdDirect */
+    BinaryCodec<?>[] directCodecs;
+    /** Component ID array in same order as directCodecs */
+    ComponentId[] directCompIds;
+
     @Setup(Level.Trial)
     public void setup() throws Exception {
         // -- Codecs --
@@ -103,6 +115,14 @@ public class NetworkSyncBenchmark {
             allEntities.add(e);
         }
         serverAccessor = serverWorld.accessor();
+
+        // -- Direct decode component IDs --
+        var reg = serverWorld.componentRegistry();
+        posCompId = reg.getOrRegisterInfo(Position.class).id();
+        velCompId = reg.getOrRegisterInfo(Velocity.class).id();
+        healthCompId = reg.getOrRegisterInfo(Health.class).id();
+        directCodecs = new BinaryCodec<?>[]{posCodec, velCodec, healthCodec};
+        directCompIds = new ComponentId[]{posCompId, velCompId, healthCompId};
 
         // -- Client world: seed with same entities so deltaSync can setComponent --
         clientWorld = World.builder().build();
@@ -234,6 +254,97 @@ public class NetworkSyncBenchmark {
                 Record comp = decodeComponent(className, clientIn);
                 clientWorld.setComponent(new Entity(entityId), comp);
             }
+        }
+
+        // Ack
+        clientOut.writeByte(1);
+        clientOut.flush();
+        serverIn.readByte();
+    }
+
+    // ---------------------------------------------------------------
+    // Full sync with decodeDirect: grouped format, zero Record alloc on client
+    // ---------------------------------------------------------------
+
+    @SuppressWarnings("unchecked")
+    @Benchmark
+    public void fullSyncDirect() throws IOException {
+        // --- Server side: encode in fixed component order (no per-comp class name) ---
+        serverOut.writeInt(allEntities.size());
+        for (var entity : allEntities) {
+            serverOut.writeLong(entity.id());
+            // Encode in fixed order: Position, Velocity, Health
+            var pos = (Position) serverWorld.getComponent(entity, Position.class);
+            posCodec.encode(pos, serverOut);
+            var vel = (Velocity) serverWorld.getComponent(entity, Velocity.class);
+            velCodec.encode(vel, serverOut);
+            var health = (Health) serverWorld.getComponent(entity, Health.class);
+            healthCodec.encode(health, serverOut);
+        }
+        serverOut.flush();
+
+        // --- Client side: decode directly into SoA arrays ---
+        clientWorld.clear();
+        int count = clientIn.readInt();
+        var builder = clientWorld.bulkSpawnWithIdBuilder(Position.class, Velocity.class, Health.class);
+        builder.ensureCapacity(count);
+        for (int i = 0; i < count; i++) {
+            long entityId = clientIn.readLong();
+            builder.spawnWithIdDirect(new Entity(entityId), clientIn, directCodecs);
+        }
+
+        // Ack
+        clientOut.writeByte(1);
+        clientOut.flush();
+        serverIn.readByte();
+    }
+
+    // ---------------------------------------------------------------
+    // Delta sync with decodeDirect: write directly to existing SoA slots
+    // ---------------------------------------------------------------
+
+    @Benchmark
+    public void deltaSyncDirect() throws IOException {
+        int deltaCount = Math.max(1, entityCount / 100);
+
+        // --- Server side: mutate ~1% of entities ---
+        var changedEntities = new ArrayList<Entity>(deltaCount);
+        for (int i = 0; i < deltaCount; i++) {
+            var e = allEntities.get(deltaCursor);
+            deltaCursor = (deltaCursor + 1) % allEntities.size();
+            var pos = serverWorld.getComponent(e, Position.class);
+            serverWorld.setComponent(e, new Position(pos.x() + 0.1f, pos.y() + 0.1f, pos.z() + 0.1f));
+            serverWorld.setComponent(e, new Health(serverWorld.getComponent(e, Health.class).hp() - 1));
+            changedEntities.add(e);
+        }
+
+        // --- Server side: encode in fixed order (no per-comp class name) ---
+        serverOut.writeInt(changedEntities.size());
+        for (var entity : changedEntities) {
+            serverOut.writeLong(entity.id());
+            // Fixed order: Position, Velocity, Health
+            posCodec.encode(serverWorld.getComponent(entity, Position.class), serverOut);
+            velCodec.encode(serverWorld.getComponent(entity, Velocity.class), serverOut);
+            healthCodec.encode(serverWorld.getComponent(entity, Health.class), serverOut);
+        }
+        serverOut.flush();
+
+        // --- Client side: decode directly into existing SoA slots ---
+        var clientReg = clientWorld.componentRegistry();
+        var clientPosId = clientReg.getOrRegisterInfo(Position.class).id();
+        var clientVelId = clientReg.getOrRegisterInfo(Velocity.class).id();
+        var clientHealthId = clientReg.getOrRegisterInfo(Health.class).id();
+
+        int count = clientIn.readInt();
+        for (int i = 0; i < count; i++) {
+            long entityId = clientIn.readLong();
+            var loc = clientWorld.entityLocationFor(new Entity(entityId));
+            var chunk = loc.archetype().chunks().get(loc.chunkIndex());
+            int slot = loc.slotIndex();
+
+            posCodec.decodeDirect(clientIn, chunk.componentStorage(clientPosId).soaFieldArrays(), slot);
+            velCodec.decodeDirect(clientIn, chunk.componentStorage(clientVelId).soaFieldArrays(), slot);
+            healthCodec.decodeDirect(clientIn, chunk.componentStorage(clientHealthId).soaFieldArrays(), slot);
         }
 
         // Ack

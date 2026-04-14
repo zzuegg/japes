@@ -198,9 +198,9 @@ public final class RelationStore<T extends Record> {
         if (previous == null) {
             size++;
             reverse.computeIfAbsent(target.id(), k -> new SourceSlice()).add(source);
-            if (tick != 0L) tracker.markAdded(new PairKey(source, target), tick);
+            if (tick != 0L && !tracker.isFullyUntracked()) tracker.markAdded(new PairKey(source, target), tick);
         } else {
-            if (tick != 0L) tracker.markChanged(new PairKey(source, target), tick);
+            if (tick != 0L && !tracker.isFullyUntracked()) tracker.markChanged(new PairKey(source, target), tick);
         }
         return previous;
     }
@@ -247,7 +247,7 @@ public final class RelationStore<T extends Record> {
             sources.remove(source);
             if (sources.isEmpty()) reverse.remove(target.id());
         }
-        tracker.remove(new PairKey(source, target));
+        if (!tracker.isFullyUntracked()) tracker.remove(new PairKey(source, target));
         if (tick != 0L) removalLog.append(source, target, previous, tick);
         return previous;
     }

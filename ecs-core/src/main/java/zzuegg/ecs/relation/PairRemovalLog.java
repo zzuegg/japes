@@ -63,6 +63,18 @@ public final class PairRemovalLog {
     }
 
     /**
+     * Returns true if any entry has a tick strictly greater than
+     * {@code sinceExclusive}. Cheaper than {@link #snapshot} when
+     * only an existence check is needed.
+     */
+    public boolean hasEntriesAfter(long sinceExclusive) {
+        for (int i = entries.size() - 1; i >= 0; i--) {
+            if (entries.get(i).tick() > sinceExclusive) return true;
+        }
+        return false;
+    }
+
+    /**
      * Advance the minimum watermark. Drops entries whose tick is
      * {@code <= newMinWatermark}. Ignored if {@code newMinWatermark}
      * regresses below the current minimum.

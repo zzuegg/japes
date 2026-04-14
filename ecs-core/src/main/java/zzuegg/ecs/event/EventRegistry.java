@@ -20,6 +20,10 @@ public final class EventRegistry {
         return store;
     }
 
+    public boolean isEmpty() {
+        return stores.isEmpty();
+    }
+
     public void swapAll() {
         for (var store : stores.values()) {
             store.swap();

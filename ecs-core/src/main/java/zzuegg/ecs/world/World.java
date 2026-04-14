@@ -71,6 +71,12 @@ public final class World {
     // allocating a new ImmutableCollections$Set12 via Set.of(compId) per
     // tracked component per tick.
     private final Map<ComponentId, Set<ComponentId>> singletonSets = new HashMap<>();
+    // Flat-array snapshots of tick-hot collections, rebuilt when the
+    // schedule changes.  Avoids HashMap/HashSet iterator allocation
+    // on every tick (~48 B per iterator * number of tracked sets).
+    private SystemExecutionPlan[] cachedPlansArray = new SystemExecutionPlan[0];
+    private ComponentId[] cachedTrackedChangeFilterArray = new ComponentId[0];
+    private ComponentId[] cachedTrackedRemovedArray = new ComponentId[0];
 
     World(WorldBuilder builder) {
         this.archetypeGraph = new ArchetypeGraph(componentRegistry, builder.chunkSize, builder.storageFactory);
@@ -162,6 +168,12 @@ public final class World {
                     && trackedChangeFilterComponents.contains(store.sourceMarkerId());
             store.tracker().setFullyUntracked(!observed);
         }
+
+        // Snapshot tick-hot collections into flat arrays so the tick()
+        // loop never allocates HashMap/HashSet iterators.
+        cachedPlansArray = systemPlans.values().toArray(new SystemExecutionPlan[0]);
+        cachedTrackedChangeFilterArray = trackedChangeFilterComponents.toArray(new ComponentId[0]);
+        cachedTrackedRemovedArray = trackedRemovedComponents.toArray(new ComponentId[0]);
     }
 
     private void buildExecutionPlan(SystemDescriptor desc) {
@@ -534,6 +546,15 @@ public final class World {
     }
 
     /**
+     * Raw-id variant that avoids allocating an Entity record on the flush
+     * hot path.
+     */
+    public void despawnIfAliveById(long entityId) {
+        if (!entityAllocator.isAlive(entityId)) return;
+        despawnWithCascade(new zzuegg.ecs.entity.Entity(entityId));
+    }
+
+    /**
      * Drive the CleanupPolicy state machine. For each relation store:
      * drop every outgoing pair from the despawning entity, then apply
      * the store's {@code onTargetDespawn} policy to every incoming
@@ -681,12 +702,24 @@ public final class World {
         if (!entityAllocator.isAlive(entity)) {
             throw new IllegalArgumentException("Entity not alive: " + entity);
         }
+        setComponentInternal(entity.index(), component);
+    }
+
+    /**
+     * Raw-id variant that avoids allocating an Entity record on the flush
+     * hot path. Caller must ensure the entity is alive.
+     */
+    public void setComponentById(long entityId, Record component) {
+        setComponentInternal((int) (entityId >>> 32), component);
+    }
+
+    private void setComponentInternal(int index, Record component) {
         // One HashMap lookup instead of two — setComponent is called once per
         // mutation and previously paid for both getOrRegister(class) and
         // info(class), which hashed the same Class key twice.
         var info = componentRegistry.getOrRegisterInfo(component.getClass());
         var compId = info.id();
-        var location = getLocation(entity.index());
+        var location = getLocation(index);
         // No archetypeGraph lookup — EntityLocation already holds a direct
         // Archetype reference. Then one ArrayList.get for the chunk; the
         // JIT CSEs this out of loops where the archetype is stable, so
@@ -869,6 +902,22 @@ public final class World {
     // ---------------------------------------------------------------
 
     /**
+     * Raw-id variant for the command flush path.
+     */
+    public <T extends Record> void setRelationById(long sourceId, long targetId, T value) {
+        setRelation(new zzuegg.ecs.entity.Entity(sourceId),
+                    new zzuegg.ecs.entity.Entity(targetId), value);
+    }
+
+    /**
+     * Raw-id variant for the command flush path.
+     */
+    public <T extends Record> void removeRelationById(long sourceId, long targetId, Class<T> type) {
+        removeRelation(new zzuegg.ecs.entity.Entity(sourceId),
+                       new zzuegg.ecs.entity.Entity(targetId), type);
+    }
+
+    /**
      * Insert or overwrite the pair payload for
      * {@code (source, target)} under the given relation type. Auto-
      * registers the relation if this is the first time it's seen.
@@ -972,6 +1021,14 @@ public final class World {
         removeMarkerComponent(source, store.sourceMarkerId());
     }
 
+    /**
+     * Raw-id variant that avoids allocating an Entity record on the flush
+     * hot path. Caller must ensure the entity is alive.
+     */
+    public void addComponentById(long entityId, Record component) {
+        addComponent(new zzuegg.ecs.entity.Entity(entityId), component);
+    }
+
     public void addComponent(zzuegg.ecs.entity.Entity entity, Record component) {
         if (!entityAllocator.isAlive(entity)) {
             throw new IllegalArgumentException("Entity not alive: " + entity);
@@ -1014,6 +1071,14 @@ public final class World {
         if (swapped != null) setLocation(swapped.index(), oldLocation);
 
         setLocation(entity.index(), newLocation);
+    }
+
+    /**
+     * Raw-id variant that avoids allocating an Entity record on the flush
+     * hot path. Caller must ensure the entity is alive.
+     */
+    public void removeComponentById(long entityId, Class<? extends Record> type) {
+        removeComponent(new zzuegg.ecs.entity.Entity(entityId), type);
     }
 
     public void removeComponent(zzuegg.ecs.entity.Entity entity, Class<? extends Record> type) {
@@ -1066,25 +1131,32 @@ public final class World {
 
     public void tick() {
         tick.advance();
-        eventRegistry.swapAll();
+        if (!eventRegistry.isEmpty()) eventRegistry.swapAll();
 
         var stages = schedule.orderedStages();
         for (int i = 0, n = stages.size(); i < n; i++) {
             executeStage(stages.get(i).getValue());
         }
 
+        // Flat-array references cached at schedule-build time so the
+        // loops below never allocate HashMap/HashSet iterators.
+        var plans = cachedPlansArray;
+
         // End-of-tick GC for the removal log: for each tracked component, drop
-        // every entry whose tick is ≤ the minimum watermark across the plans
+        // every entry whose tick is <= the minimum watermark across the plans
         // that consume it. Plans that never ran this tick (disabled / skipped
         // by RunIf) still hold references via their older watermark, so their
         // entries survive until they catch up.
-        if (!trackedRemovedComponents.isEmpty()) {
-            for (var compId : trackedRemovedComponents) {
+        var removedComps = cachedTrackedRemovedArray;
+        if (removedComps.length > 0) {
+            for (int rc = 0; rc < removedComps.length; rc++) {
+                var compId = removedComps[rc];
                 long minWatermark = Long.MAX_VALUE;
-                for (var p : systemPlans.values()) {
+                for (int pi = 0; pi < plans.length; pi++) {
+                    var p = plans[pi];
                     // Only plans that actually consume this component count.
                     // Descriptors carry the Class, not the ComponentId, so
-                    // we re-resolve here — cheap lookups in componentRegistry.
+                    // we re-resolve here -- cheap lookups in componentRegistry.
                     boolean consumes = false;
                     for (var type : p.consumedRemovedComponents()) {
                         if (componentRegistry.getOrRegister(type).equals(compId)) {
@@ -1113,7 +1185,8 @@ public final class World {
         if (componentRegistry.hasAnyRelations()) {
             for (var store : componentRegistry.allRelationStores()) {
                 long minWatermark = Long.MAX_VALUE;
-                for (var p : systemPlans.values()) {
+                for (int pi = 0; pi < plans.length; pi++) {
+                    var p = plans[pi];
                     if (p.consumedRemovedRelations().contains(store.type())
                             && p.lastSeenTick() < minWatermark) {
                         minWatermark = p.lastSeenTick();
@@ -1129,12 +1202,15 @@ public final class World {
         // component observed via @Filter(Added/Changed), compute the minimum
         // lastSeenTick across plans that consume it, walk every chunk of every
         // archetype containing that component, and drop dirty-list entries
-        // whose ticks are ≤ minWatermark. Systems with older watermarks (e.g.
+        // whose ticks are <= minWatermark. Systems with older watermarks (e.g.
         // disabled / RunIf-skipped) hold their entries until they catch up.
-        if (!trackedChangeFilterComponents.isEmpty()) {
-            for (var compId : trackedChangeFilterComponents) {
+        var changeComps = cachedTrackedChangeFilterArray;
+        if (changeComps.length > 0) {
+            for (int cc = 0; cc < changeComps.length; cc++) {
+                var compId = changeComps[cc];
                 long minWatermark = Long.MAX_VALUE;
-                for (var p : systemPlans.values()) {
+                for (int pi = 0; pi < plans.length; pi++) {
+                    var p = plans[pi];
                     if (!p.hasChangeFilters()) continue;
                     for (var f : p.resolvedChangeFilters()) {
                         boolean targets = false;
@@ -1149,7 +1225,8 @@ public final class World {
                 if (minWatermark == Long.MAX_VALUE) continue;
                 var matching = archetypeGraph.findMatching(
                     singletonSets.computeIfAbsent(compId, Set::of));
-                for (var archetype : matching) {
+                for (int ai = 0, an = matching.size(); ai < an; ai++) {
+                    var archetype = matching.get(ai);
                     var chunkList = archetype.chunks();
                     for (int ci = 0, cn = chunkList.size(); ci < cn; ci++) {
                         var chunk = chunkList.get(ci);
@@ -1167,6 +1244,13 @@ public final class World {
 
     public boolean isAlive(zzuegg.ecs.entity.Entity entity) {
         return entityAllocator.isAlive(entity);
+    }
+
+    /**
+     * Raw-id variant that avoids allocating an Entity record.
+     */
+    public boolean isAliveById(long entityId) {
+        return entityAllocator.isAlive(entityId);
     }
 
     private void setLocation(int index, EntityLocation location) {

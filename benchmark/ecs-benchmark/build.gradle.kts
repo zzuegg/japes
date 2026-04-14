@@ -9,10 +9,13 @@ dependencies {
 }
 
 jmh {
-    warmupIterations.set(3)
-    iterations.set(5)
-    fork.set(2)
+    warmupIterations.set(providers.gradleProperty("jmh.wi").map { it.toInt() }.orElse(3))
+    iterations.set(providers.gradleProperty("jmh.i").map { it.toInt() }.orElse(5))
+    fork.set(providers.gradleProperty("jmh.f").map { it.toInt() }.orElse(2))
     jvmArgs.addAll("--enable-preview")
+    includes.addAll(providers.gradleProperty("jmh.includes").map { listOf(it) }.orElse(emptyList()))
+    val prof = providers.gradleProperty("jmh.prof")
+    if (prof.isPresent) profilers.add(prof)
 }
 
 tasks.register<JavaExec>("jmhValhalla") {

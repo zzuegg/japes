@@ -87,12 +87,44 @@ public final class GroupedWorldSerializer {
             out.writeInt(types.size());
             for (Class<? extends Record> type : types) out.writeUTF(type.getName());
             out.writeInt(archetype.entityCount());
-            for (var chunk : archetype.chunks()) {
-                for (int slot = 0; slot < chunk.count(); slot++) {
-                    out.writeLong(chunk.entity(slot).id());
+
+            // Check if all codecs support direct SoA encode
+            var binaryCodecs = new BinaryCodec[compIds.size()];
+            boolean allDirect = true;
+            for (int c = 0; c < compIds.size(); c++) {
+                if (codecs.get(c) instanceof BinaryCodec bc && bc.supportsDirectEncode()) {
+                    binaryCodecs[c] = bc;
+                } else {
+                    allDirect = false;
+                    break;
+                }
+            }
+
+            if (allDirect) {
+                // Fast path: read directly from SoA arrays, no Record reconstruction
+                for (var chunk : archetype.chunks()) {
+                    // Pre-fetch SoA arrays for each component in this chunk
+                    var soaArrays = new Object[compIds.size()][];
                     for (int c = 0; c < compIds.size(); c++) {
-                        ((ComponentCodec<Record>) codecs.get(c)).encode(
-                            (Record) chunk.get(compIds.get(c), slot), out);
+                        var storage = chunk.componentStorage(compIds.get(c));
+                        soaArrays[c] = storage.soaFieldArrays();
+                    }
+                    for (int slot = 0; slot < chunk.count(); slot++) {
+                        out.writeLong(chunk.entity(slot).id());
+                        for (int c = 0; c < compIds.size(); c++) {
+                            binaryCodecs[c].encodeDirect(soaArrays[c], slot, out);
+                        }
+                    }
+                }
+            } else {
+                // Fallback: reconstruct Records and encode via accessors
+                for (var chunk : archetype.chunks()) {
+                    for (int slot = 0; slot < chunk.count(); slot++) {
+                        out.writeLong(chunk.entity(slot).id());
+                        for (int c = 0; c < compIds.size(); c++) {
+                            ((ComponentCodec<Record>) codecs.get(c)).encode(
+                                (Record) chunk.get(compIds.get(c), slot), out);
+                        }
                     }
                 }
             }
