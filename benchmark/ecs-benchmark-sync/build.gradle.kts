@@ -10,12 +10,13 @@ dependencies {
 }
 
 jmh {
-    val inc = providers.gradleProperty("jmh.includes")
-    if (inc.isPresent) includes.set(listOf(inc.get()))
     warmupIterations.set(providers.gradleProperty("jmh.wi").map { it.toInt() }.orElse(3))
     iterations.set(providers.gradleProperty("jmh.i").map { it.toInt() }.orElse(5))
     fork.set(providers.gradleProperty("jmh.f").map { it.toInt() }.orElse(2))
-    val prof = providers.gradleProperty("jmh.prof")
-    if (prof.isPresent) profilers.set(listOf(prof.get()))
     jvmArgs.addAll("--enable-preview")
+    includes.addAll(providers.gradleProperty("jmh.includes").map { listOf(it) }.orElse(emptyList()))
+    val prof = providers.gradleProperty("jmh.prof")
+    if (prof.isPresent) profilers.add(prof)
+    resultFormat.set("JSON")
+    profilers.add("gc")
 }

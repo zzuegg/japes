@@ -16,6 +16,8 @@ jmh {
     includes.addAll(providers.gradleProperty("jmh.includes").map { listOf(it) }.orElse(emptyList()))
     val prof = providers.gradleProperty("jmh.prof")
     if (prof.isPresent) profilers.add(prof)
+    resultFormat.set("JSON")
+    profilers.add("gc")
 }
 
 tasks.register<JavaExec>("jmhValhalla") {

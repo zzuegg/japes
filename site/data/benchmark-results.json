@@ -1,0 +1,86 @@
+{
+  "generated": "2026-04-14T17:28:35.083043+00:00",
+  "jdk": "openjdk version \"26\" 2026-03-17",
+  "results": [
+    {
+      "benchmark": "zzuegg.ecs.bench.macro.NBodyBenchmark.simulateOneTick",
+      "name": "simulateOneTick",
+      "implementation": "japes",
+      "params": {
+        "bodyCount": "1000"
+      },
+      "mode": "avgt",
+      "us_per_op": 0.133,
+      "ops_per_ms": 7492.789,
+      "entities_per_second": 7492789239,
+      "bytes_per_op": 0.0,
+      "score": 0.000133,
+      "score_unit": "ms/op",
+      "score_error": null
+    },
+    {
+      "benchmark": "zzuegg.ecs.bench.macro.NBodyBenchmark.simulateOneTick",
+      "name": "simulateOneTick",
+      "implementation": "japes",
+      "params": {
+        "bodyCount": "10000"
+      },
+      "mode": "avgt",
+      "us_per_op": 1.647,
+      "ops_per_ms": 607.142,
+      "entities_per_second": 6071418642,
+      "bytes_per_op": 0.0,
+      "score": 0.001647,
+      "score_unit": "ms/op",
+      "score_error": null
+    },
+    {
+      "benchmark": "zzuegg.ecs.bench.micro.IterationBenchmark.iterateWithWrite",
+      "name": "iterateWithWrite",
+      "implementation": "japes",
+      "params": {
+        "entityCount": "1000"
+      },
+      "mode": "thrpt",
+      "us_per_op": 0.133,
+      "ops_per_ms": 7506.851,
+      "entities_per_second": 7506851377,
+      "bytes_per_op": 0.0,
+      "score": 7506.851377,
+      "score_unit": "ops/ms",
+      "score_error": null
+    },
+    {
+      "benchmark": "zzuegg.ecs.bench.micro.IterationBenchmark.iterateWithWrite",
+      "name": "iterateWithWrite",
+      "implementation": "japes",
+      "params": {
+        "entityCount": "10000"
+      },
+      "mode": "thrpt",
+      "us_per_op": 1.608,
+      "ops_per_ms": 621.756,
+      "entities_per_second": 6217556112,
+      "bytes_per_op": 0.0,
+      "score": 621.755611,
+      "score_unit": "ops/ms",
+      "score_error": null
+    },
+    {
+      "benchmark": "zzuegg.ecs.bench.micro.IterationBenchmark.iterateWithWrite",
+      "name": "iterateWithWrite",
+      "implementation": "japes",
+      "params": {
+        "entityCount": "100000"
+      },
+      "mode": "thrpt",
+      "us_per_op": 23.496,
+      "ops_per_ms": 42.56,
+      "entities_per_second": 4255992680,
+      "bytes_per_op": 0.2,
+      "score": 42.559927,
+      "score_unit": "ops/ms",
+      "score_error": null
+    }
+  ]
+}
