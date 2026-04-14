@@ -51,6 +51,11 @@ tasks.register("benchmarkAll") {
     finalizedBy(mergeResults)
 }
 
+// Fast mode: 1 warmup, 2 iterations, 1 fork. ~10x faster than default.
+// Usage: ./gradlew benchmarkAll -Pjmh.fast
+// For full precision: ./gradlew benchmarkAll
+
+
 // Force sequential execution: each JMH task must wait for the previous one.
 // Without this, Gradle may run them in parallel and hit JMH file-lock conflicts.
 gradle.projectsEvaluated {
