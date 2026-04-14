@@ -17,3 +17,6 @@ project(":benchmark:ecs-benchmark-valhalla").projectDir = file("benchmark/ecs-be
 project(":benchmark:ecs-benchmark-zayes").projectDir = file("benchmark/ecs-benchmark-zayes")
 project(":benchmark:ecs-benchmark-dominion").projectDir = file("benchmark/ecs-benchmark-dominion")
 project(":benchmark:ecs-benchmark-artemis").projectDir = file("benchmark/ecs-benchmark-artemis")
+
+include("benchmark:ecs-benchmark-sync")
+project(":benchmark:ecs-benchmark-sync").projectDir = file("benchmark/ecs-benchmark-sync")

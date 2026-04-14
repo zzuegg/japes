@@ -15,6 +15,7 @@ jmh-annprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.
 dominion = { module = "dev.dominion.ecs:dominion-ecs-engine", version.ref = "dominion" }
 artemis-odb = { module = "net.onedaybeard.artemis:artemis-odb", version.ref = "artemis" }
 zayes = { module = "com.simsilica:zay-es", version.ref = "zayes" }
+h2 = { module = "com.h2database:h2", version = "2.3.232" }
 
 [plugins]
 jmh = { id = "me.champeau.jmh", version.ref = "jmh-plugin" }
