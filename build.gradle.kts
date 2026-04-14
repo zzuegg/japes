@@ -192,17 +192,6 @@ val updateSiteTables = tasks.register("updateSiteTables") {
         // --- Update README.md ---
         val readme = file("README.md")
         if (readme.exists()) {
-            val jRT10k = lookup("japes", "RealisticTickBenchmark", "entityCount", "10000")
-            val bRT10k = lookup("bevy", "realistic_tick", "entityCount", "10000")
-            val jRT100k = lookup("japes", "RealisticTickBenchmark", "entityCount", "100000")
-            val bRT100k = lookup("bevy", "realistic_tick", "entityCount", "100000")
-            val jSD = lookup("japes", "SparseDeltaBenchmark", "entityCount", "10000")
-            val bSD = lookup("bevy", "sparse_delta", "entityCount", "10000")
-            val jPP = lookup("japes", "PredatorPreyForEachPairBenchmark")
-            val bPPopt = lookup("bevy", "optimized_tick", "predators", "500")
-            val jIW = lookup("japes", "iterateWithWrite", "entityCount", "10000")
-            val bIW = lookup("bevy", "read_write", "entityCount", "10000")
-
             fun ratio(j: Map<String, Any?>?, b: Map<String, Any?>?): String {
                 val jus = (j?.get("us_per_op") as? Number)?.toDouble() ?: return "—"
                 val bus = (b?.get("us_per_op") as? Number)?.toDouble() ?: return "—"
@@ -210,16 +199,54 @@ val updateSiteTables = tasks.register("updateSiteTables") {
                 return if (r < 1) "**%.2f× faster**".format(1.0 / r) else "%.1f× slower".format(r)
             }
 
+            val jIW = lookup("japes", "iterateWithWrite", "entityCount", "10000")
+            val bIW = lookup("bevy", "read_write", "entityCount", "10000")
+            val aIW = lookup("artemis", "iterateWithWrite", "entityCount", "10000")
+            val jNB = lookup("japes", "simulateOneTick", "bodyCount", "10000")
+            val bNB = lookup("bevy", "one_tick", "entityCount", "10000")
+            val aNB = lookup("artemis", "simulateOneTick", "bodyCount", "10000")
+            val jSD = lookup("japes", "SparseDeltaBenchmark", "entityCount", "10000")
+            val bSD = lookup("bevy", "sparse_delta", "entityCount", "10000")
+            val aSD = lookup("artemis", "SparseDelta", "entityCount", "10000")
+            val jRT10k = lookup("japes", "RealisticTickBenchmark", "entityCount", "10000")
+            val bRT10k = lookup("bevy", "realistic_tick", "entityCount", "10000")
+            val aRT10k = lookup("artemis", "RealisticTick", "entityCount", "10000")
+            val jRT100k = lookup("japes", "RealisticTickBenchmark", "entityCount", "100000")
+            val bRT100k = lookup("bevy", "realistic_tick", "entityCount", "100000")
+            val aRT100k = lookup("artemis", "RealisticTick", "entityCount", "100000")
+            val jPS = lookup("japes", "ParticleScenario", "entityCount", "10000")
+            val bPS = lookup("bevy", "particle_tick", "entityCount", "10000")
+            val aPS = lookup("artemis", "ParticleScenario", "entityCount", "10000")
+            val jPP = lookup("japes", "PredatorPreyForEachPairBenchmark")
+            val bPPopt = lookup("bevy", "optimized_tick", "predators", "500")
+
             val table = """
 ## Benchmark snapshot
 
-| Benchmark | japes | Bevy 0.15 (Rust) | japes vs Bevy |
-|---|---:|---:|---|
-| RealisticTick 10k (3 observers) | **${usStr(jRT10k)} µs** | ${usStr(bRT10k)} µs | ${ratio(jRT10k, bRT10k)} |
-| RealisticTick 100k | **${usStr(jRT100k)} µs** | ${usStr(bRT100k)} µs | ${ratio(jRT100k, bRT100k)} |
-| SparseDelta 10k (change detection) | **${usStr(jSD)} µs** | ${usStr(bSD)} µs | ${ratio(jSD, bSD)} |
-| PredatorPrey @ForEachPair 500×2000 | **${usStr(jPP)} µs** | ${usStr(bPPopt)} µs (hand-rolled) | ${ratio(jPP, bPPopt)} |
-| iterateWithWrite 10k | **${usStr(jIW)} µs** | ${usStr(bIW)} µs | ${ratio(jIW, bIW)} |
+µs/op, lower is better. JDK 26, Bevy 0.15 via Criterion, single fork.
+
+| Benchmark | **japes** | Bevy (Rust) | Artemis | vs Bevy |
+|---|---:|---:|---:|---|
+| iterateWithWrite 10k | **${usStr(jIW)}** | ${usStr(bIW)} | ${usStr(aIW)} | ${ratio(jIW, bIW)} |
+| NBody 10k | **${usStr(jNB)}** | ${usStr(bNB)} | ${usStr(aNB)} | ${ratio(jNB, bNB)} |
+| SparseDelta 10k | **${usStr(jSD)}** | ${usStr(bSD)} | ${usStr(aSD)} | ${ratio(jSD, bSD)} |
+| RealisticTick 10k (3 observers) | **${usStr(jRT10k)}** | ${usStr(bRT10k)} | ${usStr(aRT10k)} | ${ratio(jRT10k, bRT10k)} |
+| RealisticTick 100k | **${usStr(jRT100k)}** | ${usStr(bRT100k)} | ${usStr(aRT100k)} | ${ratio(jRT100k, bRT100k)} |
+| ParticleScenario 10k | **${usStr(jPS)}** | ${usStr(bPS)} | ${usStr(aPS)} | ${ratio(jPS, bPS)} |
+| PredatorPrey @ForEachPair 500×2000 | **${usStr(jPP)}** | ${usStr(bPPopt)} | — | ${ratio(jPP, bPPopt)} |
+
+### Allocation per tick (japes, B/op)
+
+| Benchmark | B/op |
+|---|---:|
+| iterateWithWrite 10k | ${bopStr(jIW)} |
+| NBody 10k | ${bopStr(jNB)} |
+| SparseDelta 10k | ${bopStr(jSD)} |
+| RealisticTick 10k | ${bopStr(jRT10k)} |
+| ParticleScenario 10k | ${bopStr(jPS)} |
+
+Full cross-library tables (Zay-ES, Dominion): **[benchmarks](https://zzuegg.github.io/japes/benchmarks/)**.
+
 """.trimStart()
 
             val text = readme.readText()

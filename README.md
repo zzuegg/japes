@@ -38,13 +38,30 @@ world.tick();
 
 ## Benchmark snapshot
 
-| Benchmark | japes | Bevy 0.15 (Rust) | japes vs Bevy |
-|---|---:|---:|---|
-| RealisticTick 10k (3 observers) | **6.5 µs** | 8.5 µs | **1.32× faster** |
-| RealisticTick 100k | **8.5 µs** | 75.4 µs | **8.93× faster** |
-| SparseDelta 10k (change detection) | **1.8 µs** | 4.0 µs | **2.28× faster** |
-| PredatorPrey @ForEachPair 500×2000 | **19.4 µs** | 11.1 µs (hand-rolled) | 1.8× slower |
-| iterateWithWrite 10k | **1.6 µs** | 6.3 µs | **3.92× faster** |
+µs/op, lower is better. JDK 26, Bevy 0.15 via Criterion, single fork.
+
+| Benchmark | **japes** | Bevy (Rust) | Artemis | vs Bevy |
+|---|---:|---:|---:|---|
+| iterateWithWrite 10k | **1.6** | 6.3 | 19.0 | **3.92× faster** |
+| NBody 10k | **1.7** | 8.8 | 20.0 | **5.24× faster** |
+| SparseDelta 10k | **1.8** | 4.0 | 0.275 | **2.28× faster** |
+| RealisticTick 10k (3 observers) | **6.5** | 8.5 | 26.2 | **1.32× faster** |
+| RealisticTick 100k | **8.5** | 75.4 | 283 | **8.93× faster** |
+| ParticleScenario 10k | **28.3** | 21.5 | 101 | 1.3× slower |
+| PredatorPrey @ForEachPair 500×2000 | **19.4** | 11.1 | — | 1.8× slower |
+
+### Allocation per tick (japes, B/op)
+
+| Benchmark | B/op |
+|---|---:|
+| iterateWithWrite 10k | **0** |
+| NBody 10k | **0** |
+| SparseDelta 10k | 1,638 |
+| RealisticTick 10k | 11,279 |
+| ParticleScenario 10k | 72,583 |
+
+Full cross-library tables (Zay-ES, Dominion): **[benchmarks](https://zzuegg.github.io/japes/benchmarks/)**.
+
 ## Dependency
 
 ```kotlin
