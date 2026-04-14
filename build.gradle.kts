@@ -14,14 +14,23 @@ allprojects {
 // Benchmark orchestration
 // ---------------------------------------------------------------------------
 
-// Merge JMH JSON results into site/data/benchmark-results.json.
+// Run Bevy (Rust/Criterion) benchmarks.
+val bevyBenchmark = tasks.register<Exec>("bevyBenchmark") {
+    description = "Run Bevy ECS Criterion benchmarks"
+    group = "benchmark"
+    workingDir = file("${rootDir}/benchmark/bevy-benchmark")
+    commandLine("cargo", "bench")
+}
+
+// Merge JMH + Criterion JSON results into site/data/benchmark-results.json.
 val mergeResults = tasks.register<Exec>("mergeResults") {
-    description = "Merge existing JMH JSON results into site/data/benchmark-results.json"
+    description = "Merge existing JMH + Criterion results into site/data/benchmark-results.json"
     group = "benchmark"
     commandLine("python3", "${rootDir}/benchmark/merge-results.py")
 }
 
 // Run all benchmark suites sequentially, then merge results into a single JSON.
+// JMH acquires a file lock per module, so modules must run one at a time.
 // Usage: ./gradlew benchmarkAll
 //   Override JMH params: ./gradlew benchmarkAll -Pjmh.wi=1 -Pjmh.i=3 -Pjmh.f=1
 tasks.register("benchmarkAll") {
@@ -38,7 +47,24 @@ tasks.register("benchmarkAll") {
     for (mod in modules) {
         dependsOn("$mod:jmh")
     }
+    dependsOn(bevyBenchmark)
     finalizedBy(mergeResults)
+}
+
+// Force sequential execution: each JMH task must wait for the previous one.
+// Without this, Gradle may run them in parallel and hit JMH file-lock conflicts.
+gradle.projectsEvaluated {
+    val jmhTasks = listOf(
+        "benchmark:ecs-benchmark",
+        "benchmark:ecs-benchmark-zayes",
+        "benchmark:ecs-benchmark-dominion",
+        "benchmark:ecs-benchmark-artemis",
+        "benchmark:ecs-benchmark-sync",
+    ).mapNotNull { tasks.findByPath("$it:jmh") }
+
+    for (i in 1 until jmhTasks.size) {
+        jmhTasks[i].mustRunAfter(jmhTasks[i - 1])
+    }
 }
 
 subprojects {
