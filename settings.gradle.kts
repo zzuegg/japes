@@ -20,3 +20,6 @@ project(":benchmark:ecs-benchmark-artemis").projectDir = file("benchmark/ecs-ben
 
 include("benchmark:ecs-benchmark-sync")
 project(":benchmark:ecs-benchmark-sync").projectDir = file("benchmark/ecs-benchmark-sync")
+
+include("plugins:persistence:h2")
+project(":plugins:persistence:h2").projectDir = file("plugins/persistence/h2")

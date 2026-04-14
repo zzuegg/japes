@@ -42,10 +42,10 @@ val bevyBenchmark = tasks.register<Exec>("bevyBenchmark") {
 }
 
 // ---------------------------------------------------------------------------
-// mergeResults: JMH JSON + Criterion → site/data/benchmark-results.json
+// mergeResults: JMH JSON + Criterion → site/docs/data/benchmark-results.json
 // ---------------------------------------------------------------------------
 val mergeResults = tasks.register("mergeResults") {
-    description = "Merge JMH + Criterion results into site/data/benchmark-results.json"
+    description = "Merge JMH + Criterion results into site/docs/data/benchmark-results.json"
     group = "benchmark"
     doLast {
         val parser = groovy.json.JsonSlurper()
@@ -150,7 +150,7 @@ val mergeResults = tasks.register("mergeResults") {
             "rust" to (rust ?: "n/a"),
             "results" to allResults,
         )
-        val outFile = file("site/data/benchmark-results.json")
+        val outFile = file("site/docs/data/benchmark-results.json")
         outFile.parentFile.mkdirs()
         outFile.writeText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(output)))
         println("\nWrote ${allResults.size} benchmarks to $outFile")
@@ -165,7 +165,7 @@ val updateSiteTables = tasks.register("updateSiteTables") {
     group = "benchmark"
     mustRunAfter(mergeResults)
     doLast {
-        val jsonFile = file("site/data/benchmark-results.json")
+        val jsonFile = file("site/docs/data/benchmark-results.json")
         if (!jsonFile.exists()) { println("No benchmark-results.json found"); return@doLast }
         val parser = groovy.json.JsonSlurper()
         val data = parser.parse(jsonFile) as Map<String, Any?>
