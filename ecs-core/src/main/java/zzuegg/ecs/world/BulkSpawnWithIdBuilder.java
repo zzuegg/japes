@@ -35,7 +35,6 @@ public final class BulkSpawnWithIdBuilder {
 
     private final World world;
     private final ComponentId[] compIds;
-    private final zzuegg.ecs.component.ComponentInfo[] infos;
     private final Archetype archetype;
     private Chunk cachedChunk;
     private int cachedChunkIndex = -1;
@@ -49,23 +48,15 @@ public final class BulkSpawnWithIdBuilder {
         this.world = world;
         var registry = world.componentRegistry();
         this.compIds = new ComponentId[componentTypes.length];
-        this.infos = new zzuegg.ecs.component.ComponentInfo[componentTypes.length];
         var idSet = new java.util.HashSet<ComponentId>();
         for (int i = 0; i < componentTypes.length; i++) {
-            var info = registry.getOrRegisterInfo(componentTypes[i]);
-            compIds[i] = info.id();
-            infos[i] = info;
-            idSet.add(info.id());
+            compIds[i] = registry.getOrRegister(componentTypes[i]);
+            idSet.add(compIds[i]);
         }
         var archetypeId = ArchetypeId.of(idSet);
         this.archetype = world.archetypeGraph().getOrCreate(archetypeId);
         this.cachedStorages = new ComponentStorage[componentTypes.length];
         this.cachedSoaArrays = new Object[componentTypes.length][];
-    }
-
-    /** The pre-resolved component infos in declaration order. */
-    public zzuegg.ecs.component.ComponentInfo[] componentInfos() {
-        return infos;
     }
 
     /**

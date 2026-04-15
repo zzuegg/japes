@@ -35,16 +35,6 @@ final class SourceSlice {
 
     long[] sourceIdsArray() { return sourceIds; }
 
-    boolean contains(Entity source) {
-        long sid = source.id();
-        var ids = sourceIds;
-        int n = size;
-        for (int i = 0; i < n; i++) {
-            if (ids[i] == sid) return true;
-        }
-        return false;
-    }
-
     /**
      * Add {@code source} if not already present. Returns {@code true}
      * iff this was a new addition.

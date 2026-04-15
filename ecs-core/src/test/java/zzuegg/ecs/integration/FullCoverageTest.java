@@ -1422,7 +1422,7 @@ class FullCoverageTest {
             var codec = new BinaryCodec<>(AllPrimitives.class);
             assertTrue(codec.supportsDirectDecode());
             assertTrue(codec.supportsDirectEncode());
-            assertTrue(codec.flatFieldCount() > 0);
+            // flatFieldCount removed as dead code; just verify direct support
         }
 
         @Test
@@ -1438,8 +1438,8 @@ class FullCoverageTest {
             var bytes = baos.toByteArray();
 
             // Create SoA arrays for direct decode
-            int fieldCount = codec.flatFieldCount();
-            var soaArrays = new Object[fieldCount];
+            // 8 primitive fields in AllPrimitives
+            var soaArrays = new Object[8];
             soaArrays[0] = new byte[1];    // byte
             soaArrays[1] = new short[1];   // short
             soaArrays[2] = new int[1];     // int

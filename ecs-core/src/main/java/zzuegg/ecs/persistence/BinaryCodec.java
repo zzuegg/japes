@@ -143,11 +143,6 @@ public final class BinaryCodec<T extends Record> implements ComponentCodec<T> {
         }
     }
 
-    /** Returns the number of flat SoA fields, or -1 if not SoA-eligible. */
-    public int flatFieldCount() {
-        return directWriters != null ? directWriters.length : -1;
-    }
-
     @FunctionalInterface
     private interface DirectFieldReader {
         void loadAndWrite(Object array, int slot, DataOutput out) throws IOException;

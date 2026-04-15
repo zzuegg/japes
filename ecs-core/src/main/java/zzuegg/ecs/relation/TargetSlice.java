@@ -77,16 +77,6 @@ public final class TargetSlice<T extends Record> {
         return null;
     }
 
-    boolean containsTarget(Entity target) {
-        long tid = target.id();
-        var ids = targetIds;
-        int n = size;
-        for (int i = 0; i < n; i++) {
-            if (ids[i] == tid) return true;
-        }
-        return false;
-    }
-
     /**
      * Insert or overwrite the payload for {@code target}. Returns
      * the previous payload, or {@code null} if the target was new.
