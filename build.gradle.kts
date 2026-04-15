@@ -356,6 +356,7 @@ fun criterionName(benchPath: String): String {
 
 subprojects {
     apply(plugin = "java")
+    apply(plugin = "jacoco")
 
     java {
         toolchain {
